@@ -1,14 +1,14 @@
 mod denoiser_rt;
+mod visualizations;
 
 use nih_plug::prelude::*;
 use nih_plug_egui::{create_egui_editor, egui, widgets, EguiState};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use denoiser_rt::{
-    RealtimeDenoiser, DenoiserParams, NUM_BANDS, WINDOW_SIZE,
-    DEFAULT_ALPHA_BASE, DEFAULT_ALPHA_MIN, DEFAULT_ALPHA_MAX, DEFAULT_BETA,
-    DEFAULT_LAMBDA, DEFAULT_SPIKE_THRESHOLD, DEFAULT_SFM_SPEECH, DEFAULT_SFM_NOISE,
-    DEFAULT_DELTA, DEFAULT_GAMMA,
+    DenoiserParams, RealtimeDenoiser, VisualizationData, DEFAULT_ALPHA_BASE, DEFAULT_ALPHA_MAX,
+    DEFAULT_ALPHA_MIN, DEFAULT_BETA, DEFAULT_DELTA, DEFAULT_GAMMA, DEFAULT_LAMBDA,
+    DEFAULT_SFM_NOISE, DEFAULT_SFM_SPEECH, DEFAULT_SPIKE_THRESHOLD, NUM_BANDS, WINDOW_SIZE,
 };
 
 // =============================================================================
@@ -140,6 +140,9 @@ struct Poddyclip {
 
     // Track reset button state
     prev_reset_state: bool,
+
+    // Visualization data shared with GUI
+    visualization_data: Arc<Mutex<VisualizationData>>,
 }
 
 impl Default for Poddyclip {
@@ -157,6 +160,7 @@ impl Default for Poddyclip {
             output_buffer_right: Vec::new(),
             samples_since_process: 0,
             prev_reset_state: false,
+            visualization_data: Arc::new(Mutex::new(VisualizationData::default())),
         }
     }
 }
@@ -164,12 +168,17 @@ impl Default for Poddyclip {
 impl Default for PoddyclipParams {
     fn default() -> Self {
         Self {
-            editor_state: EguiState::from_size(600, 700),
+            editor_state: EguiState::from_size(800, 700),
 
-            reset_noise: BoolParam::new("Reset Noise Estimation", false)
-                .with_value_to_string(Arc::new(|value| {
-                    if value { "RESET".to_string() } else { "Ready".to_string() }
-                })),
+            reset_noise: BoolParam::new("Reset Noise Estimation", false).with_value_to_string(
+                Arc::new(|value| {
+                    if value {
+                        "RESET".to_string()
+                    } else {
+                        "Ready".to_string()
+                    }
+                }),
+            ),
 
             subtraction: SubtractionParams {
                 alpha_base: FloatParam::new(
@@ -177,7 +186,7 @@ impl Default for PoddyclipParams {
                     DEFAULT_ALPHA_BASE,
                     FloatRange::Linear {
                         min: 0.0,
-                        max: 20.0,
+                        max: 50.0,
                     },
                 )
                 .with_step_size(0.1)
@@ -188,7 +197,7 @@ impl Default for PoddyclipParams {
                     DEFAULT_ALPHA_MIN,
                     FloatRange::Linear {
                         min: 0.0,
-                        max: 20.0,
+                        max: 50.0,
                     },
                 )
                 .with_step_size(0.1)
@@ -199,7 +208,7 @@ impl Default for PoddyclipParams {
                     DEFAULT_ALPHA_MAX,
                     FloatRange::Linear {
                         min: 0.0,
-                        max: 20.0,
+                        max: 50.0,
                     },
                 )
                 .with_step_size(0.1)
@@ -208,7 +217,7 @@ impl Default for PoddyclipParams {
                 beta: FloatParam::new(
                     "Beta (Floor)",
                     DEFAULT_BETA,
-                    FloatRange::Linear { min: 0.0, max: 1.0 },
+                    FloatRange::Linear { min: 0.0, max: 2.0 },
                 )
                 .with_step_size(0.001)
                 .with_value_to_string(formatters::v2s_f32_rounded(3)),
@@ -220,18 +229,18 @@ impl Default for PoddyclipParams {
                     DEFAULT_LAMBDA,
                     FloatRange::Linear {
                         min: 0.0,
-                        max: 0.999,
+                        max: 0.9999,
                     },
                 )
-                .with_step_size(0.001)
-                .with_value_to_string(formatters::v2s_f32_rounded(3)),
+                .with_step_size(0.0001)
+                .with_value_to_string(formatters::v2s_f32_rounded(4)),
 
                 spike_threshold: FloatParam::new(
                     "Spike Threshold",
                     DEFAULT_SPIKE_THRESHOLD,
                     FloatRange::Linear {
-                        min: 1.0,
-                        max: 100.0,
+                        min: 0.5,
+                        max: 1000.0,
                     },
                 )
                 .with_step_size(0.5)
@@ -283,13 +292,9 @@ impl Default for PoddyclipParams {
 
 impl PoddyclipParams {
     fn make_delta_param(name: &str, default: f32) -> FloatParam {
-        FloatParam::new(
-            name,
-            default,
-            FloatRange::Linear { min: 0.1, max: 5.0 },
-        )
-        .with_step_size(0.1)
-        .with_value_to_string(formatters::v2s_f32_rounded(1))
+        FloatParam::new(name, default, FloatRange::Linear { min: 0.01, max: 15.0 })
+            .with_step_size(0.01)
+            .with_value_to_string(formatters::v2s_f32_rounded(2))
     }
 
     fn make_gamma_param(name: &str, default: f32) -> FloatParam {
@@ -298,11 +303,11 @@ impl PoddyclipParams {
             default,
             FloatRange::Linear {
                 min: 0.0,
-                max: 0.99,
+                max: 0.999,
             },
         )
-        .with_step_size(0.01)
-        .with_value_to_string(formatters::v2s_f32_rounded(2))
+        .with_step_size(0.001)
+        .with_value_to_string(formatters::v2s_f32_rounded(3))
     }
 
     fn get_delta_array(&self) -> [f32; NUM_BANDS] {
@@ -378,6 +383,7 @@ impl Plugin for Poddyclip {
 
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
         let params = self.params.clone();
+        let viz_data = self.visualization_data.clone();
 
         create_egui_editor(
             params.editor_state.clone(),
@@ -388,109 +394,217 @@ impl Plugin for Poddyclip {
                     ui.heading("Poddyclip - Spectral Subtraction");
                     ui.separator();
 
-                    egui::ScrollArea::vertical().show(ui, |ui| {
-                        // Reset button
-                        ui.horizontal(|ui| {
-                            ui.label("Noise Estimation:");
-                            if ui.button("Reset Noise Floor").clicked() {
-                                setter.begin_set_parameter(&params.reset_noise);
-                                setter.set_parameter(&params.reset_noise, true);
-                                setter.end_set_parameter(&params.reset_noise);
+                    ui.columns(2, |columns| {
+                        // LEFT COLUMN: Parameters (scrollable)
+                        egui::ScrollArea::vertical()
+                            .id_salt("params_scroll")
+                            .show(&mut columns[0], |ui| {
+                                // Reset button
+                                ui.horizontal(|ui| {
+                                    ui.label("Noise Estimation:");
+                                    if ui.button("Reset Noise Floor").clicked() {
+                                        setter.begin_set_parameter(&params.reset_noise);
+                                        setter.set_parameter(&params.reset_noise, true);
+                                        setter.end_set_parameter(&params.reset_noise);
+                                    }
+                                });
+
+                                ui.add_space(10.0);
+
+                                // Stereo mode
+                                ui.horizontal(|ui| {
+                                    ui.label("Stereo Mode:");
+                                    ui.add_space(10.0);
+                                    ui.add(widgets::ParamSlider::for_param(
+                                        &params.stereo_mode,
+                                        setter,
+                                    ));
+                                });
+
+                                ui.add_space(15.0);
+                                ui.separator();
+
+                                // Subtraction parameters
+                                ui.heading("Subtraction");
+                                ui.add_space(5.0);
+
+                                ui.label("Alpha Base:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.subtraction.alpha_base,
+                                    setter,
+                                ));
+                                ui.label("Alpha Min:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.subtraction.alpha_min,
+                                    setter,
+                                ));
+                                ui.label("Alpha Max:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.subtraction.alpha_max,
+                                    setter,
+                                ));
+                                ui.label("Beta (Floor):");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.subtraction.beta,
+                                    setter,
+                                ));
+
+                                ui.add_space(15.0);
+                                ui.separator();
+
+                                // Noise estimation parameters
+                                ui.heading("Noise Estimation");
+                                ui.add_space(5.0);
+
+                                ui.label("Lambda (Forget Factor):");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.noise_estimation.lambda,
+                                    setter,
+                                ));
+                                ui.label("Spike Threshold:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.noise_estimation.spike_threshold,
+                                    setter,
+                                ));
+                                ui.label("SFM Speech Threshold:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.noise_estimation.sfm_speech,
+                                    setter,
+                                ));
+                                ui.label("SFM Noise Threshold:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.noise_estimation.sfm_noise,
+                                    setter,
+                                ));
+
+                                ui.add_space(15.0);
+                                ui.separator();
+
+                                // Per-band delta
+                                ui.heading("Per-Band Delta (Subtraction Sensitivity)");
+                                ui.add_space(5.0);
+
+                                ui.label("Delta 0-80Hz:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.delta_0,
+                                    setter,
+                                ));
+                                ui.label("Delta 80-250Hz:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.delta_1,
+                                    setter,
+                                ));
+                                ui.label("Delta 250-500Hz:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.delta_2,
+                                    setter,
+                                ));
+                                ui.label("Delta 500-1kHz:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.delta_3,
+                                    setter,
+                                ));
+                                ui.label("Delta 1-2kHz:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.delta_4,
+                                    setter,
+                                ));
+                                ui.label("Delta 2-4kHz:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.delta_5,
+                                    setter,
+                                ));
+                                ui.label("Delta 4-8kHz:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.delta_6,
+                                    setter,
+                                ));
+                                ui.label("Delta 8-12kHz:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.delta_7,
+                                    setter,
+                                ));
+                                ui.label("Delta 12-24kHz:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.delta_8,
+                                    setter,
+                                ));
+
+                                ui.add_space(15.0);
+                                ui.separator();
+
+                                // Per-band gamma
+                                ui.heading("Per-Band Gamma (Temporal Smoothing)");
+                                ui.add_space(5.0);
+
+                                ui.label("Gamma 0-80Hz:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.gamma_0,
+                                    setter,
+                                ));
+                                ui.label("Gamma 80-250Hz:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.gamma_1,
+                                    setter,
+                                ));
+                                ui.label("Gamma 250-500Hz:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.gamma_2,
+                                    setter,
+                                ));
+                                ui.label("Gamma 500-1kHz:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.gamma_3,
+                                    setter,
+                                ));
+                                ui.label("Gamma 1-2kHz:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.gamma_4,
+                                    setter,
+                                ));
+                                ui.label("Gamma 2-4kHz:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.gamma_5,
+                                    setter,
+                                ));
+                                ui.label("Gamma 4-8kHz:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.gamma_6,
+                                    setter,
+                                ));
+                                ui.label("Gamma 8-12kHz:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.gamma_7,
+                                    setter,
+                                ));
+                                ui.label("Gamma 12-24kHz:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.gamma_8,
+                                    setter,
+                                ));
+                            });
+
+                        // RIGHT COLUMN: Visualizations
+                        columns[1].vertical(|ui| {
+                            ui.heading("Analysis");
+                            ui.add_space(10.0);
+
+                            if let Ok(viz) = viz_data.lock() {
+                                visualizations::draw_spectrum_analyzer(ui, &viz);
+
+                                ui.add_space(15.0);
+                                ui.separator();
+
+                                visualizations::draw_gain_reduction_bars(ui, &viz);
+
+                                ui.add_space(15.0);
+                                ui.separator();
+
+                                visualizations::draw_snr_table(ui, &viz);
+                            } else {
+                                ui.label("Waiting for audio data...");
                             }
                         });
-
-                        ui.add_space(10.0);
-
-                        // Stereo mode
-                        ui.horizontal(|ui| {
-                            ui.label("Stereo Mode:");
-                            ui.add_space(10.0);
-                            ui.add(widgets::ParamSlider::for_param(&params.stereo_mode, setter));
-                        });
-
-                        ui.add_space(15.0);
-                        ui.separator();
-
-                        // Subtraction parameters
-                        ui.heading("Subtraction");
-                        ui.add_space(5.0);
-
-                        ui.label("Alpha Base:");
-                        ui.add(widgets::ParamSlider::for_param(&params.subtraction.alpha_base, setter));
-                        ui.label("Alpha Min:");
-                        ui.add(widgets::ParamSlider::for_param(&params.subtraction.alpha_min, setter));
-                        ui.label("Alpha Max:");
-                        ui.add(widgets::ParamSlider::for_param(&params.subtraction.alpha_max, setter));
-                        ui.label("Beta (Floor):");
-                        ui.add(widgets::ParamSlider::for_param(&params.subtraction.beta, setter));
-
-                        ui.add_space(15.0);
-                        ui.separator();
-
-                        // Noise estimation parameters
-                        ui.heading("Noise Estimation");
-                        ui.add_space(5.0);
-
-                        ui.label("Lambda (Forget Factor):");
-                        ui.add(widgets::ParamSlider::for_param(&params.noise_estimation.lambda, setter));
-                        ui.label("Spike Threshold:");
-                        ui.add(widgets::ParamSlider::for_param(&params.noise_estimation.spike_threshold, setter));
-                        ui.label("SFM Speech Threshold:");
-                        ui.add(widgets::ParamSlider::for_param(&params.noise_estimation.sfm_speech, setter));
-                        ui.label("SFM Noise Threshold:");
-                        ui.add(widgets::ParamSlider::for_param(&params.noise_estimation.sfm_noise, setter));
-
-                        ui.add_space(15.0);
-                        ui.separator();
-
-                        // Per-band delta
-                        ui.heading("Per-Band Delta (Subtraction Sensitivity)");
-                        ui.add_space(5.0);
-
-                        ui.label("Delta 0-80Hz:");
-                        ui.add(widgets::ParamSlider::for_param(&params.bands.delta_0, setter));
-                        ui.label("Delta 80-250Hz:");
-                        ui.add(widgets::ParamSlider::for_param(&params.bands.delta_1, setter));
-                        ui.label("Delta 250-500Hz:");
-                        ui.add(widgets::ParamSlider::for_param(&params.bands.delta_2, setter));
-                        ui.label("Delta 500-1kHz:");
-                        ui.add(widgets::ParamSlider::for_param(&params.bands.delta_3, setter));
-                        ui.label("Delta 1-2kHz:");
-                        ui.add(widgets::ParamSlider::for_param(&params.bands.delta_4, setter));
-                        ui.label("Delta 2-4kHz:");
-                        ui.add(widgets::ParamSlider::for_param(&params.bands.delta_5, setter));
-                        ui.label("Delta 4-8kHz:");
-                        ui.add(widgets::ParamSlider::for_param(&params.bands.delta_6, setter));
-                        ui.label("Delta 8-12kHz:");
-                        ui.add(widgets::ParamSlider::for_param(&params.bands.delta_7, setter));
-                        ui.label("Delta 12-24kHz:");
-                        ui.add(widgets::ParamSlider::for_param(&params.bands.delta_8, setter));
-
-                        ui.add_space(15.0);
-                        ui.separator();
-
-                        // Per-band gamma
-                        ui.heading("Per-Band Gamma (Temporal Smoothing)");
-                        ui.add_space(5.0);
-
-                        ui.label("Gamma 0-80Hz:");
-                        ui.add(widgets::ParamSlider::for_param(&params.bands.gamma_0, setter));
-                        ui.label("Gamma 80-250Hz:");
-                        ui.add(widgets::ParamSlider::for_param(&params.bands.gamma_1, setter));
-                        ui.label("Gamma 250-500Hz:");
-                        ui.add(widgets::ParamSlider::for_param(&params.bands.gamma_2, setter));
-                        ui.label("Gamma 500-1kHz:");
-                        ui.add(widgets::ParamSlider::for_param(&params.bands.gamma_3, setter));
-                        ui.label("Gamma 1-2kHz:");
-                        ui.add(widgets::ParamSlider::for_param(&params.bands.gamma_4, setter));
-                        ui.label("Gamma 2-4kHz:");
-                        ui.add(widgets::ParamSlider::for_param(&params.bands.gamma_5, setter));
-                        ui.label("Gamma 4-8kHz:");
-                        ui.add(widgets::ParamSlider::for_param(&params.bands.gamma_6, setter));
-                        ui.label("Gamma 8-12kHz:");
-                        ui.add(widgets::ParamSlider::for_param(&params.bands.gamma_7, setter));
-                        ui.label("Gamma 12-24kHz:");
-                        ui.add(widgets::ParamSlider::for_param(&params.bands.gamma_8, setter));
                     });
                 });
             },
@@ -601,6 +715,10 @@ impl Poddyclip {
     fn process_mono_channel(&mut self, buffer: &mut Buffer, _channel_idx: usize) {
         use denoiser_rt::HOP_SIZE;
 
+        // Check if editor is open to enable visualization
+        let viz_enabled = self.params.editor_state.is_open();
+        self.denoiser_left.set_visualization_enabled(viz_enabled);
+
         for mut channel_samples in buffer.iter_samples() {
             let input_sample = channel_samples.get_mut(0).copied().unwrap_or(0.0);
 
@@ -614,6 +732,13 @@ impl Poddyclip {
                 let output_frame = self.denoiser_left.process_frame(&self.input_ring_left);
                 self.output_buffer_left.extend(output_frame);
                 self.samples_since_process = 0;
+
+                // Update visualization data after processing
+                if viz_enabled {
+                    if let Ok(mut viz) = self.visualization_data.try_lock() {
+                        *viz = self.denoiser_left.get_visualization_data();
+                    }
+                }
             }
 
             // Output from buffer
@@ -631,6 +756,11 @@ impl Poddyclip {
 
     fn process_stereo_lr(&mut self, buffer: &mut Buffer) {
         use denoiser_rt::HOP_SIZE;
+
+        // Check if editor is open to enable visualization
+        let viz_enabled = self.params.editor_state.is_open();
+        self.denoiser_left.set_visualization_enabled(viz_enabled);
+        self.denoiser_right.set_visualization_enabled(false); // Only visualize left
 
         for mut channel_samples in buffer.iter_samples() {
             let left_in = channel_samples.get_mut(0).copied().unwrap_or(0.0);
@@ -650,6 +780,13 @@ impl Poddyclip {
                 self.output_buffer_left.extend(left_frame);
                 self.output_buffer_right.extend(right_frame);
                 self.samples_since_process = 0;
+
+                // Update visualization from left channel
+                if viz_enabled {
+                    if let Ok(mut viz) = self.visualization_data.try_lock() {
+                        *viz = self.denoiser_left.get_visualization_data();
+                    }
+                }
             }
 
             // Output from buffers
@@ -677,6 +814,11 @@ impl Poddyclip {
     fn process_stereo_ms(&mut self, buffer: &mut Buffer) {
         use denoiser_rt::HOP_SIZE;
 
+        // Check if editor is open to enable visualization
+        let viz_enabled = self.params.editor_state.is_open();
+        self.denoiser_mid.set_visualization_enabled(viz_enabled);
+        self.denoiser_side.set_visualization_enabled(false); // Only visualize mid
+
         for mut channel_samples in buffer.iter_samples() {
             let left_in = channel_samples.get_mut(0).copied().unwrap_or(0.0);
             let right_in = channel_samples.get_mut(1).copied().unwrap_or(0.0);
@@ -699,6 +841,13 @@ impl Poddyclip {
                 self.output_buffer_left.extend(mid_frame);
                 self.output_buffer_right.extend(side_frame);
                 self.samples_since_process = 0;
+
+                // Update visualization from mid channel
+                if viz_enabled {
+                    if let Ok(mut viz) = self.visualization_data.try_lock() {
+                        *viz = self.denoiser_mid.get_visualization_data();
+                    }
+                }
             }
 
             // Output from buffers
@@ -743,10 +892,8 @@ impl ClapPlugin for Poddyclip {
 
 impl Vst3Plugin for Poddyclip {
     const VST3_CLASS_ID: [u8; 16] = *b"PoddyclipSpecSub";
-    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[
-        Vst3SubCategory::Fx,
-        Vst3SubCategory::Tools,
-    ];
+    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] =
+        &[Vst3SubCategory::Fx, Vst3SubCategory::Tools];
 }
 
 nih_export_clap!(Poddyclip);

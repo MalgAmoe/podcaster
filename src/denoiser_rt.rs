@@ -27,6 +27,42 @@ const TRANSITION_BINS: usize = 10;
 const EPSILON: f32 = 1e-10;
 
 // =============================================================================
+// Visualization Data
+// =============================================================================
+
+/// Data for real-time visualization in the GUI
+#[derive(Clone, Debug)]
+pub struct VisualizationData {
+    /// Current power spectrum (1025 bins for 2048 FFT)
+    pub current_spectrum: Vec<f32>,
+
+    /// Noise floor spectrum (1025 bins)
+    pub noise_spectrum: Vec<f32>,
+
+    /// Per-band gain reduction in dB (9 bands)
+    /// Negative values indicate attenuation
+    pub band_gain_db: [f32; NUM_BANDS],
+
+    /// Per-band SNR in dB (9 bands)
+    pub band_snr_db: [f32; NUM_BANDS],
+
+    /// Sample rate (for frequency axis calculation)
+    pub sample_rate: u32,
+}
+
+impl Default for VisualizationData {
+    fn default() -> Self {
+        Self {
+            current_spectrum: vec![0.0; 1025],
+            noise_spectrum: vec![0.0; 1025],
+            band_gain_db: [0.0; NUM_BANDS],
+            band_snr_db: [0.0; NUM_BANDS],
+            sample_rate: 48000,
+        }
+    }
+}
+
+// =============================================================================
 // Parameter Defaults
 // =============================================================================
 
@@ -220,6 +256,10 @@ pub struct RealtimeDenoiser {
     fft: Arc<dyn rustfft::Fft<f32>>,
     ifft: Arc<dyn rustfft::Fft<f32>>,
     fft_scratch: Vec<Complex<f32>>,
+
+    // Visualization (optional, only populated when GUI is open)
+    visualization_enabled: bool,
+    cached_viz_data: VisualizationData,
 }
 
 impl RealtimeDenoiser {
@@ -254,12 +294,28 @@ impl RealtimeDenoiser {
             fft,
             ifft,
             fft_scratch,
+            visualization_enabled: false,
+            cached_viz_data: VisualizationData::default(),
         }
     }
 
     pub fn set_params(&mut self, params: DenoiserParams) {
         self.params = params;
         self.gamma_dirty = true;
+    }
+
+    pub fn set_visualization_enabled(&mut self, enabled: bool) {
+        self.visualization_enabled = enabled;
+        if enabled && self.cached_viz_data.current_spectrum.len() != self.n_bins {
+            // Initialize with correct size
+            self.cached_viz_data = VisualizationData {
+                current_spectrum: vec![0.0; self.n_bins],
+                noise_spectrum: vec![0.0; self.n_bins],
+                band_gain_db: [0.0; NUM_BANDS],
+                band_snr_db: [0.0; NUM_BANDS],
+                sample_rate: self.sample_rate,
+            };
+        }
     }
 
     fn rebuild_gamma_curve(&mut self) {
@@ -386,6 +442,11 @@ impl RealtimeDenoiser {
         let gain = self.compute_gain(&power, &alpha);
         let gain = self.smooth_gain(&gain);
 
+        // Update visualization data if enabled
+        if self.visualization_enabled {
+            self.update_visualization_data(&power, &snr, &gain);
+        }
+
         // Apply gain to spectrum (maintain conjugate symmetry)
         let mut result = spectrum.clone();
         for k in 0..self.n_bins {
@@ -423,6 +484,44 @@ impl RealtimeDenoiser {
         }
 
         output
+    }
+
+    fn update_visualization_data(&mut self, power: &[f32], snr: &[f32], gain: &[f32]) {
+        // Copy current power spectrum (for blue line)
+        self.cached_viz_data.current_spectrum[..self.n_bins].copy_from_slice(power);
+
+        // Copy noise floor (for red line)
+        self.cached_viz_data.noise_spectrum[..self.n_bins].copy_from_slice(&self.noise_pow);
+
+        // Compute per-band averages
+        for (band_idx, &(start_hz, end_hz)) in BANDS.iter().enumerate() {
+            let start_bin = hz_to_bin(start_hz, self.window_size, self.sample_rate);
+            let end_bin = hz_to_bin(end_hz, self.window_size, self.sample_rate).min(self.n_bins);
+
+            if start_bin >= end_bin {
+                continue;
+            }
+
+            // Average SNR in this band
+            let snr_sum: f32 = snr[start_bin..end_bin].iter().sum();
+            let snr_avg = snr_sum / (end_bin - start_bin) as f32;
+            self.cached_viz_data.band_snr_db[band_idx] = snr_avg;
+
+            // Average gain in this band, convert to dB
+            let gain_sum: f32 = gain[start_bin..end_bin].iter().sum();
+            let gain_avg = gain_sum / (end_bin - start_bin) as f32;
+            // Convert linear gain to dB attenuation (negative values)
+            let gain_db = if gain_avg > 0.0 {
+                20.0 * gain_avg.log10()
+            } else {
+                -60.0 // Floor at -60dB
+            };
+            self.cached_viz_data.band_gain_db[band_idx] = gain_db;
+        }
+    }
+
+    pub fn get_visualization_data(&self) -> VisualizationData {
+        self.cached_viz_data.clone()
     }
 
     pub fn reset(&mut self) {

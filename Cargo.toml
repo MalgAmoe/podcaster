@@ -16,6 +16,7 @@ crate-type = ["cdylib", "lib"]
 nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", features = ["assert_process_allocs"] }
 nih_plug_egui = { git = "https://github.com/robbert-vdh/nih-plug.git" }
 rustfft = "6.2"
+egui_plot = "0.31"
 
 # CLI-only dependencies (optional)
 anyhow = { version = "1.0.100", optional = true }
