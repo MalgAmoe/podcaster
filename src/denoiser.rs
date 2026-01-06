@@ -36,6 +36,13 @@ const BANDS: [(f32, f32, f32); 9] = [
 
 const TRANSITION_BINS: usize = 10;
 const EPSILON: f32 = 1e-10;
+const WARMUP_FRAMES: usize = 20;
+
+// Shorthand constants for internal use
+const LAMBDA: f32 = DEFAULT_LAMBDA;
+const SPIKE_THRESHOLD: f32 = DEFAULT_SPIKE_THRESHOLD;
+const SFM_SPEECH: f32 = DEFAULT_SFM_SPEECH;
+const SFM_NOISE: f32 = DEFAULT_SFM_NOISE;
 
 // =============================================================================
 // Preset Configuration
@@ -82,9 +89,9 @@ pub const PRESETS: [Preset; 5] = [
     // 4: Strong - noticeable noise reduction
     Preset {
         name: "Strong",
-        alpha_base: 4.5,
-        alpha_min: 1.5,
-        alpha_max: 7.0,
+        alpha_base: 40.5,
+        alpha_min: 20.5,
+        alpha_max: 70.0,
         beta: 0.02,
         gamma: [0.55, 0.60, 0.70, 0.78, 0.84, 0.88, 0.91, 0.94, 0.96],
     },

@@ -25,6 +25,7 @@ pub const BANDS: [(f32, f32); 9] = [
 pub const NUM_BANDS: usize = 9;
 const TRANSITION_BINS: usize = 10;
 const EPSILON: f32 = 1e-10;
+const WARMUP_FRAMES: usize = 20; // Number of frames to bootstrap noise estimate
 
 // =============================================================================
 // Visualization Data
@@ -283,7 +284,7 @@ impl RealtimeDenoiser {
             n_bins,
             params,
             window: root_hann_window(window_size),
-            noise_pow: vec![EPSILON; n_bins], // Initialize with small value instead of 0
+            noise_pow: vec![0.0; n_bins], // Initialize at 0, like Python reference
             prev_gain: vec![1.0; n_bins],
             prev_sfm_decision: true,
             frames_processed: 0,
@@ -404,12 +405,12 @@ impl RealtimeDenoiser {
             .map(|c| c.norm_sqr())
             .collect();
 
-        // Bootstrap noise estimate with first 10 frames
-        if self.frames_processed < 10 {
+        // Bootstrap noise estimate with first WARMUP_FRAMES (warmup period)
+        if self.frames_processed < WARMUP_FRAMES {
             // Force update during initial frames to learn noise floor
             for k in 0..self.n_bins {
                 self.noise_pow[k] = self.params.lambda * self.noise_pow[k]
-                    + (1.0 - self.params.lambda) * power[k] * 0.5; // Use 50% of signal as initial estimate
+                    + (1.0 - self.params.lambda) * power[k]; // Full signal power during warmup
             }
             self.frames_processed += 1;
         } else {
@@ -525,7 +526,7 @@ impl RealtimeDenoiser {
     }
 
     pub fn reset(&mut self) {
-        self.noise_pow.fill(EPSILON);
+        self.noise_pow.fill(0.0);
         self.prev_gain.fill(1.0);
         self.prev_sfm_decision = true;
         self.frames_processed = 0;
