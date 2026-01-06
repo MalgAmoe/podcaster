@@ -14,14 +14,11 @@ pub const WINDOW_SIZE: usize = 2048;
 pub const HOP_SIZE: usize = 1024;
 pub const SAMPLE_RATE: u32 = 48000;
 
-// Noise estimation
-const LAMBDA: f32 = 0.92; // forget factor
-const SPIKE_THRESHOLD: f32 = 10.0; // 10 dB power spike
-const WARMUP_FRAMES: usize = 20;
-
-// SFM thresholds
-const SFM_SPEECH: f32 = 0.1; // below = tonal (freeze)
-const SFM_NOISE: f32 = 0.4; // above = flat (update)
+// Default noise estimation parameters (can be overridden)
+pub const DEFAULT_LAMBDA: f32 = 0.95; // forget factor
+pub const DEFAULT_SPIKE_THRESHOLD: f32 = 10.0; // power ratio spike
+pub const DEFAULT_SFM_SPEECH: f32 = 0.1; // below = tonal (freeze)
+pub const DEFAULT_SFM_NOISE: f32 = 0.4; // above = flat (update)
 
 // 9-Band configuration for adaptive alpha
 // (start_hz, end_hz, delta)
