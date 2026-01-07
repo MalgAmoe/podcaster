@@ -244,6 +244,7 @@ pub struct RealtimeDenoiser {
     prev_gain: Vec<f32>,
     prev_sfm_decision: bool,
     frames_processed: usize,
+    needs_initialization: bool,
 
     // Cached gamma curve (rebuild when params change)
     gamma_curve: Vec<f32>,
@@ -284,10 +285,11 @@ impl RealtimeDenoiser {
             n_bins,
             params,
             window: root_hann_window(window_size),
-            noise_pow: vec![0.0; n_bins], // Initialize at 0, like Python reference
+            noise_pow: vec![EPSILON; n_bins],  // Small non-zero placeholder
             prev_gain: vec![1.0; n_bins],
             prev_sfm_decision: true,
             frames_processed: 0,
+            needs_initialization: true,  // Will initialize from first frame
             gamma_curve,
             gamma_dirty: false,
             overlap_buffer: vec![0.0; window_size],
@@ -353,6 +355,41 @@ impl RealtimeDenoiser {
         }
     }
 
+    fn update_noise_estimate_with_lambda(&mut self, power: &[f32], force_update: bool, lambda: f32) {
+        for k in 0..self.n_bins {
+            // Spike protection
+            if !force_update && power[k] > self.params.spike_threshold * self.noise_pow[k] {
+                continue;
+            }
+            // Recursive update with custom lambda
+            self.noise_pow[k] = lambda * self.noise_pow[k] + (1.0 - lambda) * power[k];
+        }
+    }
+
+    fn initialize_noise_from_first_frame(&mut self, power: &[f32]) {
+        // Use bottom 20th percentile of first frame as initial guess
+        let mut sorted = power.to_vec();
+        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        let percentile_20 = sorted[sorted.len() / 5];
+
+        for k in 0..self.n_bins {
+            // Initialize conservatively: minimum of bin power or 20th percentile * 1.5
+            self.noise_pow[k] = power[k].min(percentile_20 * 1.5).max(EPSILON);
+        }
+        self.needs_initialization = false;
+    }
+
+    fn get_adaptive_lambda(&self) -> f32 {
+        // Fast convergence in first few frames
+        if self.frames_processed < 5 {
+            0.5   // Very fast initial convergence
+        } else if self.frames_processed < WARMUP_FRAMES {
+            0.75  // Medium convergence
+        } else {
+            self.params.lambda  // Normal - maintains adaptation
+        }
+    }
+
     fn compute_gain(&self, power: &[f32], alpha: &[f32]) -> Vec<f32> {
         power
             .iter()
@@ -405,13 +442,18 @@ impl RealtimeDenoiser {
             .map(|c| c.norm_sqr())
             .collect();
 
+        // Initialize noise estimate from first frame
+        if self.needs_initialization {
+            self.initialize_noise_from_first_frame(&power);
+        }
+
+        // Get adaptive lambda for faster initial convergence
+        let lambda = self.get_adaptive_lambda();
+
         // Bootstrap noise estimate with first WARMUP_FRAMES (warmup period)
         if self.frames_processed < WARMUP_FRAMES {
-            // Force update during initial frames to learn noise floor
-            for k in 0..self.n_bins {
-                self.noise_pow[k] = self.params.lambda * self.noise_pow[k]
-                    + (1.0 - self.params.lambda) * power[k]; // Full signal power during warmup
-            }
+            // Force update with adaptive lambda during initial frames
+            self.update_noise_estimate_with_lambda(&power, true, lambda);
             self.frames_processed += 1;
         } else {
             // Normal SFM-based VAD for noise estimation
@@ -439,19 +481,19 @@ impl RealtimeDenoiser {
             self.params.alpha_max,
         );
 
-        // Compute and smooth gain
+        // Compute and smooth gain - apply at full strength from frame 0
         let gain = self.compute_gain(&power, &alpha);
-        let gain = self.smooth_gain(&gain);
+        let final_gain = self.smooth_gain(&gain);
 
         // Update visualization data if enabled
         if self.visualization_enabled {
-            self.update_visualization_data(&power, &snr, &gain);
+            self.update_visualization_data(&power, &snr, &final_gain);
         }
 
-        // Apply gain to spectrum (maintain conjugate symmetry)
+        // Apply faded gain to spectrum (maintain conjugate symmetry)
         let mut result = spectrum.clone();
         for k in 0..self.n_bins {
-            result[k] = spectrum[k] * gain[k];
+            result[k] = spectrum[k] * final_gain[k];
         }
         for k in self.n_bins..self.window_size {
             let mirror = self.window_size - k;
@@ -526,12 +568,22 @@ impl RealtimeDenoiser {
     }
 
     pub fn reset(&mut self) {
-        self.noise_pow.fill(0.0);
+        // Reset noise estimation state
+        self.noise_pow.fill(EPSILON);
         self.prev_gain.fill(1.0);
         self.prev_sfm_decision = true;
         self.frames_processed = 0;
+        self.needs_initialization = true;
+
+        // Reset processing buffers
         self.overlap_buffer.fill(0.0);
         self.input_buffer.clear();
+
+        // Reset parameter cache - force gamma curve rebuild
+        self.gamma_dirty = true;
+
+        // Reset visualization data to show clean state
+        self.cached_viz_data = VisualizationData::default();
     }
 
     pub fn latency_samples(&self) -> u32 {

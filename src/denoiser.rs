@@ -20,18 +20,37 @@ pub const DEFAULT_SPIKE_THRESHOLD: f32 = 10.0; // power ratio spike
 pub const DEFAULT_SFM_SPEECH: f32 = 0.1; // below = tonal (freeze)
 pub const DEFAULT_SFM_NOISE: f32 = 0.4; // above = flat (update)
 
-// 9-Band configuration for adaptive alpha
+// 24 Bark critical bands configuration (psychoacoustic scale)
 // (start_hz, end_hz, delta)
-const BANDS: [(f32, f32, f32); 9] = [
-    (0.0, 80.0, 0.8),       // Band 0: Rumble, pops, HVAC
-    (80.0, 250.0, 1.0),     // Band 1: Voice fundamental
-    (250.0, 500.0, 1.5),    // Band 2: Warmth
-    (500.0, 1000.0, 2.0),   // Band 3: Body
-    (1000.0, 2000.0, 2.5),  // Band 4: Presence
-    (2000.0, 4000.0, 2.5),  // Band 5: Intelligibility
-    (4000.0, 8000.0, 2.0),  // Band 6: Sibilance
-    (8000.0, 12000.0, 1.5), // Band 7: Air
-    (12000.0, 24000.0, 1.0), // Band 8: Hiss region
+const BANDS: [(f32, f32, f32); 24] = [
+    // Low (0-770Hz): Conservative
+    (0.0, 100.0, 0.8),
+    (100.0, 200.0, 1.0),
+    (200.0, 300.0, 1.2),
+    (300.0, 400.0, 1.4),
+    (400.0, 510.0, 1.6),
+    (510.0, 630.0, 1.8),
+    (630.0, 770.0, 2.0),
+    // Mid (770-3150Hz): Aggressive on speech
+    (770.0, 920.0, 2.2),
+    (920.0, 1080.0, 2.5),
+    (1080.0, 1270.0, 2.8),
+    (1270.0, 1480.0, 2.8),
+    (1480.0, 1720.0, 2.8),
+    (1720.0, 2000.0, 2.8),
+    (2000.0, 2320.0, 2.5),
+    // High-mid (3150-7700Hz): Intelligibility
+    (2320.0, 2700.0, 2.3),
+    (2700.0, 3150.0, 2.0),
+    (3150.0, 3700.0, 1.8),
+    (3700.0, 4400.0, 1.8),
+    (4400.0, 5300.0, 1.8),
+    // High (7700-15500Hz): Air/hiss
+    (5300.0, 6400.0, 1.5),
+    (6400.0, 7700.0, 1.3),
+    (7700.0, 9500.0, 1.2),
+    (9500.0, 12000.0, 1.0),
+    (12000.0, 15500.0, 0.9),
 ];
 
 const TRANSITION_BINS: usize = 10;
@@ -55,7 +74,7 @@ pub struct Preset {
     pub alpha_min: f32,
     pub alpha_max: f32,
     pub beta: f32,
-    pub gamma: [f32; 9],
+    pub gamma: [f32; 24],
 }
 
 pub const PRESETS: [Preset; 5] = [
@@ -66,7 +85,12 @@ pub const PRESETS: [Preset; 5] = [
         alpha_min: 0.5,
         alpha_max: 2.5,
         beta: 0.15,
-        gamma: [0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80],
+        gamma: [
+            0.40, 0.42, 0.44, 0.46, 0.48, 0.50, 0.52,  // Low (7)
+            0.55, 0.58, 0.62, 0.65, 0.68, 0.70, 0.72,  // Mid (7)
+            0.74, 0.76, 0.77, 0.78, 0.79,              // High-mid (5)
+            0.80, 0.81, 0.82, 0.83, 0.84,              // High (5)
+        ],
     },
     // 2: Light - subtle noise reduction
     Preset {
@@ -75,7 +99,12 @@ pub const PRESETS: [Preset; 5] = [
         alpha_min: 0.8,
         alpha_max: 3.5,
         beta: 0.08,
-        gamma: [0.45, 0.50, 0.58, 0.65, 0.72, 0.78, 0.82, 0.86, 0.88],
+        gamma: [
+            0.45, 0.47, 0.49, 0.51, 0.53, 0.55, 0.57,  // Low (7)
+            0.60, 0.63, 0.67, 0.70, 0.73, 0.75, 0.77,  // Mid (7)
+            0.79, 0.81, 0.82, 0.83, 0.84,              // High-mid (5)
+            0.85, 0.86, 0.87, 0.88, 0.89,              // High (5)
+        ],
     },
     // 3: Moderate - balanced (default)
     Preset {
@@ -84,16 +113,26 @@ pub const PRESETS: [Preset; 5] = [
         alpha_min: 1.0,
         alpha_max: 5.0,
         beta: 0.05,
-        gamma: [0.50, 0.55, 0.65, 0.72, 0.78, 0.82, 0.86, 0.90, 0.92],
+        gamma: [
+            0.50, 0.52, 0.54, 0.56, 0.58, 0.60, 0.62,  // Low (7)
+            0.65, 0.68, 0.72, 0.75, 0.78, 0.80, 0.82,  // Mid (7)
+            0.84, 0.86, 0.87, 0.88, 0.89,              // High-mid (5)
+            0.90, 0.91, 0.92, 0.93, 0.94,              // High (5)
+        ],
     },
     // 4: Strong - noticeable noise reduction
     Preset {
         name: "Strong",
-        alpha_base: 40.5,
-        alpha_min: 20.5,
-        alpha_max: 70.0,
+        alpha_base: 4.5,
+        alpha_min: 2.5,
+        alpha_max: 7.0,
         beta: 0.02,
-        gamma: [0.55, 0.60, 0.70, 0.78, 0.84, 0.88, 0.91, 0.94, 0.96],
+        gamma: [
+            0.55, 0.57, 0.59, 0.61, 0.63, 0.65, 0.67,  // Low (7)
+            0.70, 0.73, 0.77, 0.80, 0.83, 0.85, 0.87,  // Mid (7)
+            0.89, 0.91, 0.92, 0.93, 0.94,              // High-mid (5)
+            0.95, 0.96, 0.97, 0.97, 0.98,              // High (5)
+        ],
     },
     // 5: Aggressive - maximum removal, may affect speech
     Preset {
@@ -102,7 +141,12 @@ pub const PRESETS: [Preset; 5] = [
         alpha_min: 2.0,
         alpha_max: 10.0,
         beta: 0.008,
-        gamma: [0.60, 0.65, 0.75, 0.82, 0.88, 0.92, 0.94, 0.96, 0.98],
+        gamma: [
+            0.60, 0.62, 0.64, 0.66, 0.68, 0.70, 0.72,  // Low (7)
+            0.75, 0.78, 0.82, 0.85, 0.88, 0.90, 0.92,  // Mid (7)
+            0.94, 0.95, 0.96, 0.96, 0.97,              // High-mid (5)
+            0.97, 0.98, 0.98, 0.99, 0.99,              // High (5)
+        ],
     },
 ];
 
@@ -203,9 +247,9 @@ fn compute_alpha_curve(
     alpha
 }
 
-fn compute_gamma_curve(fft_size: usize, sample_rate: u32, gamma_per_band: &[f32; 9]) -> Vec<f32> {
+fn compute_gamma_curve(fft_size: usize, sample_rate: u32, gamma_per_band: &[f32; 24]) -> Vec<f32> {
     let n_bins = fft_size / 2 + 1;
-    let mut gamma = vec![gamma_per_band[8]; n_bins]; // Default to last band
+    let mut gamma = vec![gamma_per_band[23]; n_bins]; // Default to last band
 
     // Assign gamma per band
     for (i, &(start_hz, end_hz, _)) in BANDS.iter().enumerate() {
@@ -259,6 +303,7 @@ pub struct SpectralSubtractionDenoiser {
     prev_gain: Vec<f32>,
     prev_sfm_decision: bool,
     frame_count: usize,
+    needs_initialization: bool,
 
     // Precomputed gamma curve
     gamma: Vec<f32>,
@@ -298,10 +343,11 @@ impl SpectralSubtractionDenoiser {
             alpha_max: p.alpha_max,
             beta: p.beta,
             window: root_hann_window(window_size),
-            noise_pow: vec![0.0; n_bins],
+            noise_pow: vec![EPSILON; n_bins],  // Small non-zero placeholder
             prev_gain: vec![1.0; n_bins],
             prev_sfm_decision: true,
             frame_count: 0,
+            needs_initialization: true,  // Will initialize from first frame
             gamma: compute_gamma_curve(window_size, sample_rate, &p.gamma),
             overlap_buffer: vec![0.0; window_size],
             fft,
@@ -329,6 +375,41 @@ impl SpectralSubtractionDenoiser {
             }
             // Recursive update
             self.noise_pow[k] = LAMBDA * self.noise_pow[k] + (1.0 - LAMBDA) * power[k];
+        }
+    }
+
+    fn update_noise_estimate_with_lambda(&mut self, power: &[f32], force_update: bool, lambda: f32) {
+        for k in 0..self.n_bins {
+            // Spike protection
+            if !force_update && power[k] > SPIKE_THRESHOLD * self.noise_pow[k] {
+                continue;
+            }
+            // Recursive update with custom lambda
+            self.noise_pow[k] = lambda * self.noise_pow[k] + (1.0 - lambda) * power[k];
+        }
+    }
+
+    fn initialize_noise_from_first_frame(&mut self, power: &[f32]) {
+        // Use bottom 20th percentile of first frame as initial guess
+        let mut sorted = power.to_vec();
+        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        let percentile_20 = sorted[sorted.len() / 5];
+
+        for k in 0..self.n_bins {
+            // Initialize conservatively: minimum of bin power or 20th percentile * 1.5
+            self.noise_pow[k] = power[k].min(percentile_20 * 1.5).max(EPSILON);
+        }
+        self.needs_initialization = false;
+    }
+
+    fn get_adaptive_lambda(&self) -> f32 {
+        // Fast convergence in first few frames
+        if self.frame_count < 5 {
+            0.5   // Very fast initial convergence
+        } else if self.frame_count < WARMUP_FRAMES {
+            0.75  // Medium convergence
+        } else {
+            LAMBDA  // Normal 0.95 - maintains adaptation
         }
     }
 
@@ -382,11 +463,47 @@ impl SpectralSubtractionDenoiser {
             .map(|c| c.norm_sqr())
             .collect();
 
+        // Initialize noise estimate from first frame
+        if self.needs_initialization {
+            self.initialize_noise_from_first_frame(&power);
+        }
+
+        // Get adaptive lambda for faster initial convergence
+        let lambda = self.get_adaptive_lambda();
+
         let enhanced_spectrum = if self.frame_count < WARMUP_FRAMES {
-            // Warmup: collect noise estimate, pass through
-            self.update_noise_estimate(&power, true);
-            spectrum
+            // During warmup: use fast convergence lambda, but apply full denoising
+            // Update noise estimate with adaptive lambda for fast convergence
+            self.update_noise_estimate_with_lambda(&power, true, lambda);
+
+            // Compute adaptive alpha
+            let snr = self.compute_snr_per_bin(&power);
+            let alpha = compute_alpha_curve(
+                self.window_size,
+                self.sample_rate,
+                &snr,
+                self.alpha_base,
+                self.alpha_min,
+                self.alpha_max,
+            );
+
+            // Compute and smooth gain - apply at full strength from frame 0
+            let gain = self.compute_gain(&power, &alpha);
+            let gain = self.smooth_gain(&gain);
+
+            // Apply gain to spectrum (maintain conjugate symmetry)
+            let mut result = spectrum.clone();
+            for k in 0..self.n_bins {
+                result[k] = spectrum[k] * gain[k];
+            }
+            // Mirror for negative frequencies
+            for k in self.n_bins..self.window_size {
+                let mirror = self.window_size - k;
+                result[k] = result[mirror].conj();
+            }
+            result
         } else {
+            // Normal processing after warmup
             // SFM-based VAD
             let sfm = compute_sfm(&power);
 
@@ -489,14 +606,6 @@ impl SpectralSubtractionDenoiser {
         output.truncate(original_len);
 
         output
-    }
-
-    pub fn reset(&mut self) {
-        self.noise_pow.fill(0.0);
-        self.prev_gain.fill(1.0);
-        self.prev_sfm_decision = true;
-        self.frame_count = 0;
-        self.overlap_buffer.fill(0.0);
     }
 }
 

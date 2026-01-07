@@ -186,7 +186,7 @@ impl Default for PoddyclipParams {
                     DEFAULT_ALPHA_BASE,
                     FloatRange::Linear {
                         min: 0.0,
-                        max: 50.0,
+                        max: 20.0,
                     },
                 )
                 .with_step_size(0.1)
@@ -197,7 +197,7 @@ impl Default for PoddyclipParams {
                     DEFAULT_ALPHA_MIN,
                     FloatRange::Linear {
                         min: 0.0,
-                        max: 50.0,
+                        max: 20.0,
                     },
                 )
                 .with_step_size(0.1)
@@ -208,7 +208,7 @@ impl Default for PoddyclipParams {
                     DEFAULT_ALPHA_MAX,
                     FloatRange::Linear {
                         min: 0.0,
-                        max: 50.0,
+                        max: 20.0,
                     },
                 )
                 .with_step_size(0.1)
@@ -217,7 +217,7 @@ impl Default for PoddyclipParams {
                 beta: FloatParam::new(
                     "Beta (Floor)",
                     DEFAULT_BETA,
-                    FloatRange::Linear { min: 0.0, max: 2.0 },
+                    FloatRange::Linear { min: 0.0, max: 1.0 },
                 )
                 .with_step_size(0.001)
                 .with_value_to_string(formatters::v2s_f32_rounded(3)),
@@ -240,7 +240,7 @@ impl Default for PoddyclipParams {
                     DEFAULT_SPIKE_THRESHOLD,
                     FloatRange::Linear {
                         min: 0.5,
-                        max: 1000.0,
+                        max: 100.0,
                     },
                 )
                 .with_step_size(0.5)
@@ -292,7 +292,7 @@ impl Default for PoddyclipParams {
 
 impl PoddyclipParams {
     fn make_delta_param(name: &str, default: f32) -> FloatParam {
-        FloatParam::new(name, default, FloatRange::Linear { min: 0.01, max: 15.0 })
+        FloatParam::new(name, default, FloatRange::Linear { min: 0.01, max: 5.0 })
             .with_step_size(0.01)
             .with_value_to_string(formatters::v2s_f32_rounded(2))
     }
@@ -404,7 +404,7 @@ impl Plugin for Poddyclip {
                                     ui.label("Noise Estimation:");
                                     if ui.button("Reset Noise Floor").clicked() {
                                         setter.begin_set_parameter(&params.reset_noise);
-                                        setter.set_parameter(&params.reset_noise, true);
+                                        setter.set_parameter(&params.reset_noise, !params.reset_noise.value());
                                         setter.end_set_parameter(&params.reset_noise);
                                     }
                                 });
@@ -648,10 +648,10 @@ impl Plugin for Poddyclip {
         _aux: &mut AuxiliaryBuffers,
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
-        // Check if reset button was pressed (rising edge detection)
+        // Check if reset button was pressed (any edge detection)
         let reset_state = self.params.reset_noise.value();
-        if reset_state && !self.prev_reset_state {
-            // Rising edge detected - reset the denoisers
+        if reset_state != self.prev_reset_state {
+            // State changed (either edge) - reset the denoisers
             self.denoiser_left.reset();
             self.denoiser_right.reset();
             self.denoiser_mid.reset();
