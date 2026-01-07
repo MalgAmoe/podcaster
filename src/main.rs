@@ -1,4 +1,5 @@
 mod denoiser;
+mod filters;
 
 use std::path::{Path, PathBuf};
 
@@ -16,6 +17,8 @@ use denoiser::denoiser::{
     analyze_audio, get_preset, process_stereo_lr, SpectralSubtractionDenoiser, DEFAULT_PRESET,
     PRESETS, SAMPLE_RATE,
 };
+
+use filters::{HighPassSlope, StereoFilterChain};
 
 #[derive(Parser)]
 #[command(name = "poddyclip")]
@@ -37,6 +40,14 @@ struct Args {
     /// Denoising strength 1-5
     #[arg(short, long, default_value_t = DEFAULT_PRESET, value_parser = clap::value_parser!(u8).range(1..=5))]
     preset: u8,
+
+    /// High-pass filter slope: 12 or 24 dB/octave (filters applied before denoising)
+    #[arg(long, default_value_t = 24, value_parser = clap::value_parser!(u8).range(12..=24))]
+    hp_slope: u8,
+
+    /// Disable filters (skip HP @ 80Hz and LP @ 15.5kHz)
+    #[arg(long)]
+    no_filters: bool,
 }
 
 fn main() -> Result<()> {
@@ -113,9 +124,35 @@ fn main() -> Result<()> {
         PRESETS[preset - 1].name
     );
 
+    // Apply filters before denoising (if enabled)
+    let filtered_samples = if !args.no_filters {
+        let hp_slope = if args.hp_slope == 24 {
+            HighPassSlope::Slope24dB
+        } else {
+            HighPassSlope::Slope12dB
+        };
+
+        println!("  Applying filters (HP: 80Hz @ {} dB/oct, LP: 15.5kHz @ 12 dB/oct)...", args.hp_slope);
+
+        let mut stereo_filters = StereoFilterChain::new(input_sr as f32, hp_slope);
+
+        if is_stereo {
+            let mut left_filtered = samples[0].clone();
+            let mut right_filtered = samples[1].clone();
+            stereo_filters.process_stereo(&mut left_filtered, &mut right_filtered);
+            vec![left_filtered, right_filtered]
+        } else {
+            let mut mono_filtered = samples[0].clone();
+            stereo_filters.process_mono(&mut mono_filtered);
+            vec![mono_filtered]
+        }
+    } else {
+        samples.clone()
+    };
+
     let output_samples = if is_stereo {
-        let left = &samples[0];
-        let right = &samples[1];
+        let left = &filtered_samples[0];
+        let right = &filtered_samples[1];
 
         // L/R independent processing
         let (left_out, right_out) =
@@ -125,7 +162,7 @@ fn main() -> Result<()> {
     } else {
         let mut denoiser = SpectralSubtractionDenoiser::new(input_sr, preset);
         denoiser.init_with_noise_floor(&noise_floor);
-        let output = denoiser.process(&samples[0]);
+        let output = denoiser.process(&filtered_samples[0]);
 
         vec![output]
     };

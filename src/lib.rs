@@ -1,6 +1,7 @@
 #![cfg(feature = "plugin")]
 
 mod denoiser;
+mod filters;
 mod visualizations;
 
 use nih_plug::prelude::*;
@@ -14,9 +15,20 @@ use denoiser::{
     WINDOW_SIZE,
 };
 
+use filters::{FilterChain, HighPassSlope};
+
 // =============================================================================
 // Parameter Structs
 // =============================================================================
+
+#[derive(Params)]
+struct FilterParams {
+    #[id = "filter_enable"]
+    enable: BoolParam,
+
+    #[id = "hp_slope"]
+    hp_slope: EnumParam<HighPassSlope>,
+}
 
 #[derive(Params)]
 struct SubtractionParams {
@@ -159,6 +171,9 @@ struct PoddyclipParams {
     #[id = "reset_noise"]
     reset_noise: BoolParam,
 
+    #[nested(group = "Filters")]
+    filters: FilterParams,
+
     #[nested(group = "Subtraction")]
     subtraction: SubtractionParams,
 
@@ -175,6 +190,12 @@ struct PoddyclipParams {
 
 struct Poddyclip {
     params: Arc<PoddyclipParams>,
+
+    // Filters (applied before denoising)
+    filter_left: FilterChain,
+    filter_right: FilterChain,
+    prev_hp_slope: HighPassSlope,
+
     denoiser_left: RealtimeDenoiser,
     denoiser_right: RealtimeDenoiser,
     sample_rate: f32,
@@ -197,6 +218,9 @@ impl Default for Poddyclip {
     fn default() -> Self {
         Self {
             params: Arc::new(PoddyclipParams::default()),
+            filter_left: FilterChain::new(48000.0, HighPassSlope::Slope24dB),
+            filter_right: FilterChain::new(48000.0, HighPassSlope::Slope24dB),
+            prev_hp_slope: HighPassSlope::Slope24dB,
             denoiser_left: RealtimeDenoiser::new(48000),
             denoiser_right: RealtimeDenoiser::new(48000),
             sample_rate: 48000.0,
@@ -225,6 +249,11 @@ impl Default for PoddyclipParams {
                     }
                 }),
             ),
+
+            filters: FilterParams {
+                enable: BoolParam::new("Enable Filters", true),
+                hp_slope: EnumParam::new("HP Slope", HighPassSlope::Slope24dB),
+            },
 
             subtraction: SubtractionParams {
                 alpha_base: FloatParam::new(
@@ -521,6 +550,29 @@ impl Plugin for Poddyclip {
                                         );
                                         setter.end_set_parameter(&params.reset_noise);
                                     }
+                                });
+
+                                ui.add_space(15.0);
+                                ui.separator();
+
+                                // Filter controls
+                                ui.heading("Filters (HP 80Hz + LP 15.5kHz)");
+                                ui.add_space(5.0);
+
+                                ui.horizontal(|ui| {
+                                    ui.label("Enable:");
+                                    ui.add(widgets::ParamSlider::for_param(
+                                        &params.filters.enable,
+                                        setter,
+                                    ));
+                                });
+
+                                ui.horizontal(|ui| {
+                                    ui.label("HP Slope:");
+                                    ui.add(widgets::ParamSlider::for_param(
+                                        &params.filters.hp_slope,
+                                        setter,
+                                    ));
                                 });
 
                                 ui.add_space(15.0);
@@ -849,10 +901,20 @@ impl Plugin for Poddyclip {
         _aux: &mut AuxiliaryBuffers,
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
+        // Check if HP slope parameter changed - rebuild filters if needed
+        let current_hp_slope = self.params.filters.hp_slope.value();
+        if current_hp_slope != self.prev_hp_slope {
+            self.filter_left = FilterChain::new(self.sample_rate, current_hp_slope);
+            self.filter_right = FilterChain::new(self.sample_rate, current_hp_slope);
+            self.prev_hp_slope = current_hp_slope;
+        }
+
         // Check if reset button was pressed (any edge detection)
         let reset_state = self.params.reset_noise.value();
         if reset_state != self.prev_reset_state {
-            // State changed (either edge) - reset the denoisers
+            // State changed (either edge) - reset everything
+            self.filter_left.reset();
+            self.filter_right.reset();
             self.denoiser_left.reset();
             self.denoiser_right.reset();
             self.input_ring_left.fill(0.0);
@@ -910,12 +972,21 @@ impl Poddyclip {
         let viz_enabled = self.params.editor_state.is_open();
         self.denoiser_left.set_visualization_enabled(viz_enabled);
 
+        let filter_enabled = self.params.filters.enable.value();
+
         for mut channel_samples in buffer.iter_samples() {
             let input_sample = channel_samples.get_mut(0).copied().unwrap_or(0.0);
 
+            // Apply filters before denoising
+            let filtered_sample = if filter_enabled {
+                self.filter_left.process(input_sample)
+            } else {
+                input_sample
+            };
+
             // Slide the window: shift left and add new sample at the end
             self.input_ring_left.rotate_left(1);
-            self.input_ring_left[WINDOW_SIZE - 1] = input_sample;
+            self.input_ring_left[WINDOW_SIZE - 1] = filtered_sample;
             self.samples_since_process += 1;
 
             // Process every HOP_SIZE samples
@@ -951,15 +1022,29 @@ impl Poddyclip {
         self.denoiser_left.set_visualization_enabled(viz_enabled);
         self.denoiser_right.set_visualization_enabled(false); // Only visualize left
 
+        let filter_enabled = self.params.filters.enable.value();
+
         for mut channel_samples in buffer.iter_samples() {
             let left_in = channel_samples.get_mut(0).copied().unwrap_or(0.0);
             let right_in = channel_samples.get_mut(1).copied().unwrap_or(0.0);
 
+            // Apply filters before denoising
+            let filtered_left = if filter_enabled {
+                self.filter_left.process(left_in)
+            } else {
+                left_in
+            };
+            let filtered_right = if filter_enabled {
+                self.filter_right.process(right_in)
+            } else {
+                right_in
+            };
+
             // Slide windows and add new samples
             self.input_ring_left.rotate_left(1);
-            self.input_ring_left[WINDOW_SIZE - 1] = left_in;
+            self.input_ring_left[WINDOW_SIZE - 1] = filtered_left;
             self.input_ring_right.rotate_left(1);
-            self.input_ring_right[WINDOW_SIZE - 1] = right_in;
+            self.input_ring_right[WINDOW_SIZE - 1] = filtered_right;
             self.samples_since_process += 1;
 
             // Process every HOP_SIZE samples
