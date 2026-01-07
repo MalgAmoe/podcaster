@@ -173,10 +173,10 @@ fn main() -> Result<()> {
             // Choose stereo processing mode based on user preference
             let (mut left_out, mut right_out) = if args.stereo_mode == "lr" {
                 // L/R independent processing
-                process_stereo_lr(left, right, input_sr, preset)
+                process_stereo_lr(left, right, input_sr, preset, Some(&noise_floor))
             } else {
                 // M/S (Mid/Side) processing (default)
-                process_stereo(left, right, input_sr, preset)
+                process_stereo(left, right, input_sr, preset, Some(&noise_floor))
             };
 
             if !args.no_level_match {
@@ -189,6 +189,7 @@ fn main() -> Result<()> {
             vec![left_out, right_out]
         } else {
             let mut denoiser = SpectralSubtractionDenoiser::new(input_sr, preset);
+            denoiser.init_with_noise_floor(&noise_floor);
             let mut output = denoiser.process(&samples[0]);
 
             if !args.no_level_match {

@@ -2,12 +2,12 @@
 
 use nih_plug_egui::egui;
 use egui_plot::{Line, Plot, PlotPoints, Legend, Corner};
-use crate::denoiser_rt::{VisualizationData, BANDS, NUM_BANDS};
+use crate::denoiser_rt::{VisualizationData, BANDS, NUM_BANDS, WINDOW_SIZE};
 
 /// Draw spectrum analyzer showing current signal vs noise floor
 pub fn draw_spectrum_analyzer(ui: &mut egui::Ui, viz_data: &VisualizationData) {
     let bin_to_hz = |bin: usize| -> f64 {
-        (bin as f64 * viz_data.sample_rate as f64) / 2048.0
+        (bin as f64 * viz_data.sample_rate as f64) / WINDOW_SIZE as f64
     };
 
     let linear_to_db = |power: f32| -> f64 {

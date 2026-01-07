@@ -10,8 +10,17 @@ use std::f32::consts::PI;
 // Constants (from spec)
 // =============================================================================
 
+// WINDOW_SIZE and HOP_SIZE are fixed (not scaled with sample rate).
+// At 48kHz: Window=42.67ms, Hop=21.33ms (50% overlap)
+// At 44.1kHz: Window=46.44ms, Hop=23.22ms
+// At 96kHz: Window=21.33ms, Hop=10.67ms
+// The algorithm works at any sample rate; timing semantics change slightly.
 pub const WINDOW_SIZE: usize = 2048;
 pub const HOP_SIZE: usize = 1024;
+
+// Reference sample rate - code works with any sample rate.
+// The denoiser accepts sample_rate as a parameter and scales frequency-dependent
+// calculations (Bark bands, analysis windows) appropriately.
 pub const SAMPLE_RATE: u32 = 48000;
 
 // Default noise estimation parameters (can be overridden)
@@ -354,6 +363,13 @@ impl SpectralSubtractionDenoiser {
             ifft,
             fft_scratch,
         }
+    }
+
+    /// Initialize with pre-computed noise floor from Pass 1 analysis
+    pub fn init_with_noise_floor(&mut self, noise_floor: &[f32]) {
+        assert_eq!(noise_floor.len(), self.n_bins, "Noise floor size mismatch");
+        self.noise_pow.copy_from_slice(noise_floor);
+        self.needs_initialization = false;
     }
 
     fn compute_snr_per_bin(&self, power: &[f32]) -> Vec<f32> {
@@ -990,6 +1006,7 @@ pub fn process_stereo(
     right: &[f32],
     sample_rate: u32,
     preset: usize,
+    noise_floor: Option<&[f32]>,
 ) -> (Vec<f32>, Vec<f32>) {
     // Convert to M/S
     let mid: Vec<f32> = left
@@ -1007,6 +1024,12 @@ pub fn process_stereo(
     // Process each channel
     let mut denoiser_mid = SpectralSubtractionDenoiser::new(sample_rate, preset);
     let mut denoiser_side = SpectralSubtractionDenoiser::new(sample_rate, preset);
+
+    // Initialize with noise floor if provided
+    if let Some(nf) = noise_floor {
+        denoiser_mid.init_with_noise_floor(nf);
+        denoiser_side.init_with_noise_floor(nf);
+    }
 
     let mid_processed = denoiser_mid.process(&mid);
     let side_processed = denoiser_side.process(&side);
@@ -1032,10 +1055,17 @@ pub fn process_stereo_lr(
     right: &[f32],
     sample_rate: u32,
     preset: usize,
+    noise_floor: Option<&[f32]>,
 ) -> (Vec<f32>, Vec<f32>) {
     // Process each channel independently
     let mut denoiser_left = SpectralSubtractionDenoiser::new(sample_rate, preset);
     let mut denoiser_right = SpectralSubtractionDenoiser::new(sample_rate, preset);
+
+    // Initialize with noise floor if provided
+    if let Some(nf) = noise_floor {
+        denoiser_left.init_with_noise_floor(nf);
+        denoiser_right.init_with_noise_floor(nf);
+    }
 
     let left_out = denoiser_left.process(left);
     let right_out = denoiser_right.process(right);
