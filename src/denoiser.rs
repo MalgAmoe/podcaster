@@ -635,86 +635,6 @@ impl SpectralSubtractionDenoiser {
 }
 
 // =============================================================================
-// Analysis: Minimum Statistics for Noise Floor
-// =============================================================================
-
-/// Compute noise floor using minimum statistics
-/// Tracks minimum power per bin over 1.5 second sliding windows
-pub fn compute_minimum_statistics(audio: &[f32], sample_rate: u32) -> Vec<f32> {
-    let n_bins = WINDOW_SIZE / 2 + 1;
-    let window_duration_seconds = 1.5;
-    let frames_per_window =
-        ((sample_rate as f32 * window_duration_seconds) / HOP_SIZE as f32) as usize;
-
-    // FFT setup
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(WINDOW_SIZE);
-    let mut fft_scratch = vec![Complex::new(0.0, 0.0); fft.get_inplace_scratch_len()];
-
-    // Hann window
-    let window: Vec<f32> = (0..WINDOW_SIZE)
-        .map(|i| 0.5 * (1.0 - (2.0 * PI * i as f32 / (WINDOW_SIZE - 1) as f32).cos()))
-        .collect();
-
-    // Pad audio
-    let pre_pad = WINDOW_SIZE - HOP_SIZE;
-    let mut input = vec![0.0; pre_pad];
-    input.extend_from_slice(audio);
-
-    // Collect power spectra from all frames
-    let mut all_power_spectra: Vec<Vec<f32>> = Vec::new();
-
-    let mut i = 0;
-    while i + WINDOW_SIZE <= input.len() {
-        let frame = &input[i..i + WINDOW_SIZE];
-
-        // Window and FFT
-        let windowed: Vec<f32> = frame
-            .iter()
-            .zip(window.iter())
-            .map(|(&s, &w)| s * w)
-            .collect();
-
-        let mut spectrum: Vec<Complex<f32>> =
-            windowed.iter().map(|&s| Complex::new(s, 0.0)).collect();
-
-        fft.process_with_scratch(&mut spectrum, &mut fft_scratch);
-
-        // Power spectrum
-        let power: Vec<f32> = spectrum[..n_bins].iter().map(|c| c.norm_sqr()).collect();
-
-        all_power_spectra.push(power);
-        i += HOP_SIZE;
-    }
-
-    if all_power_spectra.is_empty() {
-        return vec![EPSILON; n_bins];
-    }
-
-    // Compute minimum statistics per bin
-    let mut noise_floor = vec![f32::INFINITY; n_bins];
-
-    for window_start in 0..all_power_spectra.len() {
-        let window_end = (window_start + frames_per_window).min(all_power_spectra.len());
-
-        for bin in 0..n_bins {
-            let mut window_min = f32::INFINITY;
-            for frame_idx in window_start..window_end {
-                window_min = window_min.min(all_power_spectra[frame_idx][bin]);
-            }
-            noise_floor[bin] = noise_floor[bin].min(window_min);
-        }
-    }
-
-    // Ensure no zeros or infinities
-    for bin in 0..n_bins {
-        noise_floor[bin] = noise_floor[bin].max(EPSILON);
-    }
-
-    noise_floor
-}
-
-// =============================================================================
 // Analysis: Simple Audio Metrics
 // =============================================================================
 
@@ -724,192 +644,6 @@ pub struct SimpleAnalysis {
     pub stationarity_score: f32, // 0.0 = variable, 1.0 = constant
     pub speech_density: f32,     // 0.0-1.0
     pub dominant_freq_hz: f32,   // Where most noise energy is
-}
-
-/// Estimate overall SNR in dB
-fn estimate_overall_snr(audio: &[f32], noise_floor: &[f32]) -> f32 {
-    let n_bins = WINDOW_SIZE / 2 + 1;
-
-    // FFT setup
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(WINDOW_SIZE);
-    let mut fft_scratch = vec![Complex::new(0.0, 0.0); fft.get_inplace_scratch_len()];
-
-    // Hann window
-    let window: Vec<f32> = (0..WINDOW_SIZE)
-        .map(|i| 0.5 * (1.0 - (2.0 * PI * i as f32 / (WINDOW_SIZE - 1) as f32).cos()))
-        .collect();
-
-    // Pad audio
-    let pre_pad = WINDOW_SIZE - HOP_SIZE;
-    let mut input = vec![0.0; pre_pad];
-    input.extend_from_slice(audio);
-
-    // Compute average signal power across all frames
-    let mut total_signal_power = 0.0;
-    let mut frame_count = 0;
-
-    let mut i = 0;
-    while i + WINDOW_SIZE <= input.len() {
-        let frame = &input[i..i + WINDOW_SIZE];
-
-        // Window and FFT
-        let windowed: Vec<f32> = frame
-            .iter()
-            .zip(window.iter())
-            .map(|(&s, &w)| s * w)
-            .collect();
-
-        let mut spectrum: Vec<Complex<f32>> =
-            windowed.iter().map(|&s| Complex::new(s, 0.0)).collect();
-
-        fft.process_with_scratch(&mut spectrum, &mut fft_scratch);
-
-        // Power spectrum
-        let power: Vec<f32> = spectrum[..n_bins].iter().map(|c| c.norm_sqr()).collect();
-
-        total_signal_power += power.iter().sum::<f32>();
-        frame_count += 1;
-        i += HOP_SIZE;
-    }
-
-    if frame_count == 0 {
-        return 0.0;
-    }
-
-    let avg_signal_power = total_signal_power / (frame_count * n_bins) as f32;
-    let avg_noise_power: f32 = noise_floor.iter().sum::<f32>() / noise_floor.len() as f32;
-
-    let snr_linear = avg_signal_power / (avg_noise_power + EPSILON);
-    10.0 * snr_linear.max(EPSILON).log10()
-}
-
-/// Estimate stationarity (how constant the noise is over time)
-fn estimate_stationarity(audio: &[f32]) -> f32 {
-    let n_bins = WINDOW_SIZE / 2 + 1;
-
-    // FFT setup
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(WINDOW_SIZE);
-    let mut fft_scratch = vec![Complex::new(0.0, 0.0); fft.get_inplace_scratch_len()];
-
-    // Hann window
-    let window: Vec<f32> = (0..WINDOW_SIZE)
-        .map(|i| 0.5 * (1.0 - (2.0 * PI * i as f32 / (WINDOW_SIZE - 1) as f32).cos()))
-        .collect();
-
-    // Pad audio
-    let pre_pad = WINDOW_SIZE - HOP_SIZE;
-    let mut input = vec![0.0; pre_pad];
-    input.extend_from_slice(audio);
-
-    // Collect power spectra for noise-like frames (SFM > threshold)
-    let mut noise_powers: Vec<f32> = Vec::new();
-
-    let mut i = 0;
-    while i + WINDOW_SIZE <= input.len() {
-        let frame = &input[i..i + WINDOW_SIZE];
-
-        // Window and FFT
-        let windowed: Vec<f32> = frame
-            .iter()
-            .zip(window.iter())
-            .map(|(&s, &w)| s * w)
-            .collect();
-
-        let mut spectrum: Vec<Complex<f32>> =
-            windowed.iter().map(|&s| Complex::new(s, 0.0)).collect();
-
-        fft.process_with_scratch(&mut spectrum, &mut fft_scratch);
-
-        // Power spectrum
-        let power: Vec<f32> = spectrum[..n_bins].iter().map(|c| c.norm_sqr()).collect();
-
-        // Check if this is a noise-like frame
-        let sfm = compute_sfm(&power);
-        if sfm > SFM_NOISE {
-            noise_powers.push(power.iter().sum::<f32>());
-        }
-
-        i += HOP_SIZE;
-    }
-
-    if noise_powers.len() < 2 {
-        return 0.5; // Not enough data
-    }
-
-    // Compute coefficient of variation (std/mean)
-    let mean: f32 = noise_powers.iter().sum::<f32>() / noise_powers.len() as f32;
-    let variance: f32 = noise_powers
-        .iter()
-        .map(|&p| (p - mean).powi(2))
-        .sum::<f32>()
-        / noise_powers.len() as f32;
-    let std_dev = variance.sqrt();
-
-    let cv = std_dev / (mean + EPSILON);
-
-    // Convert to stationarity score (0 = variable, 1 = constant)
-    // Lower CV = more stationary
-    (1.0 - cv.min(1.0)).max(0.0)
-}
-
-/// Estimate speech density (percentage of frames that are speech-like)
-fn estimate_speech_density(audio: &[f32]) -> f32 {
-    let n_bins = WINDOW_SIZE / 2 + 1;
-
-    // FFT setup
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(WINDOW_SIZE);
-    let mut fft_scratch = vec![Complex::new(0.0, 0.0); fft.get_inplace_scratch_len()];
-
-    // Hann window
-    let window: Vec<f32> = (0..WINDOW_SIZE)
-        .map(|i| 0.5 * (1.0 - (2.0 * PI * i as f32 / (WINDOW_SIZE - 1) as f32).cos()))
-        .collect();
-
-    // Pad audio
-    let pre_pad = WINDOW_SIZE - HOP_SIZE;
-    let mut input = vec![0.0; pre_pad];
-    input.extend_from_slice(audio);
-
-    let mut speech_frame_count = 0;
-    let mut total_frame_count = 0;
-
-    let mut i = 0;
-    while i + WINDOW_SIZE <= input.len() {
-        let frame = &input[i..i + WINDOW_SIZE];
-
-        // Window and FFT
-        let windowed: Vec<f32> = frame
-            .iter()
-            .zip(window.iter())
-            .map(|(&s, &w)| s * w)
-            .collect();
-
-        let mut spectrum: Vec<Complex<f32>> =
-            windowed.iter().map(|&s| Complex::new(s, 0.0)).collect();
-
-        fft.process_with_scratch(&mut spectrum, &mut fft_scratch);
-
-        // Power spectrum
-        let power: Vec<f32> = spectrum[..n_bins].iter().map(|c| c.norm_sqr()).collect();
-
-        // Check if this is a speech-like frame (low SFM = tonal)
-        let sfm = compute_sfm(&power);
-        if sfm < SFM_SPEECH {
-            speech_frame_count += 1;
-        }
-
-        total_frame_count += 1;
-        i += HOP_SIZE;
-    }
-
-    if total_frame_count == 0 {
-        return 0.0;
-    }
-
-    speech_frame_count as f32 / total_frame_count as f32
 }
 
 /// Find the dominant frequency in the noise floor
@@ -926,120 +660,192 @@ fn find_dominant_noise_freq(noise_floor: &[f32], sample_rate: u32) -> f32 {
     max_bin as f32 * sample_rate as f32 / WINDOW_SIZE as f32
 }
 
-/// Analyze audio and return simple metrics
-pub fn analyze_audio_simple(
-    audio: &[f32],
+// =============================================================================
+// Unified Analysis (Single FFT Pass)
+// =============================================================================
+
+/// Result from unified audio analysis
+pub struct AudioAnalysisResult {
+    pub noise_floor: Vec<f32>,
+    pub analysis: SimpleAnalysis,
+}
+
+/// Analyze audio with ONE FFT pass (replaces compute_minimum_statistics + analyze_audio_simple)
+pub fn analyze_audio(audio: &[f32], sample_rate: u32) -> AudioAnalysisResult {
+    let n_bins = WINDOW_SIZE / 2 + 1;
+
+    // FFT setup (once!)
+    let mut planner = FftPlanner::new();
+    let fft = planner.plan_fft_forward(WINDOW_SIZE);
+    let mut fft_scratch = vec![Complex::new(0.0, 0.0); fft.get_inplace_scratch_len()];
+
+    // Hann window (once!)
+    let window: Vec<f32> = (0..WINDOW_SIZE)
+        .map(|i| 0.5 * (1.0 - (2.0 * PI * i as f32 / (WINDOW_SIZE - 1) as f32).cos()))
+        .collect();
+
+    // Pad audio
+    let pre_pad = WINDOW_SIZE - HOP_SIZE;
+    let mut input = vec![0.0; pre_pad];
+    input.extend_from_slice(audio);
+
+    // ONE FFT PASS - collect all power spectra
+    let mut all_power_spectra = Vec::new();
+    let mut i = 0;
+    while i + WINDOW_SIZE <= input.len() {
+        let frame = &input[i..i + WINDOW_SIZE];
+
+        let windowed: Vec<f32> = frame
+            .iter()
+            .zip(window.iter())
+            .map(|(&s, &w)| s * w)
+            .collect();
+
+        let mut spectrum: Vec<Complex<f32>> = windowed
+            .iter()
+            .map(|&s| Complex::new(s, 0.0))
+            .collect();
+
+        fft.process_with_scratch(&mut spectrum, &mut fft_scratch);
+
+        let power: Vec<f32> = spectrum[..n_bins].iter().map(|c| c.norm_sqr()).collect();
+        all_power_spectra.push(power);
+        i += HOP_SIZE;
+    }
+
+    // Now compute everything from the cached power spectra (no more FFTs!)
+
+    // 1. Noise floor (minimum statistics)
+    let noise_floor = compute_noise_floor_from_spectra(&all_power_spectra, sample_rate, n_bins);
+
+    // 2. SNR
+    let overall_snr_db = compute_snr_from_spectra(&all_power_spectra, &noise_floor, n_bins);
+
+    // 3. Stationarity
+    let stationarity_score = compute_stationarity_from_spectra(&all_power_spectra);
+
+    // 4. Speech density
+    let speech_density = compute_speech_density_from_spectra(&all_power_spectra);
+
+    // 5. Dominant frequency
+    let dominant_freq_hz = find_dominant_noise_freq(&noise_floor, sample_rate);
+
+    AudioAnalysisResult {
+        noise_floor,
+        analysis: SimpleAnalysis {
+            overall_snr_db,
+            stationarity_score,
+            speech_density,
+            dominant_freq_hz,
+        },
+    }
+}
+
+// Helper functions that work on cached spectra (no FFT!)
+
+fn compute_noise_floor_from_spectra(
+    all_power_spectra: &[Vec<f32>],
     sample_rate: u32,
+    n_bins: usize,
+) -> Vec<f32> {
+    if all_power_spectra.is_empty() {
+        return vec![EPSILON; n_bins];
+    }
+
+    // 1.5 second sliding windows
+    let window_duration_seconds = 1.5;
+    let frames_per_window =
+        ((sample_rate as f32 * window_duration_seconds) / HOP_SIZE as f32) as usize;
+
+    let mut noise_floor = vec![f32::INFINITY; n_bins];
+
+    for window_start in 0..all_power_spectra.len() {
+        let window_end = (window_start + frames_per_window).min(all_power_spectra.len());
+
+        for bin in 0..n_bins {
+            let mut window_min = f32::INFINITY;
+            for frame_idx in window_start..window_end {
+                window_min = window_min.min(all_power_spectra[frame_idx][bin]);
+            }
+            noise_floor[bin] = noise_floor[bin].min(window_min);
+        }
+    }
+
+    // Ensure no zeros or infinities
+    for val in noise_floor.iter_mut() {
+        *val = val.max(EPSILON);
+    }
+
+    noise_floor
+}
+
+fn compute_snr_from_spectra(
+    all_power_spectra: &[Vec<f32>],
     noise_floor: &[f32],
-) -> SimpleAnalysis {
-    let overall_snr_db = estimate_overall_snr(audio, noise_floor);
-    let stationarity_score = estimate_stationarity(audio);
-    let speech_density = estimate_speech_density(audio);
-    let dominant_freq_hz = find_dominant_noise_freq(noise_floor, sample_rate);
-
-    SimpleAnalysis {
-        overall_snr_db,
-        stationarity_score,
-        speech_density,
-        dominant_freq_hz,
+    n_bins: usize,
+) -> f32 {
+    if all_power_spectra.is_empty() {
+        return 0.0;
     }
-}
 
-// =============================================================================
-// Analysis: Recommendations
-// =============================================================================
+    let mut total_signal_power = 0.0;
+    let mut total_noise_power = 0.0;
 
-/// Recommend a preset based on audio analysis
-pub fn recommend_preset(analysis: &SimpleAnalysis) -> usize {
-    // Simple heuristic based on SNR
-    if analysis.overall_snr_db < 0.0 {
-        5 // Aggressive
-    } else if analysis.overall_snr_db < 10.0 {
-        4 // Strong
-    } else if analysis.overall_snr_db < 15.0 {
-        3 // Moderate
-    } else if analysis.overall_snr_db < 20.0 {
-        2 // Light
-    } else {
-        1 // Gentle
+    for power_spectrum in all_power_spectra {
+        for (bin, &power) in power_spectrum.iter().enumerate() {
+            total_signal_power += power;
+            total_noise_power += noise_floor[bin];
+        }
     }
+
+    let avg_signal = total_signal_power / (all_power_spectra.len() * n_bins) as f32;
+    let avg_noise = total_noise_power / (all_power_spectra.len() * n_bins) as f32;
+
+    10.0 * ((avg_signal / (avg_noise + EPSILON)).max(EPSILON)).log10()
 }
 
-/// Recommend thresholds based on audio analysis
-/// Returns: (sfm_speech_threshold, sfm_noise_threshold, spike_threshold)
-pub fn recommend_thresholds(analysis: &SimpleAnalysis) -> (f32, f32, f32) {
-    let sfm_speech = if analysis.speech_density > 0.7 {
-        0.15 // Higher threshold for speech-heavy content
-    } else {
-        0.10 // Standard threshold
-    };
+fn compute_stationarity_from_spectra(all_power_spectra: &[Vec<f32>]) -> f32 {
+    let mut noise_powers = Vec::new();
 
-    let sfm_noise = if analysis.stationarity_score > 0.8 {
-        0.35 // Lower for constant noise
-    } else {
-        0.45 // Higher for varying noise
-    };
+    for power_spectrum in all_power_spectra {
+        let sfm = compute_sfm(power_spectrum);
+        if sfm > SFM_NOISE {
+            noise_powers.push(power_spectrum.iter().sum::<f32>());
+        }
+    }
 
-    let spike_threshold = if analysis.overall_snr_db < 10.0 {
-        12.0 // More aggressive for noisy audio
-    } else {
-        10.0 // Standard threshold
-    };
+    if noise_powers.len() < 2 {
+        return 0.5;
+    }
 
-    (sfm_speech, sfm_noise, spike_threshold)
-}
-
-// =============================================================================
-// Stereo Processing (M/S)
-// =============================================================================
-
-pub fn process_stereo(
-    left: &[f32],
-    right: &[f32],
-    sample_rate: u32,
-    preset: usize,
-    noise_floor: Option<&[f32]>,
-) -> (Vec<f32>, Vec<f32>) {
-    // Convert to M/S
-    let mid: Vec<f32> = left
+    let mean: f32 = noise_powers.iter().sum::<f32>() / noise_powers.len() as f32;
+    let variance: f32 = noise_powers
         .iter()
-        .zip(right.iter())
-        .map(|(&l, &r)| (l + r) / 2.0)
-        .collect();
+        .map(|&p| (p - mean).powi(2))
+        .sum::<f32>()
+        / noise_powers.len() as f32;
+    let std_dev = variance.sqrt();
+    let cv = std_dev / (mean + EPSILON);
 
-    let side: Vec<f32> = left
-        .iter()
-        .zip(right.iter())
-        .map(|(&l, &r)| (l - r) / 2.0)
-        .collect();
+    (1.0 - cv.min(1.0)).max(0.0)
+}
 
-    // Process each channel
-    let mut denoiser_mid = SpectralSubtractionDenoiser::new(sample_rate, preset);
-    let mut denoiser_side = SpectralSubtractionDenoiser::new(sample_rate, preset);
-
-    // Initialize with noise floor if provided
-    if let Some(nf) = noise_floor {
-        denoiser_mid.init_with_noise_floor(nf);
-        denoiser_side.init_with_noise_floor(nf);
+fn compute_speech_density_from_spectra(all_power_spectra: &[Vec<f32>]) -> f32 {
+    if all_power_spectra.is_empty() {
+        return 0.0;
     }
 
-    let mid_processed = denoiser_mid.process(&mid);
-    let side_processed = denoiser_side.process(&side);
+    let speech_count = all_power_spectra
+        .iter()
+        .filter(|power| compute_sfm(power) < SFM_SPEECH)
+        .count();
 
-    // Ensure same length
-    let min_len = mid_processed.len().min(side_processed.len());
-
-    // Convert back to L/R
-    let left_out: Vec<f32> = (0..min_len)
-        .map(|i| mid_processed[i] + side_processed[i])
-        .collect();
-
-    let right_out: Vec<f32> = (0..min_len)
-        .map(|i| mid_processed[i] - side_processed[i])
-        .collect();
-
-    (left_out, right_out)
+    speech_count as f32 / all_power_spectra.len() as f32
 }
+
+// =============================================================================
+// Stereo Processing (L/R)
+// =============================================================================
 
 /// Process stereo by processing left and right channels independently
 pub fn process_stereo_lr(
@@ -1063,20 +869,4 @@ pub fn process_stereo_lr(
     let right_out = denoiser_right.process(right);
 
     (left_out, right_out)
-}
-
-// =============================================================================
-// Level Matching
-// =============================================================================
-
-pub fn match_rms(input: &[f32], output: &mut [f32]) {
-    let rms_in = (input.iter().map(|&s| s * s).sum::<f32>() / input.len() as f32 + EPSILON).sqrt();
-    let rms_out =
-        (output.iter().map(|&s| s * s).sum::<f32>() / output.len() as f32 + EPSILON).sqrt();
-
-    let gain = rms_in / rms_out;
-
-    for s in output.iter_mut() {
-        *s *= gain;
-    }
 }

@@ -104,19 +104,6 @@ struct PoddyclipParams {
 
     #[nested(group = "Per-Band")]
     bands: BandParams,
-
-    #[id = "stereo_mode"]
-    stereo_mode: EnumParam<StereoMode>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Enum)]
-enum StereoMode {
-    #[id = "lr"]
-    #[name = "L/R Independent"]
-    LR,
-    #[id = "ms"]
-    #[name = "M/S Processing"]
-    MS,
 }
 
 // =============================================================================
@@ -127,8 +114,6 @@ struct Poddyclip {
     params: Arc<PoddyclipParams>,
     denoiser_left: RealtimeDenoiser,
     denoiser_right: RealtimeDenoiser,
-    denoiser_mid: RealtimeDenoiser,
-    denoiser_side: RealtimeDenoiser,
     sample_rate: f32,
 
     // Buffering for frame-based processing (sliding window)
@@ -151,8 +136,6 @@ impl Default for Poddyclip {
             params: Arc::new(PoddyclipParams::default()),
             denoiser_left: RealtimeDenoiser::new(48000),
             denoiser_right: RealtimeDenoiser::new(48000),
-            denoiser_mid: RealtimeDenoiser::new(48000),
-            denoiser_side: RealtimeDenoiser::new(48000),
             sample_rate: 48000.0,
             input_ring_left: vec![0.0; WINDOW_SIZE],
             input_ring_right: vec![0.0; WINDOW_SIZE],
@@ -284,8 +267,6 @@ impl Default for PoddyclipParams {
                 gamma_7: Self::make_gamma_param("Gamma 8-12kHz", DEFAULT_GAMMA[7]),
                 gamma_8: Self::make_gamma_param("Gamma 12-24kHz", DEFAULT_GAMMA[8]),
             },
-
-            stereo_mode: EnumParam::new("Stereo Mode", StereoMode::LR),
         }
     }
 }
@@ -407,18 +388,6 @@ impl Plugin for Poddyclip {
                                         setter.set_parameter(&params.reset_noise, !params.reset_noise.value());
                                         setter.end_set_parameter(&params.reset_noise);
                                     }
-                                });
-
-                                ui.add_space(10.0);
-
-                                // Stereo mode
-                                ui.horizontal(|ui| {
-                                    ui.label("Stereo Mode:");
-                                    ui.add_space(10.0);
-                                    ui.add(widgets::ParamSlider::for_param(
-                                        &params.stereo_mode,
-                                        setter,
-                                    ));
                                 });
 
                                 ui.add_space(15.0);
@@ -622,8 +591,6 @@ impl Plugin for Poddyclip {
         // Reinitialize denoisers with correct sample rate
         self.denoiser_left = RealtimeDenoiser::new(buffer_config.sample_rate as u32);
         self.denoiser_right = RealtimeDenoiser::new(buffer_config.sample_rate as u32);
-        self.denoiser_mid = RealtimeDenoiser::new(buffer_config.sample_rate as u32);
-        self.denoiser_side = RealtimeDenoiser::new(buffer_config.sample_rate as u32);
 
         true
     }
@@ -631,8 +598,6 @@ impl Plugin for Poddyclip {
     fn reset(&mut self) {
         self.denoiser_left.reset();
         self.denoiser_right.reset();
-        self.denoiser_mid.reset();
-        self.denoiser_side.reset();
 
         // Clear all buffers
         self.input_ring_left.fill(0.0);
@@ -654,8 +619,6 @@ impl Plugin for Poddyclip {
             // State changed (either edge) - reset the denoisers
             self.denoiser_left.reset();
             self.denoiser_right.reset();
-            self.denoiser_mid.reset();
-            self.denoiser_side.reset();
             self.input_ring_left.fill(0.0);
             self.input_ring_right.fill(0.0);
             self.output_buffer_left.clear();
@@ -677,24 +640,18 @@ impl Plugin for Poddyclip {
         // Report latency (lookahead needed for STFT)
         context.set_latency_samples(self.denoiser_left.latency_samples());
 
-        // Process based on stereo mode and channel count
-        match (self.params.stereo_mode.value(), num_channels) {
-            (StereoMode::LR, 1) => {
+        // Process based on channel count
+        match num_channels {
+            1 => {
                 // Mono processing
                 self.denoiser_left.set_params(params);
                 self.process_mono_channel(buffer, 0);
             }
-            (StereoMode::LR, 2) => {
+            2 => {
                 // Stereo L/R independent
                 self.denoiser_left.set_params(params.clone());
                 self.denoiser_right.set_params(params);
                 self.process_stereo_lr(buffer);
-            }
-            (StereoMode::MS, 2) => {
-                // Stereo M/S processing
-                self.denoiser_mid.set_params(params.clone());
-                self.denoiser_side.set_params(params);
-                self.process_stereo_ms(buffer);
             }
             _ => {
                 // Unsupported configuration, pass through
@@ -811,70 +768,6 @@ impl Poddyclip {
         }
     }
 
-    fn process_stereo_ms(&mut self, buffer: &mut Buffer) {
-        use denoiser_rt::HOP_SIZE;
-
-        // Check if editor is open to enable visualization
-        let viz_enabled = self.params.editor_state.is_open();
-        self.denoiser_mid.set_visualization_enabled(viz_enabled);
-        self.denoiser_side.set_visualization_enabled(false); // Only visualize mid
-
-        for mut channel_samples in buffer.iter_samples() {
-            let left_in = channel_samples.get_mut(0).copied().unwrap_or(0.0);
-            let right_in = channel_samples.get_mut(1).copied().unwrap_or(0.0);
-
-            // Convert to M/S
-            let mid = (left_in + right_in) / 2.0;
-            let side = (left_in - right_in) / 2.0;
-
-            // Slide windows and add new samples
-            self.input_ring_left.rotate_left(1);
-            self.input_ring_left[WINDOW_SIZE - 1] = mid;
-            self.input_ring_right.rotate_left(1);
-            self.input_ring_right[WINDOW_SIZE - 1] = side;
-            self.samples_since_process += 1;
-
-            // Process every HOP_SIZE samples
-            if self.samples_since_process >= HOP_SIZE {
-                let mid_frame = self.denoiser_mid.process_frame(&self.input_ring_left);
-                let side_frame = self.denoiser_side.process_frame(&self.input_ring_right);
-                self.output_buffer_left.extend(mid_frame);
-                self.output_buffer_right.extend(side_frame);
-                self.samples_since_process = 0;
-
-                // Update visualization from mid channel
-                if viz_enabled {
-                    if let Ok(mut viz) = self.visualization_data.try_lock() {
-                        *viz = self.denoiser_mid.get_visualization_data();
-                    }
-                }
-            }
-
-            // Output from buffers
-            let mid_out = if !self.output_buffer_left.is_empty() {
-                self.output_buffer_left.remove(0)
-            } else {
-                mid
-            };
-
-            let side_out = if !self.output_buffer_right.is_empty() {
-                self.output_buffer_right.remove(0)
-            } else {
-                side
-            };
-
-            // Convert back to L/R
-            let left_out = mid_out + side_out;
-            let right_out = mid_out - side_out;
-
-            if let Some(sample) = channel_samples.get_mut(0) {
-                *sample = left_out;
-            }
-            if let Some(sample) = channel_samples.get_mut(1) {
-                *sample = right_out;
-            }
-        }
-    }
 }
 
 impl ClapPlugin for Poddyclip {

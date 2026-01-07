@@ -13,8 +13,7 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
 use denoiser::{
-    analyze_audio_simple, compute_minimum_statistics, get_preset, match_rms, process_stereo,
-    process_stereo_lr, recommend_preset, recommend_thresholds, SpectralSubtractionDenoiser,
+    analyze_audio, get_preset, process_stereo_lr, SpectralSubtractionDenoiser,
     DEFAULT_PRESET, PRESETS, SAMPLE_RATE,
 };
 
@@ -26,11 +25,7 @@ use denoiser::{
   2 = Light      - Subtle noise reduction
   3 = Moderate   - Balanced (default)
   4 = Strong     - Noticeable noise reduction
-  5 = Aggressive - Maximum removal, may affect speech quality
-
-Stereo Modes:
-  ms = Mid/Side processing (default) - Better for centered content
-  lr = Left/Right independent - Better for wide stereo imaging"#)]
+  5 = Aggressive - Maximum removal, may affect speech quality"#)]
 struct Args {
     /// Input audio file (WAV, MP3, etc.)
     input: PathBuf,
@@ -42,18 +37,6 @@ struct Args {
     /// Denoising strength 1-5
     #[arg(short, long, default_value_t = DEFAULT_PRESET, value_parser = clap::value_parser!(u8).range(1..=5))]
     preset: u8,
-
-    /// Disable RMS level matching
-    #[arg(long)]
-    no_level_match: bool,
-
-    /// Generate output for all 5 presets
-    #[arg(long)]
-    all_presets: bool,
-
-    /// Stereo processing mode: 'ms' (Mid/Side) or 'lr' (Left/Right independent)
-    #[arg(long, default_value = "lr", value_parser = ["ms", "lr"])]
-    stereo_mode: String,
 }
 
 fn main() -> Result<()> {
@@ -83,16 +66,10 @@ fn main() -> Result<()> {
 
     println!("\n[Pass 1] Analyzing audio...");
 
-    // Compute noise floor using minimum statistics
-    let noise_floor = if is_stereo {
-        // Use left channel for analysis
-        compute_minimum_statistics(&samples[0], input_sr)
-    } else {
-        compute_minimum_statistics(&samples[0], input_sr)
-    };
-
-    // Analyze and get recommendations
-    let analysis = analyze_audio_simple(&samples[0], input_sr, &noise_floor);
+    // Perform single-pass analysis (computes noise floor + all metrics)
+    let result = analyze_audio(&samples[0], input_sr);
+    let noise_floor = result.noise_floor;
+    let analysis = result.analysis;
 
     // Display analysis results
     println!("  ✓ Analysis complete");
@@ -100,109 +77,61 @@ fn main() -> Result<()> {
     println!("  Audio characteristics:");
     println!("    SNR: {:.1} dB", analysis.overall_snr_db);
     println!("    Stationarity: {:.2}", analysis.stationarity_score);
-    println!("    Speech density: {:.0}%", analysis.speech_density * 100.0);
-    println!("    Dominant noise freq: {:.0} Hz", analysis.dominant_freq_hz);
-    println!();
-
-    // Propose recommendations (NOT applied automatically)
-    let recommended_preset = recommend_preset(&analysis);
-    let (sfm_speech, sfm_noise, spike_thresh) = recommend_thresholds(&analysis);
-
-    println!("  Recommendations:");
     println!(
-        "    Suggested preset: {} ({})",
-        recommended_preset,
-        PRESETS[recommended_preset - 1].name
+        "    Speech density: {:.0}%",
+        analysis.speech_density * 100.0
     );
     println!(
-        "    Suggested SFM thresholds: speech={:.2}, noise={:.2}",
-        sfm_speech, sfm_noise
+        "    Dominant noise freq: {:.0} Hz",
+        analysis.dominant_freq_hz
     );
-    println!("    Suggested spike threshold: {:.1}", spike_thresh);
-
-    // If user chose default preset, show they could try the recommendation
-    if args.preset == DEFAULT_PRESET && recommended_preset != DEFAULT_PRESET as usize {
-        println!();
-        println!("  Tip: Try --preset {} for this audio", recommended_preset);
-    }
-
     println!();
 
     // =========================================================================
     // Pass 2: Processing
     // =========================================================================
 
-    let presets_to_run: Vec<usize> = if args.all_presets {
-        vec![1, 2, 3, 4, 5]
+    let preset = args.preset.into();
+
+    let preset_info = get_preset(preset).expect("Invalid preset");
+    let preset_name = preset_info.name.to_lowercase();
+
+    let output_path = if let Some(ref out) = args.output {
+        out.clone()
     } else {
-        vec![args.preset as usize]
+        let stem = args
+            .input
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("audio");
+        PathBuf::from(format!("{stem}_denoised_{preset}_{preset_name}.wav"))
     };
 
-    for preset in presets_to_run {
-        let preset_info = get_preset(preset).expect("Invalid preset");
-        let preset_name = preset_info.name.to_lowercase();
+    println!(
+        "\nProcessing with preset {} ({})...",
+        preset,
+        PRESETS[preset - 1].name
+    );
 
-        let output_path = if let Some(ref out) = args.output {
-            if args.all_presets {
-                let stem = out
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("output");
-                PathBuf::from(format!("{}_{preset}_{preset_name}.wav", stem))
-            } else {
-                out.clone()
-            }
-        } else {
-            let stem = args
-                .input
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("audio");
-            PathBuf::from(format!("{stem}_denoised_{preset}_{preset_name}.wav"))
-        };
+    let output_samples = if is_stereo {
+        let left = &samples[0];
+        let right = &samples[1];
 
-        println!(
-            "\nProcessing with preset {} ({})...",
-            preset, PRESETS[preset - 1].name
-        );
+        // L/R independent processing
+        let (left_out, right_out) =
+            process_stereo_lr(left, right, input_sr, preset, Some(&noise_floor));
 
-        let output_samples = if is_stereo {
-            let left = &samples[0];
-            let right = &samples[1];
+        vec![left_out, right_out]
+    } else {
+        let mut denoiser = SpectralSubtractionDenoiser::new(input_sr, preset);
+        denoiser.init_with_noise_floor(&noise_floor);
+        let output = denoiser.process(&samples[0]);
 
-            // Choose stereo processing mode based on user preference
-            let (mut left_out, mut right_out) = if args.stereo_mode == "lr" {
-                // L/R independent processing
-                process_stereo_lr(left, right, input_sr, preset, Some(&noise_floor))
-            } else {
-                // M/S (Mid/Side) processing (default)
-                process_stereo(left, right, input_sr, preset, Some(&noise_floor))
-            };
+        vec![output]
+    };
 
-            if !args.no_level_match {
-                let left_len = left_out.len().min(left.len());
-                let right_len = right_out.len().min(right.len());
-                match_rms(&left[..left_len], &mut left_out[..left_len]);
-                match_rms(&right[..right_len], &mut right_out[..right_len]);
-            }
-
-            vec![left_out, right_out]
-        } else {
-            let mut denoiser = SpectralSubtractionDenoiser::new(input_sr, preset);
-            denoiser.init_with_noise_floor(&noise_floor);
-            let mut output = denoiser.process(&samples[0]);
-
-            if !args.no_level_match {
-                let len = output.len().min(samples[0].len());
-                match_rms(&samples[0][..len], &mut output[..len]);
-            }
-
-            vec![output]
-        };
-
-        println!("Saving: {}", output_path.display());
-        save_wav(&output_path, &output_samples, input_sr)?;
-    }
+    println!("Saving: {}", output_path.display());
+    save_wav(&output_path, &output_samples, input_sr)?;
 
     println!("\nDone.");
     Ok(())

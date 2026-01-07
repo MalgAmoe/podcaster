@@ -1,5 +1,0 @@
-[alias]
-xtask = "run --package xtask --release --"
-build-cli = "build --release --features cli --bin poddyclip-cli"
-build-plugin = "xtask bundle poddyclip --release"
-run-cli = "run --release --features cli --bin poddyclip-cli --"
