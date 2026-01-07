@@ -2,7 +2,7 @@
 
 use nih_plug_egui::egui;
 use egui_plot::{Line, Plot, PlotPoints, Legend, Corner};
-use crate::denoiser_rt::{VisualizationData, BANDS, NUM_BANDS, WINDOW_SIZE};
+use crate::denoiser::{VisualizationData, BANDS, NUM_BANDS, WINDOW_SIZE};
 
 /// Draw spectrum analyzer showing current signal vs noise floor
 pub fn draw_spectrum_analyzer(ui: &mut egui::Ui, viz_data: &VisualizationData) {

@@ -1,13 +1,10 @@
 //! Real-time Spectral Subtraction Denoiser
 //!
 //! Optimized for plugin use with all parameters exposed
-
+use super::common::*;
 use rustfft::{num_complex::Complex, FftPlanner};
 use std::f32::consts::PI;
 use std::sync::Arc;
-
-pub const WINDOW_SIZE: usize = 2048;
-pub const HOP_SIZE: usize = 1024;
 
 // Band configuration (Hz ranges)
 pub const BANDS: [(f32, f32); 9] = [
@@ -23,9 +20,6 @@ pub const BANDS: [(f32, f32); 9] = [
 ];
 
 pub const NUM_BANDS: usize = 9;
-const TRANSITION_BINS: usize = 10;
-const EPSILON: f32 = 1e-10;
-const WARMUP_FRAMES: usize = 20; // Number of frames to bootstrap noise estimate
 
 // =============================================================================
 // Visualization Data
@@ -67,16 +61,13 @@ impl Default for VisualizationData {
 // Parameter Defaults
 // =============================================================================
 
+// Plugin-specific defaults for alpha and beta
 pub const DEFAULT_ALPHA_BASE: f32 = 3.0;
 pub const DEFAULT_ALPHA_MIN: f32 = 1.0;
 pub const DEFAULT_ALPHA_MAX: f32 = 5.0;
 pub const DEFAULT_BETA: f32 = 0.05;
 
-pub const DEFAULT_LAMBDA: f32 = 0.95;
-pub const DEFAULT_SPIKE_THRESHOLD: f32 = 10.0;
-pub const DEFAULT_SFM_SPEECH: f32 = 0.1;
-pub const DEFAULT_SFM_NOISE: f32 = 0.4;
-
+// Plugin-specific band defaults
 pub const DEFAULT_DELTA: [f32; NUM_BANDS] = [0.8, 1.0, 1.5, 2.0, 2.5, 2.5, 2.0, 1.5, 1.0];
 pub const DEFAULT_GAMMA: [f32; NUM_BANDS] = [0.50, 0.55, 0.65, 0.72, 0.78, 0.82, 0.86, 0.90, 0.92];
 
@@ -123,22 +114,6 @@ impl Default for DenoiserParams {
 // =============================================================================
 // Helper Functions
 // =============================================================================
-
-fn root_hann_window(n: usize) -> Vec<f32> {
-    (0..n).map(|i| (PI * i as f32 / n as f32).sin()).collect()
-}
-
-fn compute_sfm(power_spectrum: &[f32]) -> f32 {
-    let n = power_spectrum.len() as f32;
-    let log_sum: f32 = power_spectrum.iter().map(|&p| (p + EPSILON).ln()).sum();
-    let geo_mean = (log_sum / n).exp();
-    let arith_mean: f32 = power_spectrum.iter().sum::<f32>() / n;
-    geo_mean / (arith_mean + EPSILON)
-}
-
-fn hz_to_bin(hz: f32, fft_size: usize, sample_rate: u32) -> usize {
-    (hz * fft_size as f32 / sample_rate as f32) as usize
-}
 
 fn compute_alpha_curve(
     fft_size: usize,

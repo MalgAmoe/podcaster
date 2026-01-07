@@ -12,9 +12,9 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
-use denoiser::{
-    analyze_audio, get_preset, process_stereo_lr, SpectralSubtractionDenoiser,
-    DEFAULT_PRESET, PRESETS, SAMPLE_RATE,
+use denoiser::denoiser::{
+    analyze_audio, get_preset, process_stereo_lr, SpectralSubtractionDenoiser, DEFAULT_PRESET,
+    PRESETS, SAMPLE_RATE,
 };
 
 #[derive(Parser)]

@@ -3,6 +3,7 @@
 //! Rust port of the Python validation implementation.
 //! Minimal dependencies: rustfft for FFT operations.
 
+use super::common::*;
 use rustfft::{num_complex::Complex, FftPlanner};
 use std::f32::consts::PI;
 
@@ -10,24 +11,10 @@ use std::f32::consts::PI;
 // Constants (from spec)
 // =============================================================================
 
-// WINDOW_SIZE and HOP_SIZE are fixed (not scaled with sample rate).
-// At 48kHz: Window=42.67ms, Hop=21.33ms (50% overlap)
-// At 44.1kHz: Window=46.44ms, Hop=23.22ms
-// At 96kHz: Window=21.33ms, Hop=10.67ms
-// The algorithm works at any sample rate; timing semantics change slightly.
-pub const WINDOW_SIZE: usize = 2048;
-pub const HOP_SIZE: usize = 1024;
-
 // Reference sample rate - code works with any sample rate.
 // The denoiser accepts sample_rate as a parameter and scales frequency-dependent
 // calculations (Bark bands, analysis windows) appropriately.
 pub const SAMPLE_RATE: u32 = 48000;
-
-// Default noise estimation parameters (can be overridden)
-pub const DEFAULT_LAMBDA: f32 = 0.95; // forget factor
-pub const DEFAULT_SPIKE_THRESHOLD: f32 = 10.0; // power ratio spike
-pub const DEFAULT_SFM_SPEECH: f32 = 0.1; // below = tonal (freeze)
-pub const DEFAULT_SFM_NOISE: f32 = 0.4; // above = flat (update)
 
 // 24 Bark critical bands configuration (psychoacoustic scale)
 // (start_hz, end_hz, delta)
@@ -61,16 +48,6 @@ const BANDS: [(f32, f32, f32); 24] = [
     (9500.0, 12000.0, 1.0),
     (12000.0, 15500.0, 0.9),
 ];
-
-const TRANSITION_BINS: usize = 10;
-const EPSILON: f32 = 1e-10;
-const WARMUP_FRAMES: usize = 20;
-
-// Shorthand constants for internal use
-const LAMBDA: f32 = DEFAULT_LAMBDA;
-const SPIKE_THRESHOLD: f32 = DEFAULT_SPIKE_THRESHOLD;
-const SFM_SPEECH: f32 = DEFAULT_SFM_SPEECH;
-const SFM_NOISE: f32 = DEFAULT_SFM_NOISE;
 
 // =============================================================================
 // Preset Configuration
@@ -170,37 +147,8 @@ pub fn get_preset(level: usize) -> Option<&'static Preset> {
 }
 
 // =============================================================================
-// Window Functions
-// =============================================================================
-
-fn root_hann_window(n: usize) -> Vec<f32> {
-    (0..n).map(|i| (PI * i as f32 / n as f32).sin()).collect()
-}
-
-// =============================================================================
-// Spectral Flatness Measure
-// =============================================================================
-
-fn compute_sfm(power_spectrum: &[f32]) -> f32 {
-    let n = power_spectrum.len() as f32;
-
-    // Geometric mean via log
-    let log_sum: f32 = power_spectrum.iter().map(|&p| (p + EPSILON).ln()).sum();
-    let geo_mean = (log_sum / n).exp();
-
-    // Arithmetic mean
-    let arith_mean: f32 = power_spectrum.iter().sum::<f32>() / n;
-
-    geo_mean / (arith_mean + EPSILON)
-}
-
-// =============================================================================
 // Multi-band Alpha/Gamma Calculations
 // =============================================================================
-
-fn hz_to_bin(hz: f32, fft_size: usize, sample_rate: u32) -> usize {
-    (hz * fft_size as f32 / sample_rate as f32) as usize
-}
 
 fn compute_alpha_curve(
     fft_size: usize,
@@ -381,11 +329,11 @@ impl SpectralSubtractionDenoiser {
     fn update_noise_estimate(&mut self, power: &[f32], force_update: bool) {
         for k in 0..self.n_bins {
             // Spike protection
-            if !force_update && power[k] > SPIKE_THRESHOLD * self.noise_pow[k] {
+            if !force_update && power[k] > DEFAULT_SPIKE_THRESHOLD * self.noise_pow[k] {
                 continue;
             }
             // Recursive update
-            self.noise_pow[k] = LAMBDA * self.noise_pow[k] + (1.0 - LAMBDA) * power[k];
+            self.noise_pow[k] = DEFAULT_LAMBDA * self.noise_pow[k] + (1.0 - DEFAULT_LAMBDA) * power[k];
         }
     }
 
@@ -397,7 +345,7 @@ impl SpectralSubtractionDenoiser {
     ) {
         for k in 0..self.n_bins {
             // Spike protection
-            if !force_update && power[k] > SPIKE_THRESHOLD * self.noise_pow[k] {
+            if !force_update && power[k] > DEFAULT_SPIKE_THRESHOLD * self.noise_pow[k] {
                 continue;
             }
             // Recursive update with custom lambda
@@ -425,7 +373,7 @@ impl SpectralSubtractionDenoiser {
         } else if self.frame_count < WARMUP_FRAMES {
             0.75 // Medium convergence
         } else {
-            LAMBDA // Normal 0.95 - maintains adaptation
+            DEFAULT_LAMBDA // Normal 0.95 - maintains adaptation
         }
     }
 
@@ -523,10 +471,10 @@ impl SpectralSubtractionDenoiser {
             // SFM-based VAD
             let sfm = compute_sfm(&power);
 
-            if sfm > SFM_NOISE {
+            if sfm > DEFAULT_SFM_NOISE {
                 self.update_noise_estimate(&power, false);
                 self.prev_sfm_decision = true;
-            } else if sfm < SFM_SPEECH {
+            } else if sfm < DEFAULT_SFM_SPEECH {
                 self.prev_sfm_decision = false;
             } else if self.prev_sfm_decision {
                 self.update_noise_estimate(&power, false);
@@ -809,7 +757,7 @@ fn compute_stationarity_from_spectra(all_power_spectra: &[Vec<f32>]) -> f32 {
 
     for power_spectrum in all_power_spectra {
         let sfm = compute_sfm(power_spectrum);
-        if sfm > SFM_NOISE {
+        if sfm > DEFAULT_SFM_NOISE {
             noise_powers.push(power_spectrum.iter().sum::<f32>());
         }
     }
@@ -837,7 +785,7 @@ fn compute_speech_density_from_spectra(all_power_spectra: &[Vec<f32>]) -> f32 {
 
     let speech_count = all_power_spectra
         .iter()
-        .filter(|power| compute_sfm(power) < SFM_SPEECH)
+        .filter(|power| compute_sfm(power) < DEFAULT_SFM_SPEECH)
         .count();
 
     speech_count as f32 / all_power_spectra.len() as f32

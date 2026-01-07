@@ -1,14 +1,17 @@
-mod denoiser_rt;
+#![cfg(feature = "plugin")]
+
+mod denoiser;
 mod visualizations;
 
 use nih_plug::prelude::*;
 use nih_plug_egui::{create_egui_editor, egui, widgets, EguiState};
 use std::sync::{Arc, Mutex};
 
-use denoiser_rt::{
+use denoiser::{
     DenoiserParams, RealtimeDenoiser, VisualizationData, DEFAULT_ALPHA_BASE, DEFAULT_ALPHA_MAX,
     DEFAULT_ALPHA_MIN, DEFAULT_BETA, DEFAULT_DELTA, DEFAULT_GAMMA, DEFAULT_LAMBDA,
-    DEFAULT_SFM_NOISE, DEFAULT_SFM_SPEECH, DEFAULT_SPIKE_THRESHOLD, NUM_BANDS, WINDOW_SIZE,
+    DEFAULT_SFM_NOISE, DEFAULT_SFM_SPEECH, DEFAULT_SPIKE_THRESHOLD, HOP_SIZE, NUM_BANDS,
+    WINDOW_SIZE,
 };
 
 // =============================================================================
@@ -273,9 +276,16 @@ impl Default for PoddyclipParams {
 
 impl PoddyclipParams {
     fn make_delta_param(name: &str, default: f32) -> FloatParam {
-        FloatParam::new(name, default, FloatRange::Linear { min: 0.01, max: 5.0 })
-            .with_step_size(0.01)
-            .with_value_to_string(formatters::v2s_f32_rounded(2))
+        FloatParam::new(
+            name,
+            default,
+            FloatRange::Linear {
+                min: 0.01,
+                max: 5.0,
+            },
+        )
+        .with_step_size(0.01)
+        .with_value_to_string(formatters::v2s_f32_rounded(2))
     }
 
     fn make_gamma_param(name: &str, default: f32) -> FloatParam {
@@ -377,15 +387,18 @@ impl Plugin for Poddyclip {
 
                     ui.columns(2, |columns| {
                         // LEFT COLUMN: Parameters (scrollable)
-                        egui::ScrollArea::vertical()
-                            .id_salt("params_scroll")
-                            .show(&mut columns[0], |ui| {
+                        egui::ScrollArea::vertical().id_salt("params_scroll").show(
+                            &mut columns[0],
+                            |ui| {
                                 // Reset button
                                 ui.horizontal(|ui| {
                                     ui.label("Noise Estimation:");
                                     if ui.button("Reset Noise Floor").clicked() {
                                         setter.begin_set_parameter(&params.reset_noise);
-                                        setter.set_parameter(&params.reset_noise, !params.reset_noise.value());
+                                        setter.set_parameter(
+                                            &params.reset_noise,
+                                            !params.reset_noise.value(),
+                                        );
                                         setter.end_set_parameter(&params.reset_noise);
                                     }
                                 });
@@ -551,7 +564,8 @@ impl Plugin for Poddyclip {
                                     &params.bands.gamma_8,
                                     setter,
                                 ));
-                            });
+                            },
+                        );
 
                         // RIGHT COLUMN: Visualizations
                         columns[1].vertical(|ui| {
@@ -670,8 +684,6 @@ impl Plugin for Poddyclip {
 
 impl Poddyclip {
     fn process_mono_channel(&mut self, buffer: &mut Buffer, _channel_idx: usize) {
-        use denoiser_rt::HOP_SIZE;
-
         // Check if editor is open to enable visualization
         let viz_enabled = self.params.editor_state.is_open();
         self.denoiser_left.set_visualization_enabled(viz_enabled);
@@ -712,8 +724,6 @@ impl Poddyclip {
     }
 
     fn process_stereo_lr(&mut self, buffer: &mut Buffer) {
-        use denoiser_rt::HOP_SIZE;
-
         // Check if editor is open to enable visualization
         let viz_enabled = self.params.editor_state.is_open();
         self.denoiser_left.set_visualization_enabled(viz_enabled);
@@ -767,7 +777,6 @@ impl Poddyclip {
             }
         }
     }
-
 }
 
 impl ClapPlugin for Poddyclip {

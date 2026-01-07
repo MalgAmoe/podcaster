@@ -13,11 +13,14 @@ members = ["xtask"]
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
-nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", features = ["assert_process_allocs"] }
-nih_plug_egui = { git = "https://github.com/robbert-vdh/nih-plug.git" }
+# Core dependency (used by both CLI and plugin)
 rustfft = "6.2"
-egui_plot = "0.31"
-paste = "1.0"
+
+# Plugin-only dependencies (optional)
+nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", features = ["assert_process_allocs"], optional = true }
+nih_plug_egui = { git = "https://github.com/robbert-vdh/nih-plug.git", optional = true }
+egui_plot = { version = "0.31", optional = true }
+paste = { version = "1.0", optional = true }
 
 # CLI-only dependencies (optional)
 anyhow = { version = "1.0.100", optional = true }
@@ -31,7 +34,8 @@ path = "src/main.rs"
 required-features = ["cli"]
 
 [features]
-default = []
+default = ["plugin"]
+plugin = ["nih_plug", "nih_plug_egui", "egui_plot", "paste"]
 cli = ["anyhow", "symphonia", "hound", "clap"]
 
 [profile.release]
