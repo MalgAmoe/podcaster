@@ -50,7 +50,7 @@ struct NoiseEstimationParams {
 
 #[derive(Params)]
 struct BandParams {
-    // Delta per band (9 bands)
+    // Delta per band (24 bands)
     #[id = "delta_0"]
     delta_0: FloatParam,
     #[id = "delta_1"]
@@ -69,8 +69,38 @@ struct BandParams {
     delta_7: FloatParam,
     #[id = "delta_8"]
     delta_8: FloatParam,
+    #[id = "delta_9"]
+    delta_9: FloatParam,
+    #[id = "delta_10"]
+    delta_10: FloatParam,
+    #[id = "delta_11"]
+    delta_11: FloatParam,
+    #[id = "delta_12"]
+    delta_12: FloatParam,
+    #[id = "delta_13"]
+    delta_13: FloatParam,
+    #[id = "delta_14"]
+    delta_14: FloatParam,
+    #[id = "delta_15"]
+    delta_15: FloatParam,
+    #[id = "delta_16"]
+    delta_16: FloatParam,
+    #[id = "delta_17"]
+    delta_17: FloatParam,
+    #[id = "delta_18"]
+    delta_18: FloatParam,
+    #[id = "delta_19"]
+    delta_19: FloatParam,
+    #[id = "delta_20"]
+    delta_20: FloatParam,
+    #[id = "delta_21"]
+    delta_21: FloatParam,
+    #[id = "delta_22"]
+    delta_22: FloatParam,
+    #[id = "delta_23"]
+    delta_23: FloatParam,
 
-    // Gamma per band (9 bands)
+    // Gamma per band (24 bands)
     #[id = "gamma_0"]
     gamma_0: FloatParam,
     #[id = "gamma_1"]
@@ -89,6 +119,36 @@ struct BandParams {
     gamma_7: FloatParam,
     #[id = "gamma_8"]
     gamma_8: FloatParam,
+    #[id = "gamma_9"]
+    gamma_9: FloatParam,
+    #[id = "gamma_10"]
+    gamma_10: FloatParam,
+    #[id = "gamma_11"]
+    gamma_11: FloatParam,
+    #[id = "gamma_12"]
+    gamma_12: FloatParam,
+    #[id = "gamma_13"]
+    gamma_13: FloatParam,
+    #[id = "gamma_14"]
+    gamma_14: FloatParam,
+    #[id = "gamma_15"]
+    gamma_15: FloatParam,
+    #[id = "gamma_16"]
+    gamma_16: FloatParam,
+    #[id = "gamma_17"]
+    gamma_17: FloatParam,
+    #[id = "gamma_18"]
+    gamma_18: FloatParam,
+    #[id = "gamma_19"]
+    gamma_19: FloatParam,
+    #[id = "gamma_20"]
+    gamma_20: FloatParam,
+    #[id = "gamma_21"]
+    gamma_21: FloatParam,
+    #[id = "gamma_22"]
+    gamma_22: FloatParam,
+    #[id = "gamma_23"]
+    gamma_23: FloatParam,
 }
 
 #[derive(Params)]
@@ -154,7 +214,7 @@ impl Default for Poddyclip {
 impl Default for PoddyclipParams {
     fn default() -> Self {
         Self {
-            editor_state: EguiState::from_size(800, 700),
+            editor_state: EguiState::from_size(1400, 800),
 
             reset_noise: BoolParam::new("Reset Noise Estimation", false).with_value_to_string(
                 Arc::new(|value| {
@@ -250,25 +310,55 @@ impl Default for PoddyclipParams {
             },
 
             bands: BandParams {
-                delta_0: Self::make_delta_param("Delta 0-80Hz", DEFAULT_DELTA[0]),
-                delta_1: Self::make_delta_param("Delta 80-250Hz", DEFAULT_DELTA[1]),
-                delta_2: Self::make_delta_param("Delta 250-500Hz", DEFAULT_DELTA[2]),
-                delta_3: Self::make_delta_param("Delta 500-1kHz", DEFAULT_DELTA[3]),
-                delta_4: Self::make_delta_param("Delta 1-2kHz", DEFAULT_DELTA[4]),
-                delta_5: Self::make_delta_param("Delta 2-4kHz", DEFAULT_DELTA[5]),
-                delta_6: Self::make_delta_param("Delta 4-8kHz", DEFAULT_DELTA[6]),
-                delta_7: Self::make_delta_param("Delta 8-12kHz", DEFAULT_DELTA[7]),
-                delta_8: Self::make_delta_param("Delta 12-24kHz", DEFAULT_DELTA[8]),
+                delta_0: Self::make_delta_param("Delta 0-100Hz", DEFAULT_DELTA[0]),
+                delta_1: Self::make_delta_param("Delta 100-200Hz", DEFAULT_DELTA[1]),
+                delta_2: Self::make_delta_param("Delta 200-300Hz", DEFAULT_DELTA[2]),
+                delta_3: Self::make_delta_param("Delta 300-400Hz", DEFAULT_DELTA[3]),
+                delta_4: Self::make_delta_param("Delta 400-510Hz", DEFAULT_DELTA[4]),
+                delta_5: Self::make_delta_param("Delta 510-630Hz", DEFAULT_DELTA[5]),
+                delta_6: Self::make_delta_param("Delta 630-770Hz", DEFAULT_DELTA[6]),
+                delta_7: Self::make_delta_param("Delta 770-920Hz", DEFAULT_DELTA[7]),
+                delta_8: Self::make_delta_param("Delta 920-1080Hz", DEFAULT_DELTA[8]),
+                delta_9: Self::make_delta_param("Delta 1.1-1.3kHz", DEFAULT_DELTA[9]),
+                delta_10: Self::make_delta_param("Delta 1.3-1.5kHz", DEFAULT_DELTA[10]),
+                delta_11: Self::make_delta_param("Delta 1.5-1.7kHz", DEFAULT_DELTA[11]),
+                delta_12: Self::make_delta_param("Delta 1.7-2.0kHz", DEFAULT_DELTA[12]),
+                delta_13: Self::make_delta_param("Delta 2.0-2.3kHz", DEFAULT_DELTA[13]),
+                delta_14: Self::make_delta_param("Delta 2.3-2.7kHz", DEFAULT_DELTA[14]),
+                delta_15: Self::make_delta_param("Delta 2.7-3.2kHz", DEFAULT_DELTA[15]),
+                delta_16: Self::make_delta_param("Delta 3.2-3.7kHz", DEFAULT_DELTA[16]),
+                delta_17: Self::make_delta_param("Delta 3.7-4.4kHz", DEFAULT_DELTA[17]),
+                delta_18: Self::make_delta_param("Delta 4.4-5.3kHz", DEFAULT_DELTA[18]),
+                delta_19: Self::make_delta_param("Delta 5.3-6.4kHz", DEFAULT_DELTA[19]),
+                delta_20: Self::make_delta_param("Delta 6.4-7.7kHz", DEFAULT_DELTA[20]),
+                delta_21: Self::make_delta_param("Delta 7.7-9.5kHz", DEFAULT_DELTA[21]),
+                delta_22: Self::make_delta_param("Delta 9.5-12kHz", DEFAULT_DELTA[22]),
+                delta_23: Self::make_delta_param("Delta 12-15.5kHz", DEFAULT_DELTA[23]),
 
-                gamma_0: Self::make_gamma_param("Gamma 0-80Hz", DEFAULT_GAMMA[0]),
-                gamma_1: Self::make_gamma_param("Gamma 80-250Hz", DEFAULT_GAMMA[1]),
-                gamma_2: Self::make_gamma_param("Gamma 250-500Hz", DEFAULT_GAMMA[2]),
-                gamma_3: Self::make_gamma_param("Gamma 500-1kHz", DEFAULT_GAMMA[3]),
-                gamma_4: Self::make_gamma_param("Gamma 1-2kHz", DEFAULT_GAMMA[4]),
-                gamma_5: Self::make_gamma_param("Gamma 2-4kHz", DEFAULT_GAMMA[5]),
-                gamma_6: Self::make_gamma_param("Gamma 4-8kHz", DEFAULT_GAMMA[6]),
-                gamma_7: Self::make_gamma_param("Gamma 8-12kHz", DEFAULT_GAMMA[7]),
-                gamma_8: Self::make_gamma_param("Gamma 12-24kHz", DEFAULT_GAMMA[8]),
+                gamma_0: Self::make_gamma_param("Gamma 0-100Hz", DEFAULT_GAMMA[0]),
+                gamma_1: Self::make_gamma_param("Gamma 100-200Hz", DEFAULT_GAMMA[1]),
+                gamma_2: Self::make_gamma_param("Gamma 200-300Hz", DEFAULT_GAMMA[2]),
+                gamma_3: Self::make_gamma_param("Gamma 300-400Hz", DEFAULT_GAMMA[3]),
+                gamma_4: Self::make_gamma_param("Gamma 400-510Hz", DEFAULT_GAMMA[4]),
+                gamma_5: Self::make_gamma_param("Gamma 510-630Hz", DEFAULT_GAMMA[5]),
+                gamma_6: Self::make_gamma_param("Gamma 630-770Hz", DEFAULT_GAMMA[6]),
+                gamma_7: Self::make_gamma_param("Gamma 770-920Hz", DEFAULT_GAMMA[7]),
+                gamma_8: Self::make_gamma_param("Gamma 920-1080Hz", DEFAULT_GAMMA[8]),
+                gamma_9: Self::make_gamma_param("Gamma 1.1-1.3kHz", DEFAULT_GAMMA[9]),
+                gamma_10: Self::make_gamma_param("Gamma 1.3-1.5kHz", DEFAULT_GAMMA[10]),
+                gamma_11: Self::make_gamma_param("Gamma 1.5-1.7kHz", DEFAULT_GAMMA[11]),
+                gamma_12: Self::make_gamma_param("Gamma 1.7-2.0kHz", DEFAULT_GAMMA[12]),
+                gamma_13: Self::make_gamma_param("Gamma 2.0-2.3kHz", DEFAULT_GAMMA[13]),
+                gamma_14: Self::make_gamma_param("Gamma 2.3-2.7kHz", DEFAULT_GAMMA[14]),
+                gamma_15: Self::make_gamma_param("Gamma 2.7-3.2kHz", DEFAULT_GAMMA[15]),
+                gamma_16: Self::make_gamma_param("Gamma 3.2-3.7kHz", DEFAULT_GAMMA[16]),
+                gamma_17: Self::make_gamma_param("Gamma 3.7-4.4kHz", DEFAULT_GAMMA[17]),
+                gamma_18: Self::make_gamma_param("Gamma 4.4-5.3kHz", DEFAULT_GAMMA[18]),
+                gamma_19: Self::make_gamma_param("Gamma 5.3-6.4kHz", DEFAULT_GAMMA[19]),
+                gamma_20: Self::make_gamma_param("Gamma 6.4-7.7kHz", DEFAULT_GAMMA[20]),
+                gamma_21: Self::make_gamma_param("Gamma 7.7-9.5kHz", DEFAULT_GAMMA[21]),
+                gamma_22: Self::make_gamma_param("Gamma 9.5-12kHz", DEFAULT_GAMMA[22]),
+                gamma_23: Self::make_gamma_param("Gamma 12-15.5kHz", DEFAULT_GAMMA[23]),
             },
         }
     }
@@ -312,6 +402,21 @@ impl PoddyclipParams {
             self.bands.delta_6.value(),
             self.bands.delta_7.value(),
             self.bands.delta_8.value(),
+            self.bands.delta_9.value(),
+            self.bands.delta_10.value(),
+            self.bands.delta_11.value(),
+            self.bands.delta_12.value(),
+            self.bands.delta_13.value(),
+            self.bands.delta_14.value(),
+            self.bands.delta_15.value(),
+            self.bands.delta_16.value(),
+            self.bands.delta_17.value(),
+            self.bands.delta_18.value(),
+            self.bands.delta_19.value(),
+            self.bands.delta_20.value(),
+            self.bands.delta_21.value(),
+            self.bands.delta_22.value(),
+            self.bands.delta_23.value(),
         ]
     }
 
@@ -326,6 +431,21 @@ impl PoddyclipParams {
             self.bands.gamma_6.value(),
             self.bands.gamma_7.value(),
             self.bands.gamma_8.value(),
+            self.bands.gamma_9.value(),
+            self.bands.gamma_10.value(),
+            self.bands.gamma_11.value(),
+            self.bands.gamma_12.value(),
+            self.bands.gamma_13.value(),
+            self.bands.gamma_14.value(),
+            self.bands.gamma_15.value(),
+            self.bands.gamma_16.value(),
+            self.bands.gamma_17.value(),
+            self.bands.gamma_18.value(),
+            self.bands.gamma_19.value(),
+            self.bands.gamma_20.value(),
+            self.bands.gamma_21.value(),
+            self.bands.gamma_22.value(),
+            self.bands.gamma_23.value(),
         ]
     }
 
@@ -466,49 +586,100 @@ impl Plugin for Poddyclip {
                                 ui.heading("Per-Band Delta (Subtraction Sensitivity)");
                                 ui.add_space(5.0);
 
-                                ui.label("Delta 0-80Hz:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.bands.delta_0,
                                     setter,
                                 ));
-                                ui.label("Delta 80-250Hz:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.bands.delta_1,
                                     setter,
                                 ));
-                                ui.label("Delta 250-500Hz:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.bands.delta_2,
                                     setter,
                                 ));
-                                ui.label("Delta 500-1kHz:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.bands.delta_3,
                                     setter,
                                 ));
-                                ui.label("Delta 1-2kHz:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.bands.delta_4,
                                     setter,
                                 ));
-                                ui.label("Delta 2-4kHz:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.bands.delta_5,
                                     setter,
                                 ));
-                                ui.label("Delta 4-8kHz:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.bands.delta_6,
                                     setter,
                                 ));
-                                ui.label("Delta 8-12kHz:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.bands.delta_7,
                                     setter,
                                 ));
-                                ui.label("Delta 12-24kHz:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.bands.delta_8,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.delta_9,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.delta_10,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.delta_11,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.delta_12,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.delta_13,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.delta_14,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.delta_15,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.delta_16,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.delta_17,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.delta_18,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.delta_19,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.delta_20,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.delta_21,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.delta_22,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.delta_23,
                                     setter,
                                 ));
 
@@ -519,49 +690,100 @@ impl Plugin for Poddyclip {
                                 ui.heading("Per-Band Gamma (Temporal Smoothing)");
                                 ui.add_space(5.0);
 
-                                ui.label("Gamma 0-80Hz:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.bands.gamma_0,
                                     setter,
                                 ));
-                                ui.label("Gamma 80-250Hz:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.bands.gamma_1,
                                     setter,
                                 ));
-                                ui.label("Gamma 250-500Hz:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.bands.gamma_2,
                                     setter,
                                 ));
-                                ui.label("Gamma 500-1kHz:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.bands.gamma_3,
                                     setter,
                                 ));
-                                ui.label("Gamma 1-2kHz:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.bands.gamma_4,
                                     setter,
                                 ));
-                                ui.label("Gamma 2-4kHz:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.bands.gamma_5,
                                     setter,
                                 ));
-                                ui.label("Gamma 4-8kHz:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.bands.gamma_6,
                                     setter,
                                 ));
-                                ui.label("Gamma 8-12kHz:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.bands.gamma_7,
                                     setter,
                                 ));
-                                ui.label("Gamma 12-24kHz:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.bands.gamma_8,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.gamma_9,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.gamma_10,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.gamma_11,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.gamma_12,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.gamma_13,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.gamma_14,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.gamma_15,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.gamma_16,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.gamma_17,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.gamma_18,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.gamma_19,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.gamma_20,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.gamma_21,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.gamma_22,
+                                    setter,
+                                ));
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.bands.gamma_23,
                                     setter,
                                 ));
                             },

@@ -3,23 +3,10 @@
 //! Optimized for plugin use with all parameters exposed
 use super::common::*;
 use rustfft::{num_complex::Complex, FftPlanner};
-use std::f32::consts::PI;
 use std::sync::Arc;
 
-// Band configuration (Hz ranges)
-pub const BANDS: [(f32, f32); 9] = [
-    (0.0, 80.0),        // Band 0: Rumble
-    (80.0, 250.0),      // Band 1: Fundamental
-    (250.0, 500.0),     // Band 2: Warmth
-    (500.0, 1000.0),    // Band 3: Body
-    (1000.0, 2000.0),   // Band 4: Presence
-    (2000.0, 4000.0),   // Band 5: Intelligibility
-    (4000.0, 8000.0),   // Band 6: Sibilance
-    (8000.0, 12000.0),  // Band 7: Air
-    (12000.0, 24000.0), // Band 8: Hiss
-];
-
-pub const NUM_BANDS: usize = 9;
+// Re-export shared band configuration
+pub use super::common::{BANDS, NUM_BANDS};
 
 // =============================================================================
 // Visualization Data
@@ -61,15 +48,13 @@ impl Default for VisualizationData {
 // Parameter Defaults
 // =============================================================================
 
-// Plugin-specific defaults for alpha and beta
+// Plugin-specific defaults for alpha and beta (others in common.rs)
 pub const DEFAULT_ALPHA_BASE: f32 = 3.0;
 pub const DEFAULT_ALPHA_MIN: f32 = 1.0;
 pub const DEFAULT_ALPHA_MAX: f32 = 5.0;
 pub const DEFAULT_BETA: f32 = 0.05;
 
-// Plugin-specific band defaults
-pub const DEFAULT_DELTA: [f32; NUM_BANDS] = [0.8, 1.0, 1.5, 2.0, 2.5, 2.5, 2.0, 1.5, 1.0];
-pub const DEFAULT_GAMMA: [f32; NUM_BANDS] = [0.50, 0.55, 0.65, 0.72, 0.78, 0.82, 0.86, 0.90, 0.92];
+// DEFAULT_DELTA and DEFAULT_GAMMA are now in common.rs
 
 // =============================================================================
 // Processing Parameters (updateable in real-time)
@@ -109,93 +94,6 @@ impl Default for DenoiserParams {
             gamma: DEFAULT_GAMMA,
         }
     }
-}
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
-fn compute_alpha_curve(
-    fft_size: usize,
-    sample_rate: u32,
-    snr_per_bin: &[f32],
-    delta: &[f32; NUM_BANDS],
-    alpha_base: f32,
-    alpha_min: f32,
-    alpha_max: f32,
-) -> Vec<f32> {
-    let n_bins = fft_size / 2 + 1;
-    let mut delta_curve = vec![delta[NUM_BANDS - 1]; n_bins];
-
-    // Assign delta per band
-    for (i, &(start_hz, end_hz)) in BANDS.iter().enumerate() {
-        let start_bin = hz_to_bin(start_hz, fft_size, sample_rate);
-        let end_bin = hz_to_bin(end_hz, fft_size, sample_rate).min(n_bins);
-        for k in start_bin..end_bin {
-            delta_curve[k] = delta[i];
-        }
-    }
-
-    // Compute alpha per bin
-    let mut alpha: Vec<f32> = snr_per_bin
-        .iter()
-        .zip(delta_curve.iter())
-        .map(|(&snr, &d)| (alpha_base - snr / (d + EPSILON)).clamp(alpha_min, alpha_max))
-        .collect();
-
-    // Smooth transitions
-    for i in 0..BANDS.len() - 1 {
-        let transition_bin = hz_to_bin(BANDS[i].1, fft_size, sample_rate);
-        let half_width = TRANSITION_BINS / 2;
-        let start = transition_bin.saturating_sub(half_width);
-        let end = (transition_bin + half_width).min(n_bins);
-
-        for k in start..end {
-            let base = transition_bin.saturating_sub(half_width);
-            let t = (k - base) as f32 / TRANSITION_BINS as f32;
-            let w = 0.5 * (1.0 - (PI * t).cos());
-            if k > 0 && k < n_bins - 1 && k > transition_bin {
-                alpha[k] = (1.0 - w) * alpha[k - 1] + w * alpha[k + 1];
-            }
-        }
-    }
-
-    alpha
-}
-
-fn compute_gamma_curve(
-    fft_size: usize,
-    sample_rate: u32,
-    gamma_per_band: &[f32; NUM_BANDS],
-) -> Vec<f32> {
-    let n_bins = fft_size / 2 + 1;
-    let mut gamma = vec![gamma_per_band[NUM_BANDS - 1]; n_bins];
-
-    // Assign gamma per band
-    for (i, &(start_hz, end_hz)) in BANDS.iter().enumerate() {
-        let start_bin = hz_to_bin(start_hz, fft_size, sample_rate);
-        let end_bin = hz_to_bin(end_hz, fft_size, sample_rate).min(n_bins);
-        for k in start_bin..end_bin {
-            gamma[k] = gamma_per_band[i];
-        }
-    }
-
-    // Smooth transitions
-    for i in 0..BANDS.len() - 1 {
-        let transition_bin = hz_to_bin(BANDS[i].1, fft_size, sample_rate);
-        let half_width = TRANSITION_BINS / 2;
-        let start = transition_bin.saturating_sub(half_width);
-        let end = (transition_bin + half_width).min(n_bins);
-
-        for k in start..end {
-            let base = transition_bin.saturating_sub(half_width);
-            let t = (k - base) as f32 / TRANSITION_BINS as f32;
-            let w = 0.5 * (1.0 - (PI * t).cos());
-            gamma[k] = (1.0 - w) * gamma_per_band[i] + w * gamma_per_band[i + 1];
-        }
-    }
-
-    gamma
 }
 
 // =============================================================================
@@ -259,11 +157,11 @@ impl RealtimeDenoiser {
             n_bins,
             params,
             window: root_hann_window(window_size),
-            noise_pow: vec![EPSILON; n_bins],  // Small non-zero placeholder
+            noise_pow: vec![EPSILON; n_bins], // Small non-zero placeholder
             prev_gain: vec![1.0; n_bins],
             prev_sfm_decision: true,
             frames_processed: 0,
-            needs_initialization: true,  // Will initialize from first frame
+            needs_initialization: true, // Will initialize from first frame
             gamma_curve,
             gamma_dirty: false,
             overlap_buffer: vec![0.0; window_size],
@@ -296,11 +194,8 @@ impl RealtimeDenoiser {
 
     fn rebuild_gamma_curve(&mut self) {
         if self.gamma_dirty {
-            self.gamma_curve = compute_gamma_curve(
-                self.window_size,
-                self.sample_rate,
-                &self.params.gamma,
-            );
+            self.gamma_curve =
+                compute_gamma_curve(self.window_size, self.sample_rate, &self.params.gamma);
             self.gamma_dirty = false;
         }
     }
@@ -323,12 +218,17 @@ impl RealtimeDenoiser {
                 continue;
             }
             // Recursive update
-            self.noise_pow[k] = self.params.lambda * self.noise_pow[k]
-                + (1.0 - self.params.lambda) * power[k];
+            self.noise_pow[k] =
+                self.params.lambda * self.noise_pow[k] + (1.0 - self.params.lambda) * power[k];
         }
     }
 
-    fn update_noise_estimate_with_lambda(&mut self, power: &[f32], force_update: bool, lambda: f32) {
+    fn update_noise_estimate_with_lambda(
+        &mut self,
+        power: &[f32],
+        force_update: bool,
+        lambda: f32,
+    ) {
         for k in 0..self.n_bins {
             // Spike protection
             if !force_update && power[k] > self.params.spike_threshold * self.noise_pow[k] {
@@ -355,11 +255,11 @@ impl RealtimeDenoiser {
     fn get_adaptive_lambda(&self) -> f32 {
         // Fast convergence in first few frames
         if self.frames_processed < 5 {
-            0.5   // Very fast initial convergence
+            0.5 // Very fast initial convergence
         } else if self.frames_processed < WARMUP_FRAMES {
-            0.75  // Medium convergence
+            0.75 // Medium convergence
         } else {
-            self.params.lambda  // Normal - maintains adaptation
+            self.params.lambda // Normal - maintains adaptation
         }
     }
 
@@ -381,7 +281,8 @@ impl RealtimeDenoiser {
     fn smooth_gain(&mut self, gain: &[f32]) -> Vec<f32> {
         self.rebuild_gamma_curve();
 
-        let smoothed: Vec<f32> = self.gamma_curve
+        let smoothed: Vec<f32> = self
+            .gamma_curve
             .iter()
             .zip(self.prev_gain.iter())
             .zip(gain.iter())
@@ -403,11 +304,10 @@ impl RealtimeDenoiser {
             .collect();
 
         // Forward FFT
-        let mut spectrum: Vec<Complex<f32>> = windowed
-            .iter()
-            .map(|&s| Complex::new(s, 0.0))
-            .collect();
-        self.fft.process_with_scratch(&mut spectrum, &mut self.fft_scratch);
+        let mut spectrum: Vec<Complex<f32>> =
+            windowed.iter().map(|&s| Complex::new(s, 0.0)).collect();
+        self.fft
+            .process_with_scratch(&mut spectrum, &mut self.fft_scratch);
 
         // Compute power spectrum
         let power: Vec<f32> = spectrum[..self.n_bins]
@@ -474,7 +374,8 @@ impl RealtimeDenoiser {
         }
 
         // Inverse FFT
-        self.ifft.process_with_scratch(&mut result, &mut self.fft_scratch);
+        self.ifft
+            .process_with_scratch(&mut result, &mut self.fft_scratch);
 
         // Normalize and extract real part
         let scale = 1.0 / self.window_size as f32;

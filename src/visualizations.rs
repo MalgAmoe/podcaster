@@ -1,28 +1,27 @@
 //! Real-time visualization widgets for the denoiser
 
-use nih_plug_egui::egui;
-use egui_plot::{Line, Plot, PlotPoints, Legend, Corner};
 use crate::denoiser::{VisualizationData, BANDS, NUM_BANDS, WINDOW_SIZE};
+use egui_plot::{Corner, Legend, Line, Plot, PlotPoints};
+use nih_plug_egui::egui;
 
 /// Draw spectrum analyzer showing current signal vs noise floor
 pub fn draw_spectrum_analyzer(ui: &mut egui::Ui, viz_data: &VisualizationData) {
-    let bin_to_hz = |bin: usize| -> f64 {
-        (bin as f64 * viz_data.sample_rate as f64) / WINDOW_SIZE as f64
-    };
+    let bin_to_hz =
+        |bin: usize| -> f64 { (bin as f64 * viz_data.sample_rate as f64) / WINDOW_SIZE as f64 };
 
-    let linear_to_db = |power: f32| -> f64 {
-        10.0 * (power + 1e-10).log10() as f64
-    };
+    let linear_to_db = |power: f32| -> f64 { 10.0 * (power + 1e-10).log10() as f64 };
 
     // Build current spectrum line (blue)
-    let current_points: PlotPoints = viz_data.current_spectrum
+    let current_points: PlotPoints = viz_data
+        .current_spectrum
         .iter()
         .enumerate()
         .map(|(bin, &power)| [bin_to_hz(bin), linear_to_db(power)])
         .collect();
 
     // Build noise floor line (red)
-    let noise_points: PlotPoints = viz_data.noise_spectrum
+    let noise_points: PlotPoints = viz_data
+        .noise_spectrum
         .iter()
         .enumerate()
         .map(|(bin, &power)| [bin_to_hz(bin), linear_to_db(power)])
@@ -47,95 +46,134 @@ pub fn draw_spectrum_analyzer(ui: &mut egui::Ui, viz_data: &VisualizationData) {
         });
 }
 
-/// Draw gain reduction bars for 9 frequency bands
+/// Draw gain reduction bars for frequency bands
 pub fn draw_gain_reduction_bars(ui: &mut egui::Ui, viz_data: &VisualizationData) {
     ui.label("Gain Reduction (dB)");
     ui.add_space(5.0);
 
-    let available_width = ui.available_width();
-    let bar_width = available_width / NUM_BANDS as f32 - 4.0;
+    let bar_width = 25.0;
+    let spacing = 3.0;
     let bar_height = 150.0;
+    let label_height = 15.0;
+    let total_height = bar_height + label_height + 5.0;
 
-    ui.horizontal(|ui| {
-        for (i, &gain_db) in viz_data.band_gain_db.iter().enumerate() {
-            ui.vertical(|ui| {
-                let (rect, _) = ui.allocate_exact_size(
-                    egui::vec2(bar_width, bar_height),
-                    egui::Sense::hover()
+    // Calculate total width needed
+    let total_width = (bar_width + spacing) * NUM_BANDS as f32;
+
+    egui::ScrollArea::horizontal().show(ui, |ui| {
+        let (response, painter) =
+            ui.allocate_painter(egui::vec2(total_width, total_height), egui::Sense::hover());
+
+        let top_left = response.rect.left_top();
+
+        for i in 0..NUM_BANDS {
+            let x = top_left.x + (bar_width + spacing) * i as f32;
+            let gain_db = viz_data.band_gain_db[i];
+
+            // Bar background rect
+            let bar_rect = egui::Rect::from_min_size(
+                egui::pos2(x, top_left.y),
+                egui::vec2(bar_width, bar_height),
+            );
+            painter.rect_filled(bar_rect, 2.0, egui::Color32::from_gray(30));
+
+            // Filled bar (gain reduction)
+            let normalized = (gain_db / -60.0).clamp(0.0, 1.0);
+            let filled_height = normalized * bar_height;
+
+            if filled_height > 0.0 {
+                let filled_rect = egui::Rect::from_min_max(
+                    egui::pos2(x, top_left.y + bar_height - filled_height),
+                    egui::pos2(x + bar_width, top_left.y + bar_height),
                 );
 
-                // Background
-                ui.painter().rect_filled(rect, 2.0, egui::Color32::from_gray(30));
-
-                // Calculate bar height (0dB = no bar, -60dB = full bar)
-                let normalized = (gain_db / -60.0).clamp(0.0, 1.0);
-                let filled_height = normalized * bar_height;
-
-                if filled_height > 0.0 {
-                    let bar_rect = egui::Rect::from_min_max(
-                        egui::pos2(rect.min.x, rect.max.y - filled_height),
-                        rect.max
-                    );
-
-                    // Color: green -> yellow -> red
-                    let color = if gain_db > -10.0 {
-                        egui::Color32::from_rgb(100, 200, 100)
-                    } else if gain_db > -30.0 {
-                        egui::Color32::from_rgb(255, 200, 50)
-                    } else {
-                        egui::Color32::from_rgb(255, 100, 100)
-                    };
-
-                    ui.painter().rect_filled(bar_rect, 2.0, color);
-                }
-
-                ui.add_space(2.0);
-                ui.label(format!("B{}", i));
-            });
-        }
-    });
-}
-
-/// Draw SNR table for 9 frequency bands
-pub fn draw_snr_table(ui: &mut egui::Ui, viz_data: &VisualizationData) {
-    ui.label("Signal-to-Noise Ratio (dB)");
-    ui.add_space(5.0);
-
-    egui::Grid::new("snr_grid")
-        .spacing([10.0, 5.0])
-        .striped(true)
-        .show(ui, |ui| {
-            ui.label("Band");
-            ui.label("Frequency");
-            ui.label("SNR (dB)");
-            ui.end_row();
-
-            for (i, &snr_db) in viz_data.band_snr_db.iter().enumerate() {
-                let (start_hz, end_hz) = BANDS[i];
-
-                ui.label(format!("{}", i));
-
-                // Format frequency range
-                let freq_label = if end_hz >= 1000.0 {
-                    format!("{:.0}-{:.0}kHz", start_hz / 1000.0, end_hz / 1000.0)
-                } else {
-                    format!("{:.0}-{:.0}Hz", start_hz, end_hz)
-                };
-                ui.label(freq_label);
-
-                // Color-code SNR
-                let color = if snr_db > 20.0 {
-                    egui::Color32::from_rgb(100, 255, 100)
-                } else if snr_db > 10.0 {
-                    egui::Color32::from_rgb(255, 255, 100)
-                } else if snr_db > 0.0 {
-                    egui::Color32::from_rgb(255, 200, 100)
+                // Color: green -> yellow -> red
+                let color = if gain_db > -10.0 {
+                    egui::Color32::from_rgb(100, 200, 100)
+                } else if gain_db > -30.0 {
+                    egui::Color32::from_rgb(255, 200, 50)
                 } else {
                     egui::Color32::from_rgb(255, 100, 100)
                 };
 
-                ui.colored_label(color, format!("{:+.1}", snr_db));
-                ui.end_row();
+                painter.rect_filled(filled_rect, 2.0, color);
             }
-        });
+
+            // Label below bar
+            let label_pos = egui::pos2(x + bar_width / 2.0, top_left.y + bar_height + 5.0);
+            painter.text(
+                label_pos,
+                egui::Align2::CENTER_TOP,
+                format!("B{}", i),
+                egui::FontId::default(),
+                egui::Color32::from_gray(200),
+            );
+        }
+    });
+}
+
+/// Draw SNR table for frequency bands
+pub fn draw_snr_table(ui: &mut egui::Ui, viz_data: &VisualizationData) {
+    ui.label("Signal-to-Noise Ratio (dB)");
+    ui.add_space(5.0);
+
+    // Display in 3 columns of 8 bands each for better horizontal layout
+    const BANDS_PER_COLUMN: usize = 8;
+
+    ui.horizontal_top(|ui| {
+        for col in 0..3 {
+            ui.vertical(|ui| {
+                egui::Grid::new(format!("snr_grid_{}", col))
+                    .spacing([10.0, 5.0])
+                    .striped(true)
+                    .show(ui, |ui| {
+                        ui.label("Band");
+                        ui.label("Frequency");
+                        ui.label("SNR (dB)");
+                        ui.end_row();
+
+                        let start_idx = col * BANDS_PER_COLUMN;
+                        let end_idx = ((col + 1) * BANDS_PER_COLUMN).min(NUM_BANDS);
+
+                        for i in start_idx..end_idx {
+                            let snr_db = viz_data.band_snr_db[i];
+                            let (start_hz, end_hz) = BANDS[i];
+
+                            ui.label(format!("{}", i));
+
+                            // Format frequency range
+                            let freq_label = if start_hz >= 1000.0 && end_hz >= 1000.0 {
+                                // Both in kHz range
+                                format!("{:.1}-{:.1}kHz", start_hz / 1000.0, end_hz / 1000.0)
+                            } else if start_hz < 1000.0 && end_hz >= 1000.0 {
+                                // Crosses 1kHz boundary
+                                format!("{:.0}Hz-{:.1}kHz", start_hz, end_hz / 1000.0)
+                            } else {
+                                // Both in Hz range
+                                format!("{:.0}-{:.0}Hz", start_hz, end_hz)
+                            };
+                            ui.label(freq_label);
+
+                            // Color-code SNR
+                            let color = if snr_db > 20.0 {
+                                egui::Color32::from_rgb(100, 255, 100)
+                            } else if snr_db > 10.0 {
+                                egui::Color32::from_rgb(255, 255, 100)
+                            } else if snr_db > 0.0 {
+                                egui::Color32::from_rgb(255, 200, 100)
+                            } else {
+                                egui::Color32::from_rgb(255, 100, 100)
+                            };
+
+                            ui.colored_label(color, format!("{:+.1}", snr_db));
+                            ui.end_row();
+                        }
+                    });
+            });
+
+            if col < 2 {
+                ui.add_space(20.0);
+            }
+        }
+    });
 }

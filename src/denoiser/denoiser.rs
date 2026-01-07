@@ -16,39 +16,6 @@ use std::f32::consts::PI;
 // calculations (Bark bands, analysis windows) appropriately.
 pub const SAMPLE_RATE: u32 = 48000;
 
-// 24 Bark critical bands configuration (psychoacoustic scale)
-// (start_hz, end_hz, delta)
-const BANDS: [(f32, f32, f32); 24] = [
-    // Low (0-770Hz): Conservative
-    (0.0, 100.0, 0.8),
-    (100.0, 200.0, 1.0),
-    (200.0, 300.0, 1.2),
-    (300.0, 400.0, 1.4),
-    (400.0, 510.0, 1.6),
-    (510.0, 630.0, 1.8),
-    (630.0, 770.0, 2.0),
-    // Mid (770-3150Hz): Aggressive on speech
-    (770.0, 920.0, 2.2),
-    (920.0, 1080.0, 2.5),
-    (1080.0, 1270.0, 2.8),
-    (1270.0, 1480.0, 2.8),
-    (1480.0, 1720.0, 2.8),
-    (1720.0, 2000.0, 2.8),
-    (2000.0, 2320.0, 2.5),
-    // High-mid (3150-7700Hz): Intelligibility
-    (2320.0, 2700.0, 2.3),
-    (2700.0, 3150.0, 2.0),
-    (3150.0, 3700.0, 1.8),
-    (3700.0, 4400.0, 1.8),
-    (4400.0, 5300.0, 1.8),
-    // High (7700-15500Hz): Air/hiss
-    (5300.0, 6400.0, 1.5),
-    (6400.0, 7700.0, 1.3),
-    (7700.0, 9500.0, 1.2),
-    (9500.0, 12000.0, 1.0),
-    (12000.0, 15500.0, 0.9),
-];
-
 // =============================================================================
 // Preset Configuration
 // =============================================================================
@@ -60,7 +27,8 @@ pub struct Preset {
     pub alpha_min: f32,
     pub alpha_max: f32,
     pub beta: f32,
-    pub gamma: [f32; 24],
+    pub delta: [f32; NUM_BANDS],
+    pub gamma: [f32; NUM_BANDS],
 }
 
 pub const PRESETS: [Preset; 5] = [
@@ -71,6 +39,12 @@ pub const PRESETS: [Preset; 5] = [
         alpha_min: 0.5,
         alpha_max: 2.5,
         beta: 0.15,
+        delta: [
+            0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, // Low (7)
+            1.2, 1.4, 1.6, 1.6, 1.6, 1.6, 1.4, // Mid (7)
+            1.3, 1.2, 1.1, 1.1, 1.1, // High-mid (5)
+            1.0, 0.9, 0.8, 0.7, 0.6, // High (5)
+        ],
         gamma: [
             0.40, 0.42, 0.44, 0.46, 0.48, 0.50, 0.52, // Low (7)
             0.55, 0.58, 0.62, 0.65, 0.68, 0.70, 0.72, // Mid (7)
@@ -85,6 +59,12 @@ pub const PRESETS: [Preset; 5] = [
         alpha_min: 0.8,
         alpha_max: 3.5,
         beta: 0.08,
+        delta: [
+            0.6, 0.8, 1.0, 1.2, 1.3, 1.5, 1.6, // Low (7)
+            1.8, 2.0, 2.2, 2.2, 2.2, 2.2, 2.0, // Mid (7)
+            1.9, 1.6, 1.5, 1.5, 1.5, // High-mid (5)
+            1.2, 1.1, 1.0, 0.9, 0.8, // High (5)
+        ],
         gamma: [
             0.45, 0.47, 0.49, 0.51, 0.53, 0.55, 0.57, // Low (7)
             0.60, 0.63, 0.67, 0.70, 0.73, 0.75, 0.77, // Mid (7)
@@ -99,12 +79,8 @@ pub const PRESETS: [Preset; 5] = [
         alpha_min: 1.0,
         alpha_max: 5.0,
         beta: 0.05,
-        gamma: [
-            0.50, 0.52, 0.54, 0.56, 0.58, 0.60, 0.62, // Low (7)
-            0.65, 0.68, 0.72, 0.75, 0.78, 0.80, 0.82, // Mid (7)
-            0.84, 0.86, 0.87, 0.88, 0.89, // High-mid (5)
-            0.90, 0.91, 0.92, 0.93, 0.94, // High (5)
-        ],
+        delta: DEFAULT_DELTA, // Use shared default
+        gamma: DEFAULT_GAMMA, // Use shared default
     },
     // 4: Strong - noticeable noise reduction
     Preset {
@@ -113,6 +89,12 @@ pub const PRESETS: [Preset; 5] = [
         alpha_min: 2.5,
         alpha_max: 7.0,
         beta: 0.02,
+        delta: [
+            1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, // Low (7)
+            2.5, 2.8, 3.2, 3.2, 3.2, 3.2, 2.8, // Mid (7)
+            2.6, 2.3, 2.1, 2.1, 2.1, // High-mid (5)
+            1.7, 1.5, 1.4, 1.2, 1.0, // High (5)
+        ],
         gamma: [
             0.55, 0.57, 0.59, 0.61, 0.63, 0.65, 0.67, // Low (7)
             0.70, 0.73, 0.77, 0.80, 0.83, 0.85, 0.87, // Mid (7)
@@ -127,6 +109,12 @@ pub const PRESETS: [Preset; 5] = [
         alpha_min: 2.0,
         alpha_max: 10.0,
         beta: 0.008,
+        delta: [
+            1.2, 1.5, 1.8, 2.0, 2.2, 2.4, 2.6, // Low (7)
+            3.0, 3.5, 4.0, 4.0, 4.0, 4.0, 3.5, // Mid (7)
+            3.2, 2.8, 2.5, 2.5, 2.5, // High-mid (5)
+            2.0, 1.7, 1.5, 1.3, 1.2, // High (5)
+        ],
         gamma: [
             0.60, 0.62, 0.64, 0.66, 0.68, 0.70, 0.72, // Low (7)
             0.75, 0.78, 0.82, 0.85, 0.88, 0.90, 0.92, // Mid (7)
@@ -147,91 +135,6 @@ pub fn get_preset(level: usize) -> Option<&'static Preset> {
 }
 
 // =============================================================================
-// Multi-band Alpha/Gamma Calculations
-// =============================================================================
-
-fn compute_alpha_curve(
-    fft_size: usize,
-    sample_rate: u32,
-    snr_per_bin: &[f32],
-    alpha_base: f32,
-    alpha_min: f32,
-    alpha_max: f32,
-) -> Vec<f32> {
-    let n_bins = fft_size / 2 + 1;
-    let mut delta = vec![BANDS[8].2; n_bins]; // Default to last band's delta
-
-    // Assign delta per band
-    for &(start_hz, end_hz, d) in &BANDS {
-        let start_bin = hz_to_bin(start_hz, fft_size, sample_rate);
-        let end_bin = hz_to_bin(end_hz, fft_size, sample_rate).min(n_bins);
-        for k in start_bin..end_bin {
-            delta[k] = d;
-        }
-    }
-
-    // Compute alpha per bin: α = clamp(α₀ - SNR/δ, min, max)
-    let mut alpha: Vec<f32> = snr_per_bin
-        .iter()
-        .zip(delta.iter())
-        .map(|(&snr, &d)| (alpha_base - snr / (d + EPSILON)).clamp(alpha_min, alpha_max))
-        .collect();
-
-    // Apply raised-cosine smoothing at band transitions
-    for i in 0..BANDS.len() - 1 {
-        let transition_bin = hz_to_bin(BANDS[i].1, fft_size, sample_rate);
-        let half_width = TRANSITION_BINS / 2;
-
-        let start = transition_bin.saturating_sub(half_width);
-        let end = (transition_bin + half_width).min(n_bins);
-
-        for k in start..end {
-            let base = transition_bin.saturating_sub(half_width);
-            let t = (k - base) as f32 / TRANSITION_BINS as f32;
-            let w = 0.5 * (1.0 - (PI * t).cos());
-
-            if k > 0 && k < n_bins - 1 && k > transition_bin {
-                alpha[k] = (1.0 - w) * alpha[k - 1] + w * alpha[k + 1];
-            }
-        }
-    }
-
-    alpha
-}
-
-fn compute_gamma_curve(fft_size: usize, sample_rate: u32, gamma_per_band: &[f32; 24]) -> Vec<f32> {
-    let n_bins = fft_size / 2 + 1;
-    let mut gamma = vec![gamma_per_band[23]; n_bins]; // Default to last band
-
-    // Assign gamma per band
-    for (i, &(start_hz, end_hz, _)) in BANDS.iter().enumerate() {
-        let start_bin = hz_to_bin(start_hz, fft_size, sample_rate);
-        let end_bin = hz_to_bin(end_hz, fft_size, sample_rate).min(n_bins);
-        for k in start_bin..end_bin {
-            gamma[k] = gamma_per_band[i];
-        }
-    }
-
-    // Smooth transitions between bands
-    for i in 0..BANDS.len() - 1 {
-        let transition_bin = hz_to_bin(BANDS[i].1, fft_size, sample_rate);
-        let half_width = TRANSITION_BINS / 2;
-
-        let start = transition_bin.saturating_sub(half_width);
-        let end = (transition_bin + half_width).min(n_bins);
-
-        for k in start..end {
-            let base = transition_bin.saturating_sub(half_width);
-            let t = (k - base) as f32 / TRANSITION_BINS as f32;
-            let w = 0.5 * (1.0 - (PI * t).cos());
-            gamma[k] = (1.0 - w) * gamma_per_band[i] + w * gamma_per_band[i + 1];
-        }
-    }
-
-    gamma
-}
-
-// =============================================================================
 // Core Denoiser
 // =============================================================================
 
@@ -246,6 +149,7 @@ pub struct SpectralSubtractionDenoiser {
     alpha_min: f32,
     alpha_max: f32,
     beta: f32,
+    delta: [f32; NUM_BANDS],
 
     // Window
     window: Vec<f32>,
@@ -294,6 +198,7 @@ impl SpectralSubtractionDenoiser {
             alpha_min: p.alpha_min,
             alpha_max: p.alpha_max,
             beta: p.beta,
+            delta: p.delta,
             window: root_hann_window(window_size),
             noise_pow: vec![EPSILON; n_bins], // Small non-zero placeholder
             prev_gain: vec![1.0; n_bins],
@@ -333,7 +238,8 @@ impl SpectralSubtractionDenoiser {
                 continue;
             }
             // Recursive update
-            self.noise_pow[k] = DEFAULT_LAMBDA * self.noise_pow[k] + (1.0 - DEFAULT_LAMBDA) * power[k];
+            self.noise_pow[k] =
+                DEFAULT_LAMBDA * self.noise_pow[k] + (1.0 - DEFAULT_LAMBDA) * power[k];
         }
     }
 
@@ -446,6 +352,7 @@ impl SpectralSubtractionDenoiser {
                 self.window_size,
                 self.sample_rate,
                 &snr,
+                &self.delta,
                 self.alpha_base,
                 self.alpha_min,
                 self.alpha_max,
@@ -486,6 +393,7 @@ impl SpectralSubtractionDenoiser {
                 self.window_size,
                 self.sample_rate,
                 &snr,
+                &self.delta,
                 self.alpha_base,
                 self.alpha_min,
                 self.alpha_max,
@@ -649,10 +557,8 @@ pub fn analyze_audio(audio: &[f32], sample_rate: u32) -> AudioAnalysisResult {
             .map(|(&s, &w)| s * w)
             .collect();
 
-        let mut spectrum: Vec<Complex<f32>> = windowed
-            .iter()
-            .map(|&s| Complex::new(s, 0.0))
-            .collect();
+        let mut spectrum: Vec<Complex<f32>> =
+            windowed.iter().map(|&s| Complex::new(s, 0.0)).collect();
 
         fft.process_with_scratch(&mut spectrum, &mut fft_scratch);
 
