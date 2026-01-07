@@ -95,10 +95,10 @@ pub const PRESETS: [Preset; 5] = [
         alpha_max: 2.5,
         beta: 0.15,
         gamma: [
-            0.40, 0.42, 0.44, 0.46, 0.48, 0.50, 0.52,  // Low (7)
-            0.55, 0.58, 0.62, 0.65, 0.68, 0.70, 0.72,  // Mid (7)
-            0.74, 0.76, 0.77, 0.78, 0.79,              // High-mid (5)
-            0.80, 0.81, 0.82, 0.83, 0.84,              // High (5)
+            0.40, 0.42, 0.44, 0.46, 0.48, 0.50, 0.52, // Low (7)
+            0.55, 0.58, 0.62, 0.65, 0.68, 0.70, 0.72, // Mid (7)
+            0.74, 0.76, 0.77, 0.78, 0.79, // High-mid (5)
+            0.80, 0.81, 0.82, 0.83, 0.84, // High (5)
         ],
     },
     // 2: Light - subtle noise reduction
@@ -109,10 +109,10 @@ pub const PRESETS: [Preset; 5] = [
         alpha_max: 3.5,
         beta: 0.08,
         gamma: [
-            0.45, 0.47, 0.49, 0.51, 0.53, 0.55, 0.57,  // Low (7)
-            0.60, 0.63, 0.67, 0.70, 0.73, 0.75, 0.77,  // Mid (7)
-            0.79, 0.81, 0.82, 0.83, 0.84,              // High-mid (5)
-            0.85, 0.86, 0.87, 0.88, 0.89,              // High (5)
+            0.45, 0.47, 0.49, 0.51, 0.53, 0.55, 0.57, // Low (7)
+            0.60, 0.63, 0.67, 0.70, 0.73, 0.75, 0.77, // Mid (7)
+            0.79, 0.81, 0.82, 0.83, 0.84, // High-mid (5)
+            0.85, 0.86, 0.87, 0.88, 0.89, // High (5)
         ],
     },
     // 3: Moderate - balanced (default)
@@ -123,10 +123,10 @@ pub const PRESETS: [Preset; 5] = [
         alpha_max: 5.0,
         beta: 0.05,
         gamma: [
-            0.50, 0.52, 0.54, 0.56, 0.58, 0.60, 0.62,  // Low (7)
-            0.65, 0.68, 0.72, 0.75, 0.78, 0.80, 0.82,  // Mid (7)
-            0.84, 0.86, 0.87, 0.88, 0.89,              // High-mid (5)
-            0.90, 0.91, 0.92, 0.93, 0.94,              // High (5)
+            0.50, 0.52, 0.54, 0.56, 0.58, 0.60, 0.62, // Low (7)
+            0.65, 0.68, 0.72, 0.75, 0.78, 0.80, 0.82, // Mid (7)
+            0.84, 0.86, 0.87, 0.88, 0.89, // High-mid (5)
+            0.90, 0.91, 0.92, 0.93, 0.94, // High (5)
         ],
     },
     // 4: Strong - noticeable noise reduction
@@ -137,10 +137,10 @@ pub const PRESETS: [Preset; 5] = [
         alpha_max: 7.0,
         beta: 0.02,
         gamma: [
-            0.55, 0.57, 0.59, 0.61, 0.63, 0.65, 0.67,  // Low (7)
-            0.70, 0.73, 0.77, 0.80, 0.83, 0.85, 0.87,  // Mid (7)
-            0.89, 0.91, 0.92, 0.93, 0.94,              // High-mid (5)
-            0.95, 0.96, 0.97, 0.97, 0.98,              // High (5)
+            0.55, 0.57, 0.59, 0.61, 0.63, 0.65, 0.67, // Low (7)
+            0.70, 0.73, 0.77, 0.80, 0.83, 0.85, 0.87, // Mid (7)
+            0.89, 0.91, 0.92, 0.93, 0.94, // High-mid (5)
+            0.95, 0.96, 0.97, 0.97, 0.98, // High (5)
         ],
     },
     // 5: Aggressive - maximum removal, may affect speech
@@ -151,10 +151,10 @@ pub const PRESETS: [Preset; 5] = [
         alpha_max: 10.0,
         beta: 0.008,
         gamma: [
-            0.60, 0.62, 0.64, 0.66, 0.68, 0.70, 0.72,  // Low (7)
-            0.75, 0.78, 0.82, 0.85, 0.88, 0.90, 0.92,  // Mid (7)
-            0.94, 0.95, 0.96, 0.96, 0.97,              // High-mid (5)
-            0.97, 0.98, 0.98, 0.99, 0.99,              // High (5)
+            0.60, 0.62, 0.64, 0.66, 0.68, 0.70, 0.72, // Low (7)
+            0.75, 0.78, 0.82, 0.85, 0.88, 0.90, 0.92, // Mid (7)
+            0.94, 0.95, 0.96, 0.96, 0.97, // High-mid (5)
+            0.97, 0.98, 0.98, 0.99, 0.99, // High (5)
         ],
     },
 ];
@@ -174,9 +174,7 @@ pub fn get_preset(level: usize) -> Option<&'static Preset> {
 // =============================================================================
 
 fn root_hann_window(n: usize) -> Vec<f32> {
-    (0..n)
-        .map(|i| (PI * i as f32 / n as f32).sin())
-        .collect()
+    (0..n).map(|i| (PI * i as f32 / n as f32).sin()).collect()
 }
 
 // =============================================================================
@@ -187,10 +185,7 @@ fn compute_sfm(power_spectrum: &[f32]) -> f32 {
     let n = power_spectrum.len() as f32;
 
     // Geometric mean via log
-    let log_sum: f32 = power_spectrum
-        .iter()
-        .map(|&p| (p + EPSILON).ln())
-        .sum();
+    let log_sum: f32 = power_spectrum.iter().map(|&p| (p + EPSILON).ln()).sum();
     let geo_mean = (log_sum / n).exp();
 
     // Arithmetic mean
@@ -352,11 +347,11 @@ impl SpectralSubtractionDenoiser {
             alpha_max: p.alpha_max,
             beta: p.beta,
             window: root_hann_window(window_size),
-            noise_pow: vec![EPSILON; n_bins],  // Small non-zero placeholder
+            noise_pow: vec![EPSILON; n_bins], // Small non-zero placeholder
             prev_gain: vec![1.0; n_bins],
             prev_sfm_decision: true,
             frame_count: 0,
-            needs_initialization: true,  // Will initialize from first frame
+            needs_initialization: true, // Will initialize from first frame
             gamma: compute_gamma_curve(window_size, sample_rate, &p.gamma),
             overlap_buffer: vec![0.0; window_size],
             fft,
@@ -394,7 +389,12 @@ impl SpectralSubtractionDenoiser {
         }
     }
 
-    fn update_noise_estimate_with_lambda(&mut self, power: &[f32], force_update: bool, lambda: f32) {
+    fn update_noise_estimate_with_lambda(
+        &mut self,
+        power: &[f32],
+        force_update: bool,
+        lambda: f32,
+    ) {
         for k in 0..self.n_bins {
             // Spike protection
             if !force_update && power[k] > SPIKE_THRESHOLD * self.noise_pow[k] {
@@ -421,11 +421,11 @@ impl SpectralSubtractionDenoiser {
     fn get_adaptive_lambda(&self) -> f32 {
         // Fast convergence in first few frames
         if self.frame_count < 5 {
-            0.5   // Very fast initial convergence
+            0.5 // Very fast initial convergence
         } else if self.frame_count < WARMUP_FRAMES {
-            0.75  // Medium convergence
+            0.75 // Medium convergence
         } else {
-            LAMBDA  // Normal 0.95 - maintains adaptation
+            LAMBDA // Normal 0.95 - maintains adaptation
         }
     }
 
@@ -445,7 +445,8 @@ impl SpectralSubtractionDenoiser {
     }
 
     fn smooth_gain(&mut self, gain: &[f32]) -> Vec<f32> {
-        let smoothed: Vec<f32> = self.gamma
+        let smoothed: Vec<f32> = self
+            .gamma
             .iter()
             .zip(self.prev_gain.iter())
             .zip(gain.iter())
@@ -467,11 +468,10 @@ impl SpectralSubtractionDenoiser {
             .collect();
 
         // Forward FFT
-        let mut spectrum: Vec<Complex<f32>> = windowed
-            .iter()
-            .map(|&s| Complex::new(s, 0.0))
-            .collect();
-        self.fft.process_with_scratch(&mut spectrum, &mut self.fft_scratch);
+        let mut spectrum: Vec<Complex<f32>> =
+            windowed.iter().map(|&s| Complex::new(s, 0.0)).collect();
+        self.fft
+            .process_with_scratch(&mut spectrum, &mut self.fft_scratch);
 
         // Compute power spectrum (only need first n_bins due to symmetry)
         let power: Vec<f32> = spectrum[..self.n_bins]
@@ -562,7 +562,8 @@ impl SpectralSubtractionDenoiser {
 
         // Inverse FFT
         let mut time_domain = enhanced_spectrum;
-        self.ifft.process_with_scratch(&mut time_domain, &mut self.fft_scratch);
+        self.ifft
+            .process_with_scratch(&mut time_domain, &mut self.fft_scratch);
 
         // Normalize and extract real part
         let scale = 1.0 / self.window_size as f32;
@@ -579,7 +580,15 @@ impl SpectralSubtractionDenoiser {
         }
 
         // Extract output
-        let output: Vec<f32> = self.overlap_buffer[..self.hop_size].to_vec();
+        let mut output: Vec<f32> = self.overlap_buffer[..self.hop_size].to_vec();
+
+        // Apply fade-in during warmup to hide artifacts
+        if self.frame_count < WARMUP_FRAMES {
+            let fade = self.frame_count as f32 / WARMUP_FRAMES as f32;
+            for sample in output.iter_mut() {
+                *sample *= fade * fade;
+            }
+        }
 
         // Shift buffer
         self.overlap_buffer.rotate_left(self.hop_size);
@@ -634,7 +643,8 @@ impl SpectralSubtractionDenoiser {
 pub fn compute_minimum_statistics(audio: &[f32], sample_rate: u32) -> Vec<f32> {
     let n_bins = WINDOW_SIZE / 2 + 1;
     let window_duration_seconds = 1.5;
-    let frames_per_window = ((sample_rate as f32 * window_duration_seconds) / HOP_SIZE as f32) as usize;
+    let frames_per_window =
+        ((sample_rate as f32 * window_duration_seconds) / HOP_SIZE as f32) as usize;
 
     // FFT setup
     let mut planner = FftPlanner::new();
@@ -665,18 +675,13 @@ pub fn compute_minimum_statistics(audio: &[f32], sample_rate: u32) -> Vec<f32> {
             .map(|(&s, &w)| s * w)
             .collect();
 
-        let mut spectrum: Vec<Complex<f32>> = windowed
-            .iter()
-            .map(|&s| Complex::new(s, 0.0))
-            .collect();
+        let mut spectrum: Vec<Complex<f32>> =
+            windowed.iter().map(|&s| Complex::new(s, 0.0)).collect();
 
         fft.process_with_scratch(&mut spectrum, &mut fft_scratch);
 
         // Power spectrum
-        let power: Vec<f32> = spectrum[..n_bins]
-            .iter()
-            .map(|c| c.norm_sqr())
-            .collect();
+        let power: Vec<f32> = spectrum[..n_bins].iter().map(|c| c.norm_sqr()).collect();
 
         all_power_spectra.push(power);
         i += HOP_SIZE;
@@ -716,9 +721,9 @@ pub fn compute_minimum_statistics(audio: &[f32], sample_rate: u32) -> Vec<f32> {
 /// Simple audio analysis for displaying recommendations
 pub struct SimpleAnalysis {
     pub overall_snr_db: f32,
-    pub stationarity_score: f32,  // 0.0 = variable, 1.0 = constant
-    pub speech_density: f32,       // 0.0-1.0
-    pub dominant_freq_hz: f32,     // Where most noise energy is
+    pub stationarity_score: f32, // 0.0 = variable, 1.0 = constant
+    pub speech_density: f32,     // 0.0-1.0
+    pub dominant_freq_hz: f32,   // Where most noise energy is
 }
 
 /// Estimate overall SNR in dB
@@ -755,18 +760,13 @@ fn estimate_overall_snr(audio: &[f32], noise_floor: &[f32]) -> f32 {
             .map(|(&s, &w)| s * w)
             .collect();
 
-        let mut spectrum: Vec<Complex<f32>> = windowed
-            .iter()
-            .map(|&s| Complex::new(s, 0.0))
-            .collect();
+        let mut spectrum: Vec<Complex<f32>> =
+            windowed.iter().map(|&s| Complex::new(s, 0.0)).collect();
 
         fft.process_with_scratch(&mut spectrum, &mut fft_scratch);
 
         // Power spectrum
-        let power: Vec<f32> = spectrum[..n_bins]
-            .iter()
-            .map(|c| c.norm_sqr())
-            .collect();
+        let power: Vec<f32> = spectrum[..n_bins].iter().map(|c| c.norm_sqr()).collect();
 
         total_signal_power += power.iter().sum::<f32>();
         frame_count += 1;
@@ -817,18 +817,13 @@ fn estimate_stationarity(audio: &[f32]) -> f32 {
             .map(|(&s, &w)| s * w)
             .collect();
 
-        let mut spectrum: Vec<Complex<f32>> = windowed
-            .iter()
-            .map(|&s| Complex::new(s, 0.0))
-            .collect();
+        let mut spectrum: Vec<Complex<f32>> =
+            windowed.iter().map(|&s| Complex::new(s, 0.0)).collect();
 
         fft.process_with_scratch(&mut spectrum, &mut fft_scratch);
 
         // Power spectrum
-        let power: Vec<f32> = spectrum[..n_bins]
-            .iter()
-            .map(|c| c.norm_sqr())
-            .collect();
+        let power: Vec<f32> = spectrum[..n_bins].iter().map(|c| c.norm_sqr()).collect();
 
         // Check if this is a noise-like frame
         let sfm = compute_sfm(&power);
@@ -840,14 +835,16 @@ fn estimate_stationarity(audio: &[f32]) -> f32 {
     }
 
     if noise_powers.len() < 2 {
-        return 0.5;  // Not enough data
+        return 0.5; // Not enough data
     }
 
     // Compute coefficient of variation (std/mean)
     let mean: f32 = noise_powers.iter().sum::<f32>() / noise_powers.len() as f32;
-    let variance: f32 = noise_powers.iter()
+    let variance: f32 = noise_powers
+        .iter()
         .map(|&p| (p - mean).powi(2))
-        .sum::<f32>() / noise_powers.len() as f32;
+        .sum::<f32>()
+        / noise_powers.len() as f32;
     let std_dev = variance.sqrt();
 
     let cv = std_dev / (mean + EPSILON);
@@ -890,18 +887,13 @@ fn estimate_speech_density(audio: &[f32]) -> f32 {
             .map(|(&s, &w)| s * w)
             .collect();
 
-        let mut spectrum: Vec<Complex<f32>> = windowed
-            .iter()
-            .map(|&s| Complex::new(s, 0.0))
-            .collect();
+        let mut spectrum: Vec<Complex<f32>> =
+            windowed.iter().map(|&s| Complex::new(s, 0.0)).collect();
 
         fft.process_with_scratch(&mut spectrum, &mut fft_scratch);
 
         // Power spectrum
-        let power: Vec<f32> = spectrum[..n_bins]
-            .iter()
-            .map(|c| c.norm_sqr())
-            .collect();
+        let power: Vec<f32> = spectrum[..n_bins].iter().map(|c| c.norm_sqr()).collect();
 
         // Check if this is a speech-like frame (low SFM = tonal)
         let sfm = compute_sfm(&power);
@@ -961,15 +953,15 @@ pub fn analyze_audio_simple(
 pub fn recommend_preset(analysis: &SimpleAnalysis) -> usize {
     // Simple heuristic based on SNR
     if analysis.overall_snr_db < 0.0 {
-        5  // Aggressive
+        5 // Aggressive
     } else if analysis.overall_snr_db < 10.0 {
-        4  // Strong
+        4 // Strong
     } else if analysis.overall_snr_db < 15.0 {
-        3  // Moderate
+        3 // Moderate
     } else if analysis.overall_snr_db < 20.0 {
-        2  // Light
+        2 // Light
     } else {
-        1  // Gentle
+        1 // Gentle
     }
 }
 
@@ -977,21 +969,21 @@ pub fn recommend_preset(analysis: &SimpleAnalysis) -> usize {
 /// Returns: (sfm_speech_threshold, sfm_noise_threshold, spike_threshold)
 pub fn recommend_thresholds(analysis: &SimpleAnalysis) -> (f32, f32, f32) {
     let sfm_speech = if analysis.speech_density > 0.7 {
-        0.15  // Higher threshold for speech-heavy content
+        0.15 // Higher threshold for speech-heavy content
     } else {
-        0.10  // Standard threshold
+        0.10 // Standard threshold
     };
 
     let sfm_noise = if analysis.stationarity_score > 0.8 {
-        0.35  // Lower for constant noise
+        0.35 // Lower for constant noise
     } else {
-        0.45  // Higher for varying noise
+        0.45 // Higher for varying noise
     };
 
     let spike_threshold = if analysis.overall_snr_db < 10.0 {
-        12.0  // More aggressive for noisy audio
+        12.0 // More aggressive for noisy audio
     } else {
-        10.0  // Standard threshold
+        10.0 // Standard threshold
     };
 
     (sfm_speech, sfm_noise, spike_threshold)
@@ -1079,7 +1071,8 @@ pub fn process_stereo_lr(
 
 pub fn match_rms(input: &[f32], output: &mut [f32]) {
     let rms_in = (input.iter().map(|&s| s * s).sum::<f32>() / input.len() as f32 + EPSILON).sqrt();
-    let rms_out = (output.iter().map(|&s| s * s).sum::<f32>() / output.len() as f32 + EPSILON).sqrt();
+    let rms_out =
+        (output.iter().map(|&s| s * s).sum::<f32>() / output.len() as f32 + EPSILON).sqrt();
 
     let gain = rms_in / rms_out;
 
