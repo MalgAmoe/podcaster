@@ -252,7 +252,6 @@ pub struct RealtimeDenoiser {
 
     // Overlap buffer
     overlap_buffer: Vec<f32>,
-    input_buffer: Vec<f32>,
 
     // FFT
     fft: Arc<dyn rustfft::Fft<f32>>,
@@ -293,7 +292,6 @@ impl RealtimeDenoiser {
             gamma_curve,
             gamma_dirty: false,
             overlap_buffer: vec![0.0; window_size],
-            input_buffer: Vec::new(),
             fft,
             ifft,
             fft_scratch,
@@ -577,7 +575,6 @@ impl RealtimeDenoiser {
 
         // Reset processing buffers
         self.overlap_buffer.fill(0.0);
-        self.input_buffer.clear();
 
         // Reset parameter cache - force gamma curve rebuild
         self.gamma_dirty = true;

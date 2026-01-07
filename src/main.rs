@@ -13,7 +13,8 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
 use denoiser::{
-    get_preset, match_rms, process_stereo, process_stereo_lr, SpectralSubtractionDenoiser,
+    analyze_audio_simple, compute_minimum_statistics, get_preset, match_rms, process_stereo,
+    process_stereo_lr, recommend_preset, recommend_thresholds, SpectralSubtractionDenoiser,
     DEFAULT_PRESET, PRESETS, SAMPLE_RATE,
 };
 
@@ -76,6 +77,61 @@ fn main() -> Result<()> {
         );
     }
 
+    // =========================================================================
+    // Pass 1: Analysis
+    // =========================================================================
+
+    println!("\n[Pass 1] Analyzing audio...");
+
+    // Compute noise floor using minimum statistics
+    let noise_floor = if is_stereo {
+        // Use left channel for analysis
+        compute_minimum_statistics(&samples[0], input_sr)
+    } else {
+        compute_minimum_statistics(&samples[0], input_sr)
+    };
+
+    // Analyze and get recommendations
+    let analysis = analyze_audio_simple(&samples[0], input_sr, &noise_floor);
+
+    // Display analysis results
+    println!("  ✓ Analysis complete");
+    println!();
+    println!("  Audio characteristics:");
+    println!("    SNR: {:.1} dB", analysis.overall_snr_db);
+    println!("    Stationarity: {:.2}", analysis.stationarity_score);
+    println!("    Speech density: {:.0}%", analysis.speech_density * 100.0);
+    println!("    Dominant noise freq: {:.0} Hz", analysis.dominant_freq_hz);
+    println!();
+
+    // Propose recommendations (NOT applied automatically)
+    let recommended_preset = recommend_preset(&analysis);
+    let (sfm_speech, sfm_noise, spike_thresh) = recommend_thresholds(&analysis);
+
+    println!("  Recommendations:");
+    println!(
+        "    Suggested preset: {} ({})",
+        recommended_preset,
+        PRESETS[recommended_preset - 1].name
+    );
+    println!(
+        "    Suggested SFM thresholds: speech={:.2}, noise={:.2}",
+        sfm_speech, sfm_noise
+    );
+    println!("    Suggested spike threshold: {:.1}", spike_thresh);
+
+    // If user chose default preset, show they could try the recommendation
+    if args.preset == DEFAULT_PRESET && recommended_preset != DEFAULT_PRESET as usize {
+        println!();
+        println!("  Tip: Try --preset {} for this audio", recommended_preset);
+    }
+
+    println!();
+
+    // =========================================================================
+    // Pass 2: Processing
+    // =========================================================================
+
     let presets_to_run: Vec<usize> = if args.all_presets {
         vec![1, 2, 3, 4, 5]
     } else {
@@ -117,7 +173,7 @@ fn main() -> Result<()> {
             // Choose stereo processing mode based on user preference
             let (mut left_out, mut right_out) = if args.stereo_mode == "lr" {
                 // L/R independent processing
-                process_stereo_lr(left, right, input_sr, preset, None)
+                process_stereo_lr(left, right, input_sr, preset)
             } else {
                 // M/S (Mid/Side) processing (default)
                 process_stereo(left, right, input_sr, preset)
