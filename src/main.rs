@@ -13,8 +13,8 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
 use denoiser::{
-    get_preset, match_rms, process_stereo, SpectralSubtractionDenoiser, DEFAULT_PRESET, PRESETS,
-    SAMPLE_RATE,
+    get_preset, match_rms, process_stereo, process_stereo_lr, SpectralSubtractionDenoiser,
+    DEFAULT_PRESET, PRESETS, SAMPLE_RATE,
 };
 
 #[derive(Parser)]
@@ -25,7 +25,11 @@ use denoiser::{
   2 = Light      - Subtle noise reduction
   3 = Moderate   - Balanced (default)
   4 = Strong     - Noticeable noise reduction
-  5 = Aggressive - Maximum removal, may affect speech quality"#)]
+  5 = Aggressive - Maximum removal, may affect speech quality
+
+Stereo Modes:
+  ms = Mid/Side processing (default) - Better for centered content
+  lr = Left/Right independent - Better for wide stereo imaging"#)]
 struct Args {
     /// Input audio file (WAV, MP3, etc.)
     input: PathBuf,
@@ -45,6 +49,10 @@ struct Args {
     /// Generate output for all 5 presets
     #[arg(long)]
     all_presets: bool,
+
+    /// Stereo processing mode: 'ms' (Mid/Side) or 'lr' (Left/Right independent)
+    #[arg(long, default_value = "lr", value_parser = ["ms", "lr"])]
+    stereo_mode: String,
 }
 
 fn main() -> Result<()> {
@@ -106,7 +114,14 @@ fn main() -> Result<()> {
             let left = &samples[0];
             let right = &samples[1];
 
-            let (mut left_out, mut right_out) = process_stereo(left, right, input_sr, preset);
+            // Choose stereo processing mode based on user preference
+            let (mut left_out, mut right_out) = if args.stereo_mode == "lr" {
+                // L/R independent processing
+                process_stereo_lr(left, right, input_sr, preset, None)
+            } else {
+                // M/S (Mid/Side) processing (default)
+                process_stereo(left, right, input_sr, preset)
+            };
 
             if !args.no_level_match {
                 let left_len = left_out.len().min(left.len());

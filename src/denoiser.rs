@@ -654,6 +654,24 @@ pub fn process_stereo(
     (left_out, right_out)
 }
 
+/// Process stereo by processing left and right channels independently
+pub fn process_stereo_lr(
+    left: &[f32],
+    right: &[f32],
+    sample_rate: u32,
+    preset: usize,
+    _noise_floors: Option<(Vec<f32>, Vec<f32>)>,  // For compatibility, not used in simple version
+) -> (Vec<f32>, Vec<f32>) {
+    // Process each channel independently
+    let mut denoiser_left = SpectralSubtractionDenoiser::new(sample_rate, preset);
+    let mut denoiser_right = SpectralSubtractionDenoiser::new(sample_rate, preset);
+
+    let left_out = denoiser_left.process(left);
+    let right_out = denoiser_right.process(right);
+
+    (left_out, right_out)
+}
+
 // =============================================================================
 // Level Matching
 // =============================================================================
