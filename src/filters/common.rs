@@ -1,5 +1,6 @@
 //! Common filter implementations shared between CLI and plugin
 //! Uses State Variable Filters (SVF) for numerical stability
+#![cfg_attr(all(feature = "cli", feature = "plugin"), allow(dead_code))]
 
 use std::f32::consts::PI;
 

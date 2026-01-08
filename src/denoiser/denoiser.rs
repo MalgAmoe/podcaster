@@ -2,6 +2,7 @@
 //!
 //! Rust port of the Python validation implementation.
 //! Minimal dependencies: rustfft for FFT operations.
+#![cfg_attr(all(feature = "cli", feature = "plugin"), allow(dead_code))]
 
 use super::common::*;
 use rustfft::{num_complex::Complex, FftPlanner};

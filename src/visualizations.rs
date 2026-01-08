@@ -1,6 +1,6 @@
 //! Real-time visualization widgets for the denoiser
 
-use crate::denoiser::{VisualizationData, BANDS, NUM_BANDS, WINDOW_SIZE};
+use crate::denoiser::{VisualizationData, NUM_BANDS, WINDOW_SIZE};
 use egui_plot::{Corner, Legend, Line, Plot, PlotPoints};
 use nih_plug_egui::egui;
 
@@ -108,72 +108,6 @@ pub fn draw_gain_reduction_bars(ui: &mut egui::Ui, viz_data: &VisualizationData)
                 egui::FontId::default(),
                 egui::Color32::from_gray(200),
             );
-        }
-    });
-}
-
-/// Draw SNR table for frequency bands
-pub fn draw_snr_table(ui: &mut egui::Ui, viz_data: &VisualizationData) {
-    ui.label("Signal-to-Noise Ratio (dB)");
-    ui.add_space(5.0);
-
-    // Display in 3 columns of 8 bands each for better horizontal layout
-    const BANDS_PER_COLUMN: usize = 8;
-
-    ui.horizontal_top(|ui| {
-        for col in 0..3 {
-            ui.vertical(|ui| {
-                egui::Grid::new(format!("snr_grid_{}", col))
-                    .spacing([10.0, 5.0])
-                    .striped(true)
-                    .show(ui, |ui| {
-                        ui.label("Band");
-                        ui.label("Frequency");
-                        ui.label("SNR (dB)");
-                        ui.end_row();
-
-                        let start_idx = col * BANDS_PER_COLUMN;
-                        let end_idx = ((col + 1) * BANDS_PER_COLUMN).min(NUM_BANDS);
-
-                        for i in start_idx..end_idx {
-                            let snr_db = viz_data.band_snr_db[i];
-                            let (start_hz, end_hz) = BANDS[i];
-
-                            ui.label(format!("{}", i));
-
-                            // Format frequency range
-                            let freq_label = if start_hz >= 1000.0 && end_hz >= 1000.0 {
-                                // Both in kHz range
-                                format!("{:.1}-{:.1}kHz", start_hz / 1000.0, end_hz / 1000.0)
-                            } else if start_hz < 1000.0 && end_hz >= 1000.0 {
-                                // Crosses 1kHz boundary
-                                format!("{:.0}Hz-{:.1}kHz", start_hz, end_hz / 1000.0)
-                            } else {
-                                // Both in Hz range
-                                format!("{:.0}-{:.0}Hz", start_hz, end_hz)
-                            };
-                            ui.label(freq_label);
-
-                            // Color-code SNR
-                            let color = if snr_db > 20.0 {
-                                egui::Color32::from_rgb(100, 255, 100)
-                            } else if snr_db > 10.0 {
-                                egui::Color32::from_rgb(255, 255, 100)
-                            } else if snr_db > 0.0 {
-                                egui::Color32::from_rgb(255, 200, 100)
-                            } else {
-                                egui::Color32::from_rgb(255, 100, 100)
-                            };
-
-                            ui.colored_label(color, format!("{:+.1}", snr_db));
-                            ui.end_row();
-                        }
-                    });
-            });
-
-            if col < 2 {
-                ui.add_space(20.0);
-            }
         }
     });
 }

@@ -2,6 +2,7 @@
 
 mod denoiser;
 mod filters;
+mod fixeq;
 mod visualizations;
 
 use nih_plug::prelude::*;
@@ -10,12 +11,13 @@ use std::sync::{Arc, Mutex};
 
 use denoiser::{
     DenoiserParams, RealtimeDenoiser, VisualizationData, DEFAULT_ALPHA_BASE, DEFAULT_ALPHA_MAX,
-    DEFAULT_ALPHA_MIN, DEFAULT_BETA, DEFAULT_DELTA, DEFAULT_GAMMA, DEFAULT_LAMBDA,
+    DEFAULT_ALPHA_MIN, DEFAULT_BETA, DEFAULT_LAMBDA,
     DEFAULT_SFM_NOISE, DEFAULT_SFM_SPEECH, DEFAULT_SPIKE_THRESHOLD, HOP_SIZE, NUM_BANDS,
     PRESETS, WINDOW_SIZE,
 };
 
 use filters::{FilterChain, HighPassSlope};
+use fixeq::FixEq;
 
 // =============================================================================
 // Parameter Structs
@@ -68,6 +70,15 @@ struct PresetParams {
 }
 
 #[derive(Params)]
+struct DeMudParams {
+    #[id = "demud_enable"]
+    enable: BoolParam,
+
+    #[id = "demud_macro"]
+    macro_val: FloatParam,
+}
+
+#[derive(Params)]
 struct PoddyclipParams {
     #[persist = "editor-state"]
     editor_state: Arc<EguiState>,
@@ -86,6 +97,9 @@ struct PoddyclipParams {
 
     #[nested(group = "Preset")]
     preset: PresetParams,
+
+    #[nested(group = "Dynamic EQ")]
+    demud: DeMudParams,
 }
 
 // =============================================================================
@@ -116,6 +130,13 @@ struct Poddyclip {
 
     // Visualization data shared with GUI
     visualization_data: Arc<Mutex<VisualizationData>>,
+
+    // FixEq (post-denoiser dynamic EQ)
+    fixeq_left: FixEq,
+    fixeq_right: FixEq,
+
+    // De-mud gain reduction for UI meter
+    demud_gain_db: Arc<Mutex<f32>>,
 }
 
 impl Default for Poddyclip {
@@ -135,6 +156,9 @@ impl Default for Poddyclip {
             samples_since_process: 0,
             prev_reset_state: false,
             visualization_data: Arc::new(Mutex::new(VisualizationData::default())),
+            fixeq_left: FixEq::new(48000.0),
+            fixeq_right: FixEq::new(48000.0),
+            demud_gain_db: Arc::new(Mutex::new(0.0)),
         }
     }
 }
@@ -254,6 +278,20 @@ impl Default for PoddyclipParams {
                 .with_step_size(0.01)
                 .with_value_to_string(formatters::v2s_f32_rounded(2)),
             },
+
+            demud: DeMudParams {
+                enable: BoolParam::new("Enable De-Mud", false),
+                macro_val: FloatParam::new(
+                    "De-Mud Strength",
+                    0.5, // Default to moderate
+                    FloatRange::Linear {
+                        min: 0.0,
+                        max: 1.0,
+                    },
+                )
+                .with_step_size(0.01)
+                .with_value_to_string(formatters::v2s_f32_percentage(0)),
+            },
         }
     }
 }
@@ -350,6 +388,7 @@ impl Plugin for Poddyclip {
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
         let params = self.params.clone();
         let viz_data = self.visualization_data.clone();
+        let demud_gain = self.demud_gain_db.clone();
 
         create_egui_editor(
             params.editor_state.clone(),
@@ -477,6 +516,27 @@ impl Plugin for Poddyclip {
                                     &params.preset.strength,
                                     setter,
                                 ));
+
+                                ui.add_space(15.0);
+                                ui.separator();
+
+                                // Dynamic EQ - De-Mud
+                                ui.heading("Dynamic EQ");
+                                ui.add_space(5.0);
+
+                                ui.horizontal(|ui| {
+                                    ui.label("De-Mud (300Hz):");
+                                    ui.add(widgets::ParamSlider::for_param(
+                                        &params.demud.enable,
+                                        setter,
+                                    ));
+                                });
+
+                                ui.label("Strength:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.demud.macro_val,
+                                    setter,
+                                ));
                             },
                         );
 
@@ -492,12 +552,52 @@ impl Plugin for Poddyclip {
                                 ui.separator();
 
                                 visualizations::draw_gain_reduction_bars(ui, &viz);
+                            }
 
-                                ui.add_space(15.0);
-                                ui.separator();
+                            ui.add_space(15.0);
+                            ui.separator();
 
-                                visualizations::draw_snr_table(ui, &viz);
-                            } else {
+                            // De-Mud Gain Reduction Meter
+                            ui.heading("De-Mud Gain Reduction");
+                            ui.add_space(5.0);
+                            let gain_db = demud_gain.lock().map(|g| *g).unwrap_or(0.0);
+                            let reduction = -gain_db; // Convert to positive for display
+
+                            ui.horizontal(|ui| {
+                                ui.label(format!("{:.1} dB", gain_db));
+                                let max_reduction = 6.0; // Max is -6dB
+                                let ratio = (reduction / max_reduction).clamp(0.0, 1.0);
+                                let available = ui.available_width() - 10.0;
+                                let (rect, _) = ui.allocate_exact_size(
+                                    egui::vec2(available, 20.0),
+                                    egui::Sense::hover(),
+                                );
+
+                                // Background
+                                ui.painter().rect_filled(
+                                    rect,
+                                    4.0,
+                                    egui::Color32::from_gray(40),
+                                );
+
+                                // Meter bar (yellow/orange for reduction)
+                                if ratio > 0.0 {
+                                    let bar_rect = egui::Rect::from_min_size(
+                                        rect.min,
+                                        egui::vec2(rect.width() * ratio, rect.height()),
+                                    );
+                                    let color = if ratio > 0.8 {
+                                        egui::Color32::from_rgb(255, 100, 50) // Orange-red
+                                    } else if ratio > 0.5 {
+                                        egui::Color32::from_rgb(255, 180, 50) // Orange
+                                    } else {
+                                        egui::Color32::from_rgb(255, 220, 100) // Yellow
+                                    };
+                                    ui.painter().rect_filled(bar_rect, 4.0, color);
+                                }
+                            });
+
+                            if viz_data.lock().is_err() {
                                 ui.label("Waiting for audio data...");
                             }
                         });
@@ -613,6 +713,15 @@ impl Poddyclip {
 
         let filter_enabled = self.params.filters.enable.value();
 
+        // FixEq parameters
+        let demud_enabled = self.params.demud.enable.value();
+        self.fixeq_left.set_demud_enabled(demud_enabled);
+        let demud_strength = if demud_enabled {
+            self.params.demud.macro_val.value()
+        } else {
+            0.0
+        };
+
         for mut channel_samples in buffer.iter_samples() {
             let input_sample = channel_samples.get_mut(0).copied().unwrap_or(0.0);
 
@@ -643,11 +752,21 @@ impl Poddyclip {
             }
 
             // Output from buffer
-            let output_sample = if !self.output_buffer_left.is_empty() {
+            let mut output_sample = if !self.output_buffer_left.is_empty() {
                 self.output_buffer_left.remove(0)
             } else {
                 input_sample // Pass through if no output ready yet
             };
+
+            // Apply FixEq AFTER denoiser
+            output_sample = self.fixeq_left.process(output_sample, demud_strength);
+
+            // Update gain reduction for UI
+            if viz_enabled {
+                if let Ok(mut gain) = self.demud_gain_db.try_lock() {
+                    *gain = self.fixeq_left.get_demud_gain_db();
+                }
+            }
 
             if let Some(sample) = channel_samples.get_mut(0) {
                 *sample = output_sample;
@@ -662,6 +781,16 @@ impl Poddyclip {
         self.denoiser_right.set_visualization_enabled(false); // Only visualize left
 
         let filter_enabled = self.params.filters.enable.value();
+
+        // FixEq parameters
+        let demud_enabled = self.params.demud.enable.value();
+        self.fixeq_left.set_demud_enabled(demud_enabled);
+        self.fixeq_right.set_demud_enabled(demud_enabled);
+        let demud_strength = if demud_enabled {
+            self.params.demud.macro_val.value()
+        } else {
+            0.0
+        };
 
         for mut channel_samples in buffer.iter_samples() {
             let left_in = channel_samples.get_mut(0).copied().unwrap_or(0.0);
@@ -703,17 +832,28 @@ impl Poddyclip {
             }
 
             // Output from buffers
-            let left_out = if !self.output_buffer_left.is_empty() {
+            let mut left_out = if !self.output_buffer_left.is_empty() {
                 self.output_buffer_left.remove(0)
             } else {
                 left_in
             };
 
-            let right_out = if !self.output_buffer_right.is_empty() {
+            let mut right_out = if !self.output_buffer_right.is_empty() {
                 self.output_buffer_right.remove(0)
             } else {
                 right_in
             };
+
+            // Apply FixEq AFTER denoiser
+            left_out = self.fixeq_left.process(left_out, demud_strength);
+            right_out = self.fixeq_right.process(right_out, demud_strength);
+
+            // Update gain reduction for UI (from left channel only)
+            if viz_enabled {
+                if let Ok(mut gain) = self.demud_gain_db.try_lock() {
+                    *gain = self.fixeq_left.get_demud_gain_db();
+                }
+            }
 
             if let Some(sample) = channel_samples.get_mut(0) {
                 *sample = left_out;

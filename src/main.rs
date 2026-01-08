@@ -1,5 +1,6 @@
 mod denoiser;
 mod filters;
+mod fixeq;
 
 use std::path::{Path, PathBuf};
 
@@ -13,12 +14,13 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
+use denoiser::common::{get_preset, DEFAULT_PRESET, PRESETS};
 use denoiser::denoiser::{
-    analyze_audio, get_preset, process_stereo_lr, SpectralSubtractionDenoiser, DEFAULT_PRESET,
-    PRESETS, SAMPLE_RATE,
+    analyze_audio, process_stereo_lr, SpectralSubtractionDenoiser, SAMPLE_RATE,
 };
 
 use filters::{HighPassSlope, StereoFilterChain};
+use fixeq::FixEq;
 
 #[derive(Parser)]
 #[command(name = "poddyclip")]
@@ -48,6 +50,14 @@ struct Args {
     /// Disable filters (skip HP @ 80Hz and LP @ 15.5kHz)
     #[arg(long)]
     no_filters: bool,
+
+    /// Enable de-mud (300Hz dynamic EQ, reduces proximity effect)
+    #[arg(long)]
+    demud: bool,
+
+    /// De-mud strength 0.0-1.0
+    #[arg(long, default_value_t = 0.5, value_parser = clap::value_parser!(f32))]
+    demud_strength: f32,
 }
 
 fn main() -> Result<()> {
@@ -150,7 +160,7 @@ fn main() -> Result<()> {
         samples.clone()
     };
 
-    let output_samples = if is_stereo {
+    let denoised_samples = if is_stereo {
         let left = &filtered_samples[0];
         let right = &filtered_samples[1];
 
@@ -165,6 +175,38 @@ fn main() -> Result<()> {
         let output = denoiser.process(&filtered_samples[0]);
 
         vec![output]
+    };
+
+    // Apply FixEq (post-denoiser dynamic EQ)
+    let output_samples = if args.demud {
+        println!("  Applying FixEq (de-mud @ 300Hz, strength: {:.0}%)...", args.demud_strength * 100.0);
+
+        let mut fixeq_left = FixEq::new(input_sr as f32);
+        let mut fixeq_right = FixEq::new(input_sr as f32);
+        fixeq_left.set_demud_enabled(true);
+        fixeq_right.set_demud_enabled(true);
+
+        let demud_strength = args.demud_strength.clamp(0.0, 1.0);
+
+        if is_stereo {
+            let left_out: Vec<f32> = denoised_samples[0]
+                .iter()
+                .map(|&s| fixeq_left.process(s, demud_strength))
+                .collect();
+            let right_out: Vec<f32> = denoised_samples[1]
+                .iter()
+                .map(|&s| fixeq_right.process(s, demud_strength))
+                .collect();
+            vec![left_out, right_out]
+        } else {
+            let mono_out: Vec<f32> = denoised_samples[0]
+                .iter()
+                .map(|&s| fixeq_left.process(s, demud_strength))
+                .collect();
+            vec![mono_out]
+        }
+    } else {
+        denoised_samples
     };
 
     println!("Saving: {}", output_path.display());

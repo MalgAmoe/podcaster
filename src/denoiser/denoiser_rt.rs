@@ -1,6 +1,8 @@
 //! Real-time Spectral Subtraction Denoiser
 //!
 //! Optimized for plugin use with all parameters exposed
+#![cfg_attr(all(feature = "cli", feature = "plugin"), allow(dead_code))]
+
 use super::common::*;
 use rustfft::{num_complex::Complex, FftPlanner};
 use std::sync::Arc;

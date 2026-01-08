@@ -1,4 +1,5 @@
 //! Shared code between batch (CLI) and realtime (plugin) denoisers
+#![cfg_attr(all(feature = "cli", feature = "plugin"), allow(dead_code))]
 
 use std::f32::consts::PI;
 

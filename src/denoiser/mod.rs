@@ -1,4 +1,4 @@
-mod common;
+pub(crate) mod common;
 
 // Re-export common constants so they're accessible from both modules
 #[allow(unused_imports)]

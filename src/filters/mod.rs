@@ -4,6 +4,7 @@
 //! numerically stable State Variable Filters (SVF).
 
 pub mod common;
+pub mod dynamic;
 
 // Re-export common types
 #[cfg_attr(feature = "cli", allow(unused_imports))]
