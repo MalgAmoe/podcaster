@@ -1,4 +1,5 @@
 mod aireq;
+mod autogain;
 mod buttercomp;
 mod channel9;
 mod denoiser;
@@ -23,6 +24,7 @@ use denoiser::denoiser::{
 };
 
 use aireq::StereoAirEq;
+use autogain::{analyze_gain, apply_gain, rms_to_db, DEFAULT_TARGET_RMS_DB};
 use buttercomp::StereoButterComp2;
 use channel9::StereoChannel9;
 use filters::{HighPassSlope, StereoFilterChain};
@@ -80,7 +82,57 @@ fn main() -> Result<()> {
     }
 
     // =========================================================================
-    // Pass 1: Analysis
+    // Cleanup Filters - Apply HP/LP before gain analysis
+    // =========================================================================
+
+    let mut samples = samples;
+
+    if !args.no_filters {
+        let hp_slope = if args.hp_slope == 24 {
+            HighPassSlope::Slope24dB
+        } else {
+            HighPassSlope::Slope12dB
+        };
+
+        println!(
+            "\n[Cleanup Filters] HP: 80Hz @ {} dB/oct, LP: 15.5kHz @ 12 dB/oct",
+            args.hp_slope
+        );
+
+        let mut stereo_filters = StereoFilterChain::new(input_sr as f32, hp_slope);
+
+        if is_stereo {
+            let (left, right) = samples.split_at_mut(1);
+            stereo_filters.process_stereo(&mut left[0], &mut right[0]);
+        } else {
+            stereo_filters.process_mono(&mut samples[0]);
+        }
+    }
+
+    // =========================================================================
+    // Input Gain - Normalize to target RMS (after filtering)
+    // =========================================================================
+
+    println!("\n[Input Gain]");
+    let input_rms = if is_stereo {
+        autogain::calculate_rms_stereo(&samples[0], &samples[1])
+    } else {
+        autogain::calculate_rms(&samples[0])
+    };
+    let input_rms_db = rms_to_db(input_rms);
+    let gain_db = analyze_gain(&samples, DEFAULT_TARGET_RMS_DB);
+
+    println!("  Input RMS: {:.1} dBFS (post-filter)", input_rms_db);
+    println!(
+        "  Target RMS: {:.1} dBFS",
+        DEFAULT_TARGET_RMS_DB
+    );
+    println!("  Applying: {:+.1} dB gain", gain_db);
+
+    apply_gain(&mut samples, gain_db);
+
+    // =========================================================================
+    // Pass 1: Analysis (on filtered + gain-normalized audio)
     // =========================================================================
 
     println!("\n[Pass 1] Analyzing audio...");
@@ -127,43 +179,15 @@ fn main() -> Result<()> {
     };
 
     println!(
-        "\nProcessing with preset {} ({})...",
+        "\n[Pass 2] Processing with preset {} ({})...",
         preset,
         PRESETS[preset - 1].name
     );
 
-    // Apply filters before denoising (if enabled)
-    let filtered_samples = if !args.no_filters {
-        let hp_slope = if args.hp_slope == 24 {
-            HighPassSlope::Slope24dB
-        } else {
-            HighPassSlope::Slope12dB
-        };
-
-        println!(
-            "  Applying filters (HP: 80Hz @ {} dB/oct, LP: 15.5kHz @ 12 dB/oct)...",
-            args.hp_slope
-        );
-
-        let mut stereo_filters = StereoFilterChain::new(input_sr as f32, hp_slope);
-
-        if is_stereo {
-            let mut left_filtered = samples[0].clone();
-            let mut right_filtered = samples[1].clone();
-            stereo_filters.process_stereo(&mut left_filtered, &mut right_filtered);
-            vec![left_filtered, right_filtered]
-        } else {
-            let mut mono_filtered = samples[0].clone();
-            stereo_filters.process_mono(&mut mono_filtered);
-            vec![mono_filtered]
-        }
-    } else {
-        samples.clone()
-    };
-
+    // Audio is already filtered and gain-normalized from earlier stages
     let denoised_samples = if is_stereo {
-        let left = &filtered_samples[0];
-        let right = &filtered_samples[1];
+        let left = &samples[0];
+        let right = &samples[1];
 
         // L/R independent processing
         let (left_out, right_out) =
@@ -173,7 +197,7 @@ fn main() -> Result<()> {
     } else {
         let mut denoiser = SpectralSubtractionDenoiser::new(input_sr, preset);
         denoiser.init_with_noise_floor(&noise_floor);
-        let output = denoiser.process(&filtered_samples[0]);
+        let output = denoiser.process(&samples[0]);
 
         vec![output]
     };
