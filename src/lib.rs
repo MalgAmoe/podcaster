@@ -1,5 +1,6 @@
 #![cfg(feature = "plugin")]
 
+mod channel9;
 mod denoiser;
 mod filters;
 mod fixeq;
@@ -16,6 +17,7 @@ use denoiser::{
     PRESETS, WINDOW_SIZE,
 };
 
+use channel9::StereoChannel9;
 use filters::{FilterChain, HighPassSlope};
 use fixeq::FixEq;
 
@@ -118,6 +120,15 @@ struct CorrectionBParams {
 }
 
 #[derive(Params)]
+struct Channel9Params {
+    #[id = "channel9_enable"]
+    enable: BoolParam,
+
+    #[id = "channel9_drive"]
+    drive: FloatParam,
+}
+
+#[derive(Params)]
 struct PoddyclipParams {
     #[persist = "editor-state"]
     editor_state: Arc<EguiState>,
@@ -148,6 +159,9 @@ struct PoddyclipParams {
 
     #[nested(group = "Dynamic EQ")]
     correction_b: CorrectionBParams,
+
+    #[nested(group = "Transformer")]
+    channel9: Channel9Params,
 }
 
 // =============================================================================
@@ -188,6 +202,9 @@ struct Poddyclip {
     deesser_gain_db: Arc<Mutex<f32>>,
     correction_a_gain_db: Arc<Mutex<f32>>,
     correction_b_gain_db: Arc<Mutex<f32>>,
+
+    // Channel9 (Neve transformer emulation)
+    channel9: StereoChannel9,
 }
 
 impl Default for Poddyclip {
@@ -213,6 +230,7 @@ impl Default for Poddyclip {
             deesser_gain_db: Arc::new(Mutex::new(0.0)),
             correction_a_gain_db: Arc::new(Mutex::new(0.0)),
             correction_b_gain_db: Arc::new(Mutex::new(0.0)),
+            channel9: StereoChannel9::new(48000.0),
         }
     }
 }
@@ -435,6 +453,26 @@ impl Default for PoddyclipParams {
                 .with_step_size(5.0)
                 .with_value_to_string(formatters::v2s_f32_hz_then_khz(0))
                 .with_unit(" Hz"),
+            },
+
+            channel9: Channel9Params {
+                enable: BoolParam::new("Enable Neve Transformer", false),
+                drive: FloatParam::new(
+                    "Drive",
+                    0.25, // 50% displayed (0-200% range)
+                    FloatRange::Linear {
+                        min: 0.0,
+                        max: 1.0,
+                    },
+                )
+                .with_step_size(0.01)
+                .with_value_to_string(Arc::new(|v| format!("{:.0}%", v * 200.0)))
+                .with_string_to_value(Arc::new(|s| {
+                    s.trim_end_matches('%')
+                        .parse::<f32>()
+                        .ok()
+                        .map(|v| v / 200.0)
+                })),
             },
         }
     }
@@ -746,6 +784,26 @@ impl Plugin for Poddyclip {
                                 ui.label("Strength:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.correction_b.macro_val,
+                                    setter,
+                                ));
+
+                                ui.add_space(15.0);
+                                ui.separator();
+
+                                // Neve Transformer (Channel9)
+                                ui.heading("Neve Transformer");
+                                ui.add_space(5.0);
+
+                                ui.horizontal(|ui| {
+                                    ui.label("Enable:");
+                                    ui.add(widgets::ParamSlider::for_param(
+                                        &params.channel9.enable,
+                                        setter,
+                                    ));
+                                });
+                                ui.label("Drive:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.channel9.drive,
                                     setter,
                                 ));
                             },
@@ -1127,6 +1185,12 @@ impl Poddyclip {
             // Apply FixEq AFTER denoiser
             output_sample = self.fixeq_left.process(output_sample);
 
+            // Apply Channel9 (Neve transformer) AFTER FixEq
+            if self.params.channel9.enable.value() {
+                self.channel9.set_drive(self.params.channel9.drive.value());
+                output_sample = self.channel9.left.process(output_sample);
+            }
+
             // Update gain reduction for UI
             if viz_enabled {
                 if let Ok(mut gain) = self.demud_gain_db.try_lock() {
@@ -1280,6 +1344,13 @@ impl Poddyclip {
             // Apply FixEq AFTER denoiser
             left_out = self.fixeq_left.process(left_out);
             right_out = self.fixeq_right.process(right_out);
+
+            // Apply Channel9 (Neve transformer) AFTER FixEq
+            if self.params.channel9.enable.value() {
+                self.channel9.set_drive(self.params.channel9.drive.value());
+                left_out = self.channel9.left.process(left_out);
+                right_out = self.channel9.right.process(right_out);
+            }
 
             // Update gain reduction for UI (from left channel only)
             if viz_enabled {

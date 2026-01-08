@@ -1,3 +1,4 @@
+mod channel9;
 mod denoiser;
 mod filters;
 mod fixeq;
@@ -19,6 +20,7 @@ use denoiser::denoiser::{
     analyze_audio, process_stereo_lr, SpectralSubtractionDenoiser, SAMPLE_RATE,
 };
 
+use channel9::StereoChannel9;
 use filters::{HighPassSlope, StereoFilterChain};
 use fixeq::FixEq;
 
@@ -213,7 +215,7 @@ fn main() -> Result<()> {
         fixeq.get_correction_b_strength() * 100.0
     );
 
-    let output_samples = if is_stereo {
+    let mut output_samples = if is_stereo {
         let (mut left, mut right) = {
             let mut iter = denoised_samples.into_iter();
             (iter.next().unwrap(), iter.next().unwrap())
@@ -225,6 +227,21 @@ fn main() -> Result<()> {
         fixeq.process_mono(&mut mono);
         vec![mono]
     };
+
+    // Apply Channel9 (Neve transformer emulation)
+    let drive = 0.2; // Fixed 40% - subtle warmth without emphasizing problems
+    println!(
+        "  Applying Neve transformer (drive: {:.0}%)...",
+        drive * 200.0
+    );
+    let mut channel9 = StereoChannel9::new(input_sr as f32);
+    channel9.set_drive(drive);
+    if is_stereo {
+        let (left, right) = output_samples.split_at_mut(1);
+        channel9.process_stereo(&mut left[0], &mut right[0]);
+    } else {
+        channel9.process_mono(&mut output_samples[0]);
+    }
 
     println!("Saving: {}", output_path.display());
     save_wav(&output_path, &output_samples, input_sr)?;
