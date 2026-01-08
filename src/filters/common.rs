@@ -255,6 +255,73 @@ impl FilterChain {
 }
 
 // =============================================================================
+// 1st Order High Shelf using SVF Topology (6 dB/oct, gentle slope)
+// =============================================================================
+
+/// 1st order high shelf filter using SVF topology
+/// More stable and consistent with the rest of the processor.
+/// Ideal for "Air EQ" - gentle, natural-sounding lift.
+#[derive(Clone, Debug)]
+pub struct HighShelfSvf {
+    // State variable
+    ic1eq: f32,
+
+    // Coefficients
+    g: f32,
+
+    // Parameters
+    sample_rate: f32,
+    freq: f32,
+    gain_db: f32,
+}
+
+impl HighShelfSvf {
+    pub fn new(freq: f32, gain_db: f32, sample_rate: f32) -> Self {
+        let mut shelf = Self {
+            ic1eq: 0.0,
+            g: 0.0,
+            sample_rate,
+            freq,
+            gain_db,
+        };
+        shelf.update_coefficients();
+        shelf
+    }
+
+    fn update_coefficients(&mut self) {
+        // Standard tan-warped frequency
+        self.g = (PI * self.freq / self.sample_rate).tan();
+    }
+
+    pub fn set_params(&mut self, freq: f32, gain_db: f32) {
+        if (self.freq - freq).abs() > 0.1 || (self.gain_db - gain_db).abs() > 0.01 {
+            self.freq = freq;
+            self.gain_db = gain_db;
+            self.update_coefficients();
+        }
+    }
+
+    #[inline]
+    pub fn process(&mut self, input: f32) -> f32 {
+        // 1st order SVF (simplified Trapezoidal)
+        let v1 = (input - self.ic1eq) * (self.g / (1.0 + self.g));
+        let v2 = v1 + self.ic1eq;
+        self.ic1eq = v2 + v1;
+
+        // Output logic for High Shelf:
+        // Result = Input + (A - 1) * HighPass
+        let a = 10.0f32.powf(self.gain_db / 20.0); // 1st order gain factor
+        let hp = input - v2;
+
+        input + (a - 1.0) * hp
+    }
+
+    pub fn reset(&mut self) {
+        self.ic1eq = 0.0;
+    }
+}
+
+// =============================================================================
 // Stereo Chain
 // =============================================================================
 

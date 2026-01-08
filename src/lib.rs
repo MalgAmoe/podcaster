@@ -1,5 +1,6 @@
 #![cfg(feature = "plugin")]
 
+mod aireq;
 mod channel9;
 mod denoiser;
 mod filters;
@@ -17,6 +18,7 @@ use denoiser::{
     PRESETS, WINDOW_SIZE,
 };
 
+use aireq::StereoAirEq;
 use channel9::StereoChannel9;
 use filters::{FilterChain, HighPassSlope};
 use fixeq::FixEq;
@@ -129,6 +131,15 @@ struct Channel9Params {
 }
 
 #[derive(Params)]
+struct AirEqParams {
+    #[id = "aireq_enable"]
+    enable: BoolParam,
+
+    #[id = "aireq_gain"]
+    gain: FloatParam,
+}
+
+#[derive(Params)]
 struct PoddyclipParams {
     #[persist = "editor-state"]
     editor_state: Arc<EguiState>,
@@ -162,6 +173,9 @@ struct PoddyclipParams {
 
     #[nested(group = "Transformer")]
     channel9: Channel9Params,
+
+    #[nested(group = "Air EQ")]
+    air_eq: AirEqParams,
 }
 
 // =============================================================================
@@ -205,6 +219,9 @@ struct Poddyclip {
 
     // Channel9 (Neve transformer emulation)
     channel9: StereoChannel9,
+
+    // Air EQ (high shelf + LP)
+    air_eq: StereoAirEq,
 }
 
 impl Default for Poddyclip {
@@ -231,6 +248,7 @@ impl Default for Poddyclip {
             correction_a_gain_db: Arc::new(Mutex::new(0.0)),
             correction_b_gain_db: Arc::new(Mutex::new(0.0)),
             channel9: StereoChannel9::new(48000.0),
+            air_eq: StereoAirEq::new(48000.0),
         }
     }
 }
@@ -473,6 +491,21 @@ impl Default for PoddyclipParams {
                         .ok()
                         .map(|v| v / 200.0)
                 })),
+            },
+
+            air_eq: AirEqParams {
+                enable: BoolParam::new("Enable Air EQ", true), // On by default
+                gain: FloatParam::new(
+                    "Air Gain",
+                    2.0, // +2dB default
+                    FloatRange::Linear {
+                        min: 0.0,
+                        max: 6.0,
+                    },
+                )
+                .with_step_size(0.1)
+                .with_value_to_string(formatters::v2s_f32_rounded(1))
+                .with_unit(" dB"),
             },
         }
     }
@@ -804,6 +837,26 @@ impl Plugin for Poddyclip {
                                 ui.label("Drive:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.channel9.drive,
+                                    setter,
+                                ));
+
+                                ui.add_space(15.0);
+                                ui.separator();
+
+                                // Air EQ
+                                ui.heading("Air EQ");
+                                ui.add_space(5.0);
+
+                                ui.horizontal(|ui| {
+                                    ui.label("Enable:");
+                                    ui.add(widgets::ParamSlider::for_param(
+                                        &params.air_eq.enable,
+                                        setter,
+                                    ));
+                                });
+                                ui.label("Gain:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.air_eq.gain,
                                     setter,
                                 ));
                             },
@@ -1191,6 +1244,12 @@ impl Poddyclip {
                 output_sample = self.channel9.left.process(output_sample);
             }
 
+            // Apply Air EQ AFTER Channel9
+            if self.params.air_eq.enable.value() {
+                self.air_eq.left.set_shelf_gain(self.params.air_eq.gain.value());
+                output_sample = self.air_eq.left.process(output_sample);
+            }
+
             // Update gain reduction for UI
             if viz_enabled {
                 if let Ok(mut gain) = self.demud_gain_db.try_lock() {
@@ -1350,6 +1409,13 @@ impl Poddyclip {
                 self.channel9.set_drive(self.params.channel9.drive.value());
                 left_out = self.channel9.left.process(left_out);
                 right_out = self.channel9.right.process(right_out);
+            }
+
+            // Apply Air EQ AFTER Channel9
+            if self.params.air_eq.enable.value() {
+                self.air_eq.set_shelf_gain(self.params.air_eq.gain.value());
+                left_out = self.air_eq.left.process(left_out);
+                right_out = self.air_eq.right.process(right_out);
             }
 
             // Update gain reduction for UI (from left channel only)

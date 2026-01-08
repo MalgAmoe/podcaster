@@ -1,3 +1,4 @@
+mod aireq;
 mod channel9;
 mod denoiser;
 mod filters;
@@ -20,6 +21,7 @@ use denoiser::denoiser::{
     analyze_audio, process_stereo_lr, SpectralSubtractionDenoiser, SAMPLE_RATE,
 };
 
+use aireq::StereoAirEq;
 use channel9::StereoChannel9;
 use filters::{HighPassSlope, StereoFilterChain};
 use fixeq::FixEq;
@@ -241,6 +243,16 @@ fn main() -> Result<()> {
         channel9.process_stereo(&mut left[0], &mut right[0]);
     } else {
         channel9.process_mono(&mut output_samples[0]);
+    }
+
+    // Apply Air EQ (high shelf + LP rolloff)
+    println!("  Applying Air EQ (shelf: 10kHz +2dB, LP: 16kHz)...");
+    let mut aireq = StereoAirEq::new(input_sr as f32);
+    if is_stereo {
+        let (left, right) = output_samples.split_at_mut(1);
+        aireq.process_stereo(&mut left[0], &mut right[0]);
+    } else {
+        aireq.process_mono(&mut output_samples[0]);
     }
 
     println!("Saving: {}", output_path.display());
