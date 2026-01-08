@@ -1,4 +1,5 @@
 mod aireq;
+mod buttercomp;
 mod channel9;
 mod denoiser;
 mod filters;
@@ -22,6 +23,7 @@ use denoiser::denoiser::{
 };
 
 use aireq::StereoAirEq;
+use buttercomp::StereoButterComp2;
 use channel9::StereoChannel9;
 use filters::{HighPassSlope, StereoFilterChain};
 use fixeq::FixEq;
@@ -253,6 +255,21 @@ fn main() -> Result<()> {
         aireq.process_stereo(&mut left[0], &mut right[0]);
     } else {
         aireq.process_mono(&mut output_samples[0]);
+    }
+
+    // Apply ButterComp2 (smooth leveling)
+    let compress = 0.3; // Subtle compression
+    println!(
+        "  Applying ButterComp2 (compress: {:.0}%)...",
+        compress * 100.0
+    );
+    let mut compressor = StereoButterComp2::new(input_sr as f32);
+    compressor.set_compress(compress);
+    if is_stereo {
+        let (left, right) = output_samples.split_at_mut(1);
+        compressor.process_stereo(&mut left[0], &mut right[0]);
+    } else {
+        compressor.process_mono(&mut output_samples[0]);
     }
 
     println!("Saving: {}", output_path.display());

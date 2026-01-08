@@ -1,6 +1,7 @@
 #![cfg(feature = "plugin")]
 
 mod aireq;
+mod buttercomp;
 mod channel9;
 mod denoiser;
 mod filters;
@@ -19,6 +20,7 @@ use denoiser::{
 };
 
 use aireq::StereoAirEq;
+use buttercomp::StereoButterComp2;
 use channel9::StereoChannel9;
 use filters::{FilterChain, HighPassSlope};
 use fixeq::FixEq;
@@ -140,6 +142,15 @@ struct AirEqParams {
 }
 
 #[derive(Params)]
+struct ButterCompParams {
+    #[id = "buttercomp_enable"]
+    enable: BoolParam,
+
+    #[id = "buttercomp_compress"]
+    compress: FloatParam,
+}
+
+#[derive(Params)]
 struct PoddyclipParams {
     #[persist = "editor-state"]
     editor_state: Arc<EguiState>,
@@ -176,6 +187,9 @@ struct PoddyclipParams {
 
     #[nested(group = "Air EQ")]
     air_eq: AirEqParams,
+
+    #[nested(group = "Compressor")]
+    buttercomp: ButterCompParams,
 }
 
 // =============================================================================
@@ -222,6 +236,9 @@ struct Poddyclip {
 
     // Air EQ (high shelf + LP)
     air_eq: StereoAirEq,
+
+    // ButterComp2 (smooth leveling)
+    buttercomp: StereoButterComp2,
 }
 
 impl Default for Poddyclip {
@@ -249,6 +266,7 @@ impl Default for Poddyclip {
             correction_b_gain_db: Arc::new(Mutex::new(0.0)),
             channel9: StereoChannel9::new(48000.0),
             air_eq: StereoAirEq::new(48000.0),
+            buttercomp: StereoButterComp2::new(48000.0),
         }
     }
 }
@@ -506,6 +524,20 @@ impl Default for PoddyclipParams {
                 .with_step_size(0.1)
                 .with_value_to_string(formatters::v2s_f32_rounded(1))
                 .with_unit(" dB"),
+            },
+
+            buttercomp: ButterCompParams {
+                enable: BoolParam::new("Enable ButterComp", true), // On by default
+                compress: FloatParam::new(
+                    "Compress",
+                    0.3, // 30% default (subtle)
+                    FloatRange::Linear {
+                        min: 0.0,
+                        max: 1.0,
+                    },
+                )
+                .with_step_size(0.01)
+                .with_value_to_string(formatters::v2s_f32_percentage(0)),
             },
         }
     }
@@ -857,6 +889,26 @@ impl Plugin for Poddyclip {
                                 ui.label("Gain:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.air_eq.gain,
+                                    setter,
+                                ));
+
+                                ui.add_space(15.0);
+                                ui.separator();
+
+                                // ButterComp (smooth leveling)
+                                ui.heading("ButterComp");
+                                ui.add_space(5.0);
+
+                                ui.horizontal(|ui| {
+                                    ui.label("Enable:");
+                                    ui.add(widgets::ParamSlider::for_param(
+                                        &params.buttercomp.enable,
+                                        setter,
+                                    ));
+                                });
+                                ui.label("Compress:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.buttercomp.compress,
                                     setter,
                                 ));
                             },
@@ -1250,6 +1302,12 @@ impl Poddyclip {
                 output_sample = self.air_eq.left.process(output_sample);
             }
 
+            // Apply ButterComp AFTER Air EQ
+            if self.params.buttercomp.enable.value() {
+                self.buttercomp.left.set_compress(self.params.buttercomp.compress.value());
+                output_sample = self.buttercomp.left.process(output_sample);
+            }
+
             // Update gain reduction for UI
             if viz_enabled {
                 if let Ok(mut gain) = self.demud_gain_db.try_lock() {
@@ -1416,6 +1474,13 @@ impl Poddyclip {
                 self.air_eq.set_shelf_gain(self.params.air_eq.gain.value());
                 left_out = self.air_eq.left.process(left_out);
                 right_out = self.air_eq.right.process(right_out);
+            }
+
+            // Apply ButterComp AFTER Air EQ
+            if self.params.buttercomp.enable.value() {
+                self.buttercomp.set_compress(self.params.buttercomp.compress.value());
+                left_out = self.buttercomp.left.process(left_out);
+                right_out = self.buttercomp.right.process(right_out);
             }
 
             // Update gain reduction for UI (from left channel only)
