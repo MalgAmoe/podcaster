@@ -1,9 +1,13 @@
 //! FixEq - Dynamic EQ processor for podcast enhancement
 //!
 //! Applied after denoising to fix tonal issues:
-//! - De-mud (300Hz) - reduces proximity effect / boominess
+//! - De-mud (150-500Hz) - reduces proximity effect / boominess
 //! - Future: de-harsh, de-boom, presence boost, etc.
 #![cfg_attr(all(feature = "cli", feature = "plugin"), allow(dead_code))]
+
+pub mod analysis;
+
+pub use analysis::{analyze_mud_frequency, mix_to_mono, MudAnalysis};
 
 use crate::filters::dynamic::DynamicBand;
 
@@ -44,13 +48,18 @@ impl FixEq {
         output
     }
 
-    /// Set de-mud enabled state
+    /// Set de-mud enabled state (uses default 300Hz)
     pub fn set_demud_enabled(&mut self, enabled: bool) {
         match (enabled, self.demud.is_some()) {
             (true, false) => self.demud = Some(DynamicBand::new_demud(self.sample_rate)),
             (false, true) => self.demud = None,
             _ => {}
         }
+    }
+
+    /// Set de-mud with analyzed center frequency
+    pub fn set_demud_frequency(&mut self, center_freq: f32) {
+        self.demud = Some(DynamicBand::new_demud_at(center_freq, self.sample_rate));
     }
 
     /// Get de-mud gain reduction in dB (0.0 if disabled)

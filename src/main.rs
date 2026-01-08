@@ -20,7 +20,7 @@ use denoiser::denoiser::{
 };
 
 use filters::{HighPassSlope, StereoFilterChain};
-use fixeq::FixEq;
+use fixeq::{analyze_mud_frequency, mix_to_mono, FixEq};
 
 #[derive(Parser)]
 #[command(name = "poddyclip")]
@@ -50,14 +50,6 @@ struct Args {
     /// Disable filters (skip HP @ 80Hz and LP @ 15.5kHz)
     #[arg(long)]
     no_filters: bool,
-
-    /// Enable de-mud (300Hz dynamic EQ, reduces proximity effect)
-    #[arg(long)]
-    demud: bool,
-
-    /// De-mud strength 0.0-1.0
-    #[arg(long, default_value_t = 0.5, value_parser = clap::value_parser!(f32))]
-    demud_strength: f32,
 }
 
 fn main() -> Result<()> {
@@ -142,7 +134,10 @@ fn main() -> Result<()> {
             HighPassSlope::Slope12dB
         };
 
-        println!("  Applying filters (HP: 80Hz @ {} dB/oct, LP: 15.5kHz @ 12 dB/oct)...", args.hp_slope);
+        println!(
+            "  Applying filters (HP: 80Hz @ {} dB/oct, LP: 15.5kHz @ 12 dB/oct)...",
+            args.hp_slope
+        );
 
         let mut stereo_filters = StereoFilterChain::new(input_sr as f32, hp_slope);
 
@@ -178,35 +173,54 @@ fn main() -> Result<()> {
     };
 
     // Apply FixEq (post-denoiser dynamic EQ)
-    let output_samples = if args.demud {
-        println!("  Applying FixEq (de-mud @ 300Hz, strength: {:.0}%)...", args.demud_strength * 100.0);
+    let mut fixeq_left = FixEq::new(input_sr as f32);
+    let mut fixeq_right = FixEq::new(input_sr as f32);
 
-        let mut fixeq_left = FixEq::new(input_sr as f32);
-        let mut fixeq_right = FixEq::new(input_sr as f32);
-        fixeq_left.set_demud_enabled(true);
-        fixeq_right.set_demud_enabled(true);
-
-        let demud_strength = args.demud_strength.clamp(0.0, 1.0);
-
-        if is_stereo {
-            let left_out: Vec<f32> = denoised_samples[0]
-                .iter()
-                .map(|&s| fixeq_left.process(s, demud_strength))
-                .collect();
-            let right_out: Vec<f32> = denoised_samples[1]
-                .iter()
-                .map(|&s| fixeq_right.process(s, demud_strength))
-                .collect();
-            vec![left_out, right_out]
-        } else {
-            let mono_out: Vec<f32> = denoised_samples[0]
-                .iter()
-                .map(|&s| fixeq_left.process(s, demud_strength))
-                .collect();
-            vec![mono_out]
-        }
+    // Analyze denoised audio to find optimal mud frequency
+    let mono_for_analysis = if is_stereo {
+        mix_to_mono(&denoised_samples[0], &denoised_samples[1])
     } else {
-        denoised_samples
+        denoised_samples[0].clone()
+    };
+
+    let mud_analysis = analyze_mud_frequency(&mono_for_analysis, input_sr);
+
+    // Auto-calculate demud strength from preset + analysis
+    let preset_factor = preset as f32 / 5.0; // 1=0.2, 5=1.0
+    let energy_factor = ((mud_analysis.energy_db + 40.0) / 30.0).clamp(0.0, 1.0); // -40dB=0, -10dB=1
+    let demud_strength = (preset_factor * mud_analysis.confidence * energy_factor).clamp(0.0, 1.0);
+
+    println!(
+        "  Mud analysis: {:.0}Hz (energy: {:.1}dB, confidence: {:.0}%)",
+        mud_analysis.center_freq,
+        mud_analysis.energy_db,
+        mud_analysis.confidence * 100.0
+    );
+    println!(
+        "  Applying de-mud @ {:.0}Hz (strength: {:.0}%)...",
+        mud_analysis.center_freq,
+        demud_strength * 100.0
+    );
+
+    fixeq_left.set_demud_frequency(mud_analysis.center_freq);
+    fixeq_right.set_demud_frequency(mud_analysis.center_freq);
+
+    let output_samples = if is_stereo {
+        let left_out: Vec<f32> = denoised_samples[0]
+            .iter()
+            .map(|&s| fixeq_left.process(s, demud_strength))
+            .collect();
+        let right_out: Vec<f32> = denoised_samples[1]
+            .iter()
+            .map(|&s| fixeq_right.process(s, demud_strength))
+            .collect();
+        vec![left_out, right_out]
+    } else {
+        let mono_out: Vec<f32> = denoised_samples[0]
+            .iter()
+            .map(|&s| fixeq_left.process(s, demud_strength))
+            .collect();
+        vec![mono_out]
     };
 
     println!("Saving: {}", output_path.display());

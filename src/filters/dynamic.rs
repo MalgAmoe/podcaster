@@ -60,12 +60,17 @@ impl DynamicBand {
         }
     }
 
-    /// Create a de-mud preset (300Hz, reduces proximity effect)
-    pub fn new_demud(sample_rate: f32) -> Self {
-        Self::new(300.0, 1.2, 1.0, sample_rate, 50.0, 300.0)
+    /// Create a de-mud preset with custom center frequency
+    pub fn new_demud_at(center_freq: f32, sample_rate: f32) -> Self {
+        Self::new(center_freq, 1.2, 1.0, sample_rate, 50.0, 300.0)
             .with_threshold(-20.0)
             .with_ratio(2.0)
             .with_max_cut(-6.0)
+    }
+
+    /// Create a de-mud preset (300Hz default, reduces proximity effect)
+    pub fn new_demud(sample_rate: f32) -> Self {
+        Self::new_demud_at(300.0, sample_rate)
     }
 
     pub fn with_threshold(mut self, threshold_db: f32) -> Self {
