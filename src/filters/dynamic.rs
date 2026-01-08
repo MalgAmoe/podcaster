@@ -73,6 +73,19 @@ impl DynamicBand {
         Self::new_demud_at(300.0, sample_rate)
     }
 
+    /// Create a de-esser preset with custom center frequency
+    pub fn new_deesser_at(center_freq: f32, sample_rate: f32) -> Self {
+        Self::new(center_freq, 2.0, 3.0, sample_rate, 5.0, 60.0) // Fast attack, sharp Q
+            .with_threshold(-25.0)
+            .with_ratio(3.0)
+            .with_max_cut(-8.0)
+    }
+
+    /// Create a de-esser preset (6.5kHz default, reduces sibilance)
+    pub fn new_deesser(sample_rate: f32) -> Self {
+        Self::new_deesser_at(6500.0, sample_rate)
+    }
+
     pub fn with_threshold(mut self, threshold_db: f32) -> Self {
         self.threshold_db = threshold_db;
         self
