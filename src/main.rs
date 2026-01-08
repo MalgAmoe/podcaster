@@ -198,6 +198,20 @@ fn main() -> Result<()> {
         analysis.sibilance.center_freq,
         fixeq.get_deesser_strength() * 100.0
     );
+    println!(
+        "  Correction A: {:.0}Hz (energy: {:.1}dB, confidence: {:.0}%, strength: {:.0}%)",
+        analysis.correction.band_a.center_freq,
+        analysis.correction.band_a.energy_db,
+        analysis.correction.band_a.confidence * 100.0,
+        fixeq.get_correction_a_strength() * 100.0
+    );
+    println!(
+        "  Correction B: {:.0}Hz (energy: {:.1}dB, confidence: {:.0}%, strength: {:.0}%)",
+        analysis.correction.band_b.center_freq,
+        analysis.correction.band_b.energy_db,
+        analysis.correction.band_b.confidence * 100.0,
+        fixeq.get_correction_b_strength() * 100.0
+    );
 
     let output_samples = if is_stereo {
         let (mut left, mut right) = {

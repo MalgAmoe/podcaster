@@ -86,6 +86,25 @@ impl DynamicBand {
         Self::new_deesser_at(6500.0, sample_rate)
     }
 
+    /// Create a mid-range correction preset with custom center frequency
+    /// Used for taming resonances and harshness in 500-5000 Hz range
+    pub fn new_correction_at(center_freq: f32, sample_rate: f32) -> Self {
+        Self::new(center_freq, 1.5, 2.0, sample_rate, 20.0, 150.0) // Medium Q, medium attack
+            .with_threshold(-22.0)
+            .with_ratio(2.5)
+            .with_max_cut(-6.0)
+    }
+
+    /// Create a correction preset at 1kHz (default for band A)
+    pub fn new_correction_a(sample_rate: f32) -> Self {
+        Self::new_correction_at(1000.0, sample_rate)
+    }
+
+    /// Create a correction preset at 3kHz (default for band B)
+    pub fn new_correction_b(sample_rate: f32) -> Self {
+        Self::new_correction_at(3000.0, sample_rate)
+    }
+
     pub fn with_threshold(mut self, threshold_db: f32) -> Self {
         self.threshold_db = threshold_db;
         self

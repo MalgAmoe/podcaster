@@ -76,6 +76,9 @@ struct DeMudParams {
 
     #[id = "demud_macro"]
     macro_val: FloatParam,
+
+    #[id = "demud_freq"]
+    frequency: FloatParam,
 }
 
 #[derive(Params)]
@@ -85,6 +88,33 @@ struct DeEsserParams {
 
     #[id = "deesser_macro"]
     macro_val: FloatParam,
+
+    #[id = "deesser_freq"]
+    frequency: FloatParam,
+}
+
+#[derive(Params)]
+struct CorrectionAParams {
+    #[id = "corr_a_enable"]
+    enable: BoolParam,
+
+    #[id = "corr_a_macro"]
+    macro_val: FloatParam,
+
+    #[id = "corr_a_freq"]
+    frequency: FloatParam,
+}
+
+#[derive(Params)]
+struct CorrectionBParams {
+    #[id = "corr_b_enable"]
+    enable: BoolParam,
+
+    #[id = "corr_b_macro"]
+    macro_val: FloatParam,
+
+    #[id = "corr_b_freq"]
+    frequency: FloatParam,
 }
 
 #[derive(Params)]
@@ -112,6 +142,12 @@ struct PoddyclipParams {
 
     #[nested(group = "Dynamic EQ")]
     deesser: DeEsserParams,
+
+    #[nested(group = "Dynamic EQ")]
+    correction_a: CorrectionAParams,
+
+    #[nested(group = "Dynamic EQ")]
+    correction_b: CorrectionBParams,
 }
 
 // =============================================================================
@@ -150,6 +186,8 @@ struct Poddyclip {
     // Gain reduction for UI meters
     demud_gain_db: Arc<Mutex<f32>>,
     deesser_gain_db: Arc<Mutex<f32>>,
+    correction_a_gain_db: Arc<Mutex<f32>>,
+    correction_b_gain_db: Arc<Mutex<f32>>,
 }
 
 impl Default for Poddyclip {
@@ -173,6 +211,8 @@ impl Default for Poddyclip {
             fixeq_right: FixEq::new(48000.0),
             demud_gain_db: Arc::new(Mutex::new(0.0)),
             deesser_gain_db: Arc::new(Mutex::new(0.0)),
+            correction_a_gain_db: Arc::new(Mutex::new(0.0)),
+            correction_b_gain_db: Arc::new(Mutex::new(0.0)),
         }
     }
 }
@@ -305,6 +345,18 @@ impl Default for PoddyclipParams {
                 )
                 .with_step_size(0.01)
                 .with_value_to_string(formatters::v2s_f32_percentage(0)),
+                frequency: FloatParam::new(
+                    "De-Mud Freq",
+                    300.0,
+                    FloatRange::Skewed {
+                        min: 150.0,
+                        max: 500.0,
+                        factor: FloatRange::skew_factor(-0.5),
+                    },
+                )
+                .with_step_size(1.0)
+                .with_value_to_string(formatters::v2s_f32_hz_then_khz(0))
+                .with_unit(" Hz"),
             },
 
             deesser: DeEsserParams {
@@ -319,6 +371,70 @@ impl Default for PoddyclipParams {
                 )
                 .with_step_size(0.01)
                 .with_value_to_string(formatters::v2s_f32_percentage(0)),
+                frequency: FloatParam::new(
+                    "De-Esser Freq",
+                    6500.0,
+                    FloatRange::Skewed {
+                        min: 4000.0,
+                        max: 12000.0,
+                        factor: FloatRange::skew_factor(-0.5),
+                    },
+                )
+                .with_step_size(10.0)
+                .with_value_to_string(formatters::v2s_f32_hz_then_khz(1))
+                .with_unit(" Hz"),
+            },
+
+            correction_a: CorrectionAParams {
+                enable: BoolParam::new("Enable Correction A", false),
+                macro_val: FloatParam::new(
+                    "Correction A Strength",
+                    0.5,
+                    FloatRange::Linear {
+                        min: 0.0,
+                        max: 1.0,
+                    },
+                )
+                .with_step_size(0.01)
+                .with_value_to_string(formatters::v2s_f32_percentage(0)),
+                frequency: FloatParam::new(
+                    "Correction A Freq",
+                    1000.0,
+                    FloatRange::Skewed {
+                        min: 500.0,
+                        max: 5000.0,
+                        factor: FloatRange::skew_factor(-0.5),
+                    },
+                )
+                .with_step_size(5.0)
+                .with_value_to_string(formatters::v2s_f32_hz_then_khz(0))
+                .with_unit(" Hz"),
+            },
+
+            correction_b: CorrectionBParams {
+                enable: BoolParam::new("Enable Correction B", false),
+                macro_val: FloatParam::new(
+                    "Correction B Strength",
+                    0.5,
+                    FloatRange::Linear {
+                        min: 0.0,
+                        max: 1.0,
+                    },
+                )
+                .with_step_size(0.01)
+                .with_value_to_string(formatters::v2s_f32_percentage(0)),
+                frequency: FloatParam::new(
+                    "Correction B Freq",
+                    3000.0,
+                    FloatRange::Skewed {
+                        min: 500.0,
+                        max: 5000.0,
+                        factor: FloatRange::skew_factor(-0.5),
+                    },
+                )
+                .with_step_size(5.0)
+                .with_value_to_string(formatters::v2s_f32_hz_then_khz(0))
+                .with_unit(" Hz"),
             },
         }
     }
@@ -418,6 +534,8 @@ impl Plugin for Poddyclip {
         let viz_data = self.visualization_data.clone();
         let demud_gain = self.demud_gain_db.clone();
         let deesser_gain = self.deesser_gain_db.clone();
+        let correction_a_gain = self.correction_a_gain_db.clone();
+        let correction_b_gain = self.correction_b_gain_db.clone();
 
         create_egui_editor(
             params.editor_state.clone(),
@@ -554,13 +672,17 @@ impl Plugin for Poddyclip {
                                 ui.add_space(5.0);
 
                                 ui.horizontal(|ui| {
-                                    ui.label("De-Mud (300Hz):");
+                                    ui.label("De-Mud:");
                                     ui.add(widgets::ParamSlider::for_param(
                                         &params.demud.enable,
                                         setter,
                                     ));
                                 });
-
+                                ui.label("Frequency:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.demud.frequency,
+                                    setter,
+                                ));
                                 ui.label("Strength:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.demud.macro_val,
@@ -570,16 +692,60 @@ impl Plugin for Poddyclip {
                                 ui.add_space(10.0);
 
                                 ui.horizontal(|ui| {
-                                    ui.label("De-Esser (6.5kHz):");
+                                    ui.label("De-Esser:");
                                     ui.add(widgets::ParamSlider::for_param(
                                         &params.deesser.enable,
                                         setter,
                                     ));
                                 });
-
+                                ui.label("Frequency:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.deesser.frequency,
+                                    setter,
+                                ));
                                 ui.label("Strength:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.deesser.macro_val,
+                                    setter,
+                                ));
+
+                                ui.add_space(10.0);
+
+                                ui.horizontal(|ui| {
+                                    ui.label("Correction A:");
+                                    ui.add(widgets::ParamSlider::for_param(
+                                        &params.correction_a.enable,
+                                        setter,
+                                    ));
+                                });
+                                ui.label("Frequency:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.correction_a.frequency,
+                                    setter,
+                                ));
+                                ui.label("Strength:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.correction_a.macro_val,
+                                    setter,
+                                ));
+
+                                ui.add_space(10.0);
+
+                                ui.horizontal(|ui| {
+                                    ui.label("Correction B:");
+                                    ui.add(widgets::ParamSlider::for_param(
+                                        &params.correction_b.enable,
+                                        setter,
+                                    ));
+                                });
+                                ui.label("Frequency:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.correction_b.frequency,
+                                    setter,
+                                ));
+                                ui.label("Strength:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.correction_b.macro_val,
                                     setter,
                                 ));
                             },
@@ -679,6 +845,88 @@ impl Plugin for Poddyclip {
                                         egui::Color32::from_rgb(80, 180, 255) // Light blue
                                     } else {
                                         egui::Color32::from_rgb(100, 200, 255) // Cyan
+                                    };
+                                    ui.painter().rect_filled(bar_rect, 4.0, color);
+                                }
+                            });
+
+                            ui.add_space(10.0);
+
+                            // Correction A Gain Reduction Meter
+                            ui.heading("Correction A Gain Reduction");
+                            ui.add_space(5.0);
+                            let corr_a_db = correction_a_gain.lock().map(|g| *g).unwrap_or(0.0);
+                            let corr_a_reduction = -corr_a_db;
+
+                            ui.horizontal(|ui| {
+                                ui.label(format!("{:.1} dB", corr_a_db));
+                                let max_reduction = 6.0;
+                                let ratio = (corr_a_reduction / max_reduction).clamp(0.0, 1.0);
+                                let available = ui.available_width() - 10.0;
+                                let (rect, _) = ui.allocate_exact_size(
+                                    egui::vec2(available, 20.0),
+                                    egui::Sense::hover(),
+                                );
+
+                                ui.painter().rect_filled(
+                                    rect,
+                                    4.0,
+                                    egui::Color32::from_gray(40),
+                                );
+
+                                // Meter bar (green for correction A)
+                                if ratio > 0.0 {
+                                    let bar_rect = egui::Rect::from_min_size(
+                                        rect.min,
+                                        egui::vec2(rect.width() * ratio, rect.height()),
+                                    );
+                                    let color = if ratio > 0.8 {
+                                        egui::Color32::from_rgb(50, 200, 100) // Bright green
+                                    } else if ratio > 0.5 {
+                                        egui::Color32::from_rgb(80, 220, 120) // Light green
+                                    } else {
+                                        egui::Color32::from_rgb(100, 240, 150) // Pale green
+                                    };
+                                    ui.painter().rect_filled(bar_rect, 4.0, color);
+                                }
+                            });
+
+                            ui.add_space(10.0);
+
+                            // Correction B Gain Reduction Meter
+                            ui.heading("Correction B Gain Reduction");
+                            ui.add_space(5.0);
+                            let corr_b_db = correction_b_gain.lock().map(|g| *g).unwrap_or(0.0);
+                            let corr_b_reduction = -corr_b_db;
+
+                            ui.horizontal(|ui| {
+                                ui.label(format!("{:.1} dB", corr_b_db));
+                                let max_reduction = 6.0;
+                                let ratio = (corr_b_reduction / max_reduction).clamp(0.0, 1.0);
+                                let available = ui.available_width() - 10.0;
+                                let (rect, _) = ui.allocate_exact_size(
+                                    egui::vec2(available, 20.0),
+                                    egui::Sense::hover(),
+                                );
+
+                                ui.painter().rect_filled(
+                                    rect,
+                                    4.0,
+                                    egui::Color32::from_gray(40),
+                                );
+
+                                // Meter bar (purple for correction B)
+                                if ratio > 0.0 {
+                                    let bar_rect = egui::Rect::from_min_size(
+                                        rect.min,
+                                        egui::vec2(rect.width() * ratio, rect.height()),
+                                    );
+                                    let color = if ratio > 0.8 {
+                                        egui::Color32::from_rgb(180, 100, 255) // Bright purple
+                                    } else if ratio > 0.5 {
+                                        egui::Color32::from_rgb(160, 120, 240) // Light purple
+                                    } else {
+                                        egui::Color32::from_rgb(140, 140, 220) // Pale purple
                                     };
                                     ui.painter().rect_filled(bar_rect, 4.0, color);
                                 }
@@ -800,22 +1048,45 @@ impl Poddyclip {
 
         let filter_enabled = self.params.filters.enable.value();
 
-        // FixEq parameters
+        // FixEq parameters - De-mud
         let demud_enabled = self.params.demud.enable.value();
         self.fixeq_left.set_demud_enabled(demud_enabled);
-        self.fixeq_left.set_demud_strength(if demud_enabled {
-            self.params.demud.macro_val.value()
+        if demud_enabled {
+            self.fixeq_left.set_demud_frequency(self.params.demud.frequency.value());
+            self.fixeq_left.set_demud_strength(self.params.demud.macro_val.value());
         } else {
-            0.0
-        });
+            self.fixeq_left.set_demud_strength(0.0);
+        }
 
+        // De-esser
         let deesser_enabled = self.params.deesser.enable.value();
         self.fixeq_left.set_deesser_enabled(deesser_enabled);
-        self.fixeq_left.set_deesser_strength(if deesser_enabled {
-            self.params.deesser.macro_val.value()
+        if deesser_enabled {
+            self.fixeq_left.set_deesser_frequency(self.params.deesser.frequency.value());
+            self.fixeq_left.set_deesser_strength(self.params.deesser.macro_val.value());
         } else {
-            0.0
-        });
+            self.fixeq_left.set_deesser_strength(0.0);
+        }
+
+        // Correction A
+        let corr_a_enabled = self.params.correction_a.enable.value();
+        self.fixeq_left.set_correction_a_enabled(corr_a_enabled);
+        if corr_a_enabled {
+            self.fixeq_left.set_correction_a_frequency(self.params.correction_a.frequency.value());
+            self.fixeq_left.set_correction_a_strength(self.params.correction_a.macro_val.value());
+        } else {
+            self.fixeq_left.set_correction_a_strength(0.0);
+        }
+
+        // Correction B
+        let corr_b_enabled = self.params.correction_b.enable.value();
+        self.fixeq_left.set_correction_b_enabled(corr_b_enabled);
+        if corr_b_enabled {
+            self.fixeq_left.set_correction_b_frequency(self.params.correction_b.frequency.value());
+            self.fixeq_left.set_correction_b_strength(self.params.correction_b.macro_val.value());
+        } else {
+            self.fixeq_left.set_correction_b_strength(0.0);
+        }
 
         for mut channel_samples in buffer.iter_samples() {
             let input_sample = channel_samples.get_mut(0).copied().unwrap_or(0.0);
@@ -864,6 +1135,12 @@ impl Poddyclip {
                 if let Ok(mut gain) = self.deesser_gain_db.try_lock() {
                     *gain = self.fixeq_left.get_deesser_gain_db();
                 }
+                if let Ok(mut gain) = self.correction_a_gain_db.try_lock() {
+                    *gain = self.fixeq_left.get_correction_a_gain_db();
+                }
+                if let Ok(mut gain) = self.correction_b_gain_db.try_lock() {
+                    *gain = self.fixeq_left.get_correction_b_gain_db();
+                }
             }
 
             if let Some(sample) = channel_samples.get_mut(0) {
@@ -880,28 +1157,73 @@ impl Poddyclip {
 
         let filter_enabled = self.params.filters.enable.value();
 
-        // FixEq parameters
+        // FixEq parameters - De-mud
         let demud_enabled = self.params.demud.enable.value();
+        let demud_freq = self.params.demud.frequency.value();
         let demud_strength = if demud_enabled {
             self.params.demud.macro_val.value()
         } else {
             0.0
         };
         self.fixeq_left.set_demud_enabled(demud_enabled);
-        self.fixeq_left.set_demud_strength(demud_strength);
         self.fixeq_right.set_demud_enabled(demud_enabled);
+        if demud_enabled {
+            self.fixeq_left.set_demud_frequency(demud_freq);
+            self.fixeq_right.set_demud_frequency(demud_freq);
+        }
+        self.fixeq_left.set_demud_strength(demud_strength);
         self.fixeq_right.set_demud_strength(demud_strength);
 
+        // De-esser
         let deesser_enabled = self.params.deesser.enable.value();
+        let deesser_freq = self.params.deesser.frequency.value();
         let deesser_strength = if deesser_enabled {
             self.params.deesser.macro_val.value()
         } else {
             0.0
         };
         self.fixeq_left.set_deesser_enabled(deesser_enabled);
-        self.fixeq_left.set_deesser_strength(deesser_strength);
         self.fixeq_right.set_deesser_enabled(deesser_enabled);
+        if deesser_enabled {
+            self.fixeq_left.set_deesser_frequency(deesser_freq);
+            self.fixeq_right.set_deesser_frequency(deesser_freq);
+        }
+        self.fixeq_left.set_deesser_strength(deesser_strength);
         self.fixeq_right.set_deesser_strength(deesser_strength);
+
+        // Correction A
+        let corr_a_enabled = self.params.correction_a.enable.value();
+        let corr_a_freq = self.params.correction_a.frequency.value();
+        let corr_a_strength = if corr_a_enabled {
+            self.params.correction_a.macro_val.value()
+        } else {
+            0.0
+        };
+        self.fixeq_left.set_correction_a_enabled(corr_a_enabled);
+        self.fixeq_right.set_correction_a_enabled(corr_a_enabled);
+        if corr_a_enabled {
+            self.fixeq_left.set_correction_a_frequency(corr_a_freq);
+            self.fixeq_right.set_correction_a_frequency(corr_a_freq);
+        }
+        self.fixeq_left.set_correction_a_strength(corr_a_strength);
+        self.fixeq_right.set_correction_a_strength(corr_a_strength);
+
+        // Correction B
+        let corr_b_enabled = self.params.correction_b.enable.value();
+        let corr_b_freq = self.params.correction_b.frequency.value();
+        let corr_b_strength = if corr_b_enabled {
+            self.params.correction_b.macro_val.value()
+        } else {
+            0.0
+        };
+        self.fixeq_left.set_correction_b_enabled(corr_b_enabled);
+        self.fixeq_right.set_correction_b_enabled(corr_b_enabled);
+        if corr_b_enabled {
+            self.fixeq_left.set_correction_b_frequency(corr_b_freq);
+            self.fixeq_right.set_correction_b_frequency(corr_b_freq);
+        }
+        self.fixeq_left.set_correction_b_strength(corr_b_strength);
+        self.fixeq_right.set_correction_b_strength(corr_b_strength);
 
         for mut channel_samples in buffer.iter_samples() {
             let left_in = channel_samples.get_mut(0).copied().unwrap_or(0.0);
@@ -966,6 +1288,12 @@ impl Poddyclip {
                 }
                 if let Ok(mut gain) = self.deesser_gain_db.try_lock() {
                     *gain = self.fixeq_left.get_deesser_gain_db();
+                }
+                if let Ok(mut gain) = self.correction_a_gain_db.try_lock() {
+                    *gain = self.fixeq_left.get_correction_a_gain_db();
+                }
+                if let Ok(mut gain) = self.correction_b_gain_db.try_lock() {
+                    *gain = self.fixeq_left.get_correction_b_gain_db();
                 }
             }
 
