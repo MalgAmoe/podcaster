@@ -1,8 +1,7 @@
 mod aireq;
-mod autogain;
-mod buttercomp;
 mod channel9;
 mod denoiser;
+mod dynamic;
 mod filters;
 mod fixeq;
 
@@ -24,9 +23,8 @@ use denoiser::denoiser::{
 };
 
 use aireq::StereoAirEq;
-use autogain::{analyze_gain, apply_gain, rms_to_db, DEFAULT_TARGET_RMS_DB};
-use buttercomp::StereoButterComp2;
 use channel9::StereoChannel9;
+use dynamic::{analyze_gain, apply_gain, rms_to_db, StereoButterComp2, DEFAULT_TARGET_RMS_DB};
 use filters::{HighPassSlope, StereoFilterChain};
 use fixeq::FixEq;
 
@@ -115,9 +113,9 @@ fn main() -> Result<()> {
 
     println!("\n[Input Gain]");
     let input_rms = if is_stereo {
-        autogain::calculate_rms_stereo(&samples[0], &samples[1])
+        dynamic::calculate_rms_stereo(&samples[0], &samples[1])
     } else {
-        autogain::calculate_rms(&samples[0])
+        dynamic::calculate_rms(&samples[0])
     };
     let input_rms_db = rms_to_db(input_rms);
     let gain_db = analyze_gain(&samples, DEFAULT_TARGET_RMS_DB);

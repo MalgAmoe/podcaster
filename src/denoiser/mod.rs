@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub(crate) mod common;
 
 // Re-export common constants so they're accessible from both modules

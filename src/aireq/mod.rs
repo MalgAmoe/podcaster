@@ -3,6 +3,8 @@
 //! Adds presence/air with a gentle 1st order high shelf boost,
 //! then rolls off the very top with an SVF LP filter to keep things smooth.
 
+#![allow(dead_code)]
+
 use crate::filters::{HighShelfSvf, SvfBiquad};
 
 /// Default air shelf frequency (10-12kHz recommended for podcast)

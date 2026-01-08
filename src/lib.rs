@@ -1,9 +1,9 @@
 #![cfg(feature = "plugin")]
 
 mod aireq;
-mod buttercomp;
 mod channel9;
 mod denoiser;
+mod dynamic;
 mod filters;
 mod fixeq;
 mod visualizations;
@@ -20,8 +20,8 @@ use denoiser::{
 };
 
 use aireq::StereoAirEq;
-use buttercomp::StereoButterComp2;
 use channel9::StereoChannel9;
+use dynamic::StereoButterComp2;
 use filters::{FilterChain, HighPassSlope};
 use fixeq::FixEq;
 

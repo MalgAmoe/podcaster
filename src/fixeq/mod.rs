@@ -3,7 +3,8 @@
 //! Applied after denoising to fix tonal issues:
 //! - De-mud (150-500Hz) - reduces proximity effect / boominess
 //! - De-esser (4-10kHz) - reduces sibilance
-#![cfg_attr(all(feature = "cli", feature = "plugin"), allow(dead_code))]
+
+#![allow(dead_code)]
 
 pub mod analysis;
 

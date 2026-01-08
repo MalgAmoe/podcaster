@@ -9,6 +9,8 @@
 //! - Opto-like release: Slows recovery when output is loud
 //! - Soft knee: Inverse square gain calculation
 
+#![allow(dead_code)]
+
 /// Single channel ButterComp2 processor
 #[derive(Clone, Debug)]
 pub struct ButterComp2 {

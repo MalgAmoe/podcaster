@@ -10,6 +10,8 @@
 //! - Slew rate limiting (golden ratio coefficients)
 //! - Biquad lowpass (golden ratio Q = 0.618)
 
+#![allow(dead_code)]
+
 use std::f32::consts::PI;
 
 /// Neve console preset values

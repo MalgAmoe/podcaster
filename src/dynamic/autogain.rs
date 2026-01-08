@@ -3,6 +3,8 @@
 //! Analyzes audio RMS and applies gain to normalize to a target level.
 //! This ensures the processing chain operates at consistent levels.
 
+#![allow(dead_code)]
+
 /// Default target RMS level in dBFS
 pub const DEFAULT_TARGET_RMS_DB: f32 = -18.0;
 

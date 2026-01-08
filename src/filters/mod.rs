@@ -3,6 +3,8 @@
 //! Removes rumble, plosives, hiss, and aliasing noise using
 //! numerically stable State Variable Filters (SVF).
 
+#![allow(dead_code)]
+
 pub mod common;
 pub mod dynamic;
 
