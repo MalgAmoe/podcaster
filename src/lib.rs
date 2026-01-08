@@ -21,7 +21,7 @@ use denoiser::{
 
 use aireq::StereoAirEq;
 use channel9::StereoChannel9;
-use dynamic::StereoButterComp2;
+use dynamic::{StereoButterComp2, StereoRealtimeLimiter};
 use filters::{FilterChain, HighPassSlope};
 use fixeq::FixEq;
 
@@ -151,6 +151,15 @@ struct ButterCompParams {
 }
 
 #[derive(Params)]
+struct LimiterParams {
+    #[id = "limiter_enable"]
+    enable: BoolParam,
+
+    #[id = "limiter_ceiling"]
+    ceiling: FloatParam,
+}
+
+#[derive(Params)]
 struct PoddyclipParams {
     #[persist = "editor-state"]
     editor_state: Arc<EguiState>,
@@ -190,6 +199,9 @@ struct PoddyclipParams {
 
     #[nested(group = "Compressor")]
     buttercomp: ButterCompParams,
+
+    #[nested(group = "Limiter")]
+    limiter: LimiterParams,
 }
 
 // =============================================================================
@@ -239,6 +251,12 @@ struct Poddyclip {
 
     // ButterComp2 (smooth leveling)
     buttercomp: StereoButterComp2,
+
+    // Limiter (true peak limiting)
+    limiter: StereoRealtimeLimiter,
+
+    // Limiter gain reduction for UI
+    limiter_gain_db: Arc<Mutex<f32>>,
 }
 
 impl Default for Poddyclip {
@@ -267,6 +285,8 @@ impl Default for Poddyclip {
             channel9: StereoChannel9::new(48000.0),
             air_eq: StereoAirEq::new(48000.0),
             buttercomp: StereoButterComp2::new(48000.0),
+            limiter: StereoRealtimeLimiter::new(-1.0, 5.0, 100.0, 48000.0),
+            limiter_gain_db: Arc::new(Mutex::new(0.0)),
         }
     }
 }
@@ -274,7 +294,7 @@ impl Default for Poddyclip {
 impl Default for PoddyclipParams {
     fn default() -> Self {
         Self {
-            editor_state: EguiState::from_size(1400, 800),
+            editor_state: EguiState::from_size(1400, 900),
 
             reset_noise: BoolParam::new("Reset Noise Estimation", false).with_value_to_string(
                 Arc::new(|value| {
@@ -539,6 +559,21 @@ impl Default for PoddyclipParams {
                 .with_step_size(0.01)
                 .with_value_to_string(formatters::v2s_f32_percentage(0)),
             },
+
+            limiter: LimiterParams {
+                enable: BoolParam::new("Enable Limiter", true), // On by default
+                ceiling: FloatParam::new(
+                    "Ceiling",
+                    -1.0, // -1 dBTP default
+                    FloatRange::Linear {
+                        min: -6.0,
+                        max: 0.0,
+                    },
+                )
+                .with_step_size(0.1)
+                .with_value_to_string(formatters::v2s_f32_rounded(1))
+                .with_unit(" dBTP"),
+            },
         }
     }
 }
@@ -639,6 +674,7 @@ impl Plugin for Poddyclip {
         let deesser_gain = self.deesser_gain_db.clone();
         let correction_a_gain = self.correction_a_gain_db.clone();
         let correction_b_gain = self.correction_b_gain_db.clone();
+        let limiter_gain = self.limiter_gain_db.clone();
 
         create_egui_editor(
             params.editor_state.clone(),
@@ -911,6 +947,26 @@ impl Plugin for Poddyclip {
                                     &params.buttercomp.compress,
                                     setter,
                                 ));
+
+                                ui.add_space(15.0);
+                                ui.separator();
+
+                                // Limiter
+                                ui.heading("Limiter");
+                                ui.add_space(5.0);
+
+                                ui.horizontal(|ui| {
+                                    ui.label("Enable:");
+                                    ui.add(widgets::ParamSlider::for_param(
+                                        &params.limiter.enable,
+                                        setter,
+                                    ));
+                                });
+                                ui.label("Ceiling:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.limiter.ceiling,
+                                    setter,
+                                ));
                             },
                         );
 
@@ -1095,6 +1151,47 @@ impl Plugin for Poddyclip {
                                 }
                             });
 
+                            ui.add_space(10.0);
+
+                            // Limiter Gain Reduction Meter
+                            ui.heading("Limiter Gain Reduction");
+                            ui.add_space(5.0);
+                            let limiter_db = limiter_gain.lock().map(|g| *g).unwrap_or(0.0);
+                            let limiter_reduction = -limiter_db;
+
+                            ui.horizontal(|ui| {
+                                ui.label(format!("{:.1} dB", limiter_db));
+                                let max_reduction = 12.0; // Max display is -12dB
+                                let ratio = (limiter_reduction / max_reduction).clamp(0.0, 1.0);
+                                let available = ui.available_width() - 10.0;
+                                let (rect, _) = ui.allocate_exact_size(
+                                    egui::vec2(available, 20.0),
+                                    egui::Sense::hover(),
+                                );
+
+                                ui.painter().rect_filled(
+                                    rect,
+                                    4.0,
+                                    egui::Color32::from_gray(40),
+                                );
+
+                                // Meter bar (red/orange for limiter)
+                                if ratio > 0.0 {
+                                    let bar_rect = egui::Rect::from_min_size(
+                                        rect.min,
+                                        egui::vec2(rect.width() * ratio, rect.height()),
+                                    );
+                                    let color = if ratio > 0.8 {
+                                        egui::Color32::from_rgb(255, 50, 50) // Bright red
+                                    } else if ratio > 0.5 {
+                                        egui::Color32::from_rgb(255, 100, 50) // Orange-red
+                                    } else {
+                                        egui::Color32::from_rgb(255, 150, 50) // Orange
+                                    };
+                                    ui.painter().rect_filled(bar_rect, 4.0, color);
+                                }
+                            });
+
                             if viz_data.lock().is_err() {
                                 ui.label("Waiting for audio data...");
                             }
@@ -1117,6 +1214,9 @@ impl Plugin for Poddyclip {
         self.denoiser_left = RealtimeDenoiser::new(buffer_config.sample_rate as u32);
         self.denoiser_right = RealtimeDenoiser::new(buffer_config.sample_rate as u32);
 
+        // Reinitialize limiter with correct sample rate
+        self.limiter = StereoRealtimeLimiter::new(-1.0, 5.0, 100.0, buffer_config.sample_rate);
+
         true
     }
 
@@ -1130,6 +1230,9 @@ impl Plugin for Poddyclip {
         self.output_buffer_left.clear();
         self.output_buffer_right.clear();
         self.samples_since_process = 0;
+
+        // Reset limiter
+        self.limiter.reset();
     }
 
     fn process(
@@ -1308,6 +1411,16 @@ impl Poddyclip {
                 output_sample = self.buttercomp.left.process(output_sample);
             }
 
+            // Apply Limiter AFTER ButterComp (final stage)
+            let mut limiter_gr_db = 0.0;
+            if self.params.limiter.enable.value() {
+                // Note: For mono, we use the stereo limiter with same sample on both channels
+                // This ensures consistent behavior. We could also create a mono realtime limiter.
+                let (out, _, gr) = self.limiter.process(output_sample, output_sample);
+                output_sample = out;
+                limiter_gr_db = gr;
+            }
+
             // Update gain reduction for UI
             if viz_enabled {
                 if let Ok(mut gain) = self.demud_gain_db.try_lock() {
@@ -1321,6 +1434,9 @@ impl Poddyclip {
                 }
                 if let Ok(mut gain) = self.correction_b_gain_db.try_lock() {
                     *gain = self.fixeq_left.get_correction_b_gain_db();
+                }
+                if let Ok(mut gain) = self.limiter_gain_db.try_lock() {
+                    *gain = limiter_gr_db;
                 }
             }
 
@@ -1483,6 +1599,15 @@ impl Poddyclip {
                 right_out = self.buttercomp.right.process(right_out);
             }
 
+            // Apply Limiter AFTER ButterComp (final stage)
+            let mut limiter_gr_db = 0.0;
+            if self.params.limiter.enable.value() {
+                let (l, r, gr) = self.limiter.process(left_out, right_out);
+                left_out = l;
+                right_out = r;
+                limiter_gr_db = gr;
+            }
+
             // Update gain reduction for UI (from left channel only)
             if viz_enabled {
                 if let Ok(mut gain) = self.demud_gain_db.try_lock() {
@@ -1496,6 +1621,9 @@ impl Poddyclip {
                 }
                 if let Ok(mut gain) = self.correction_b_gain_db.try_lock() {
                     *gain = self.fixeq_left.get_correction_b_gain_db();
+                }
+                if let Ok(mut gain) = self.limiter_gain_db.try_lock() {
+                    *gain = limiter_gr_db;
                 }
             }
 

@@ -4,6 +4,7 @@ mod denoiser;
 mod dynamic;
 mod filters;
 mod fixeq;
+mod output;
 
 use std::path::{Path, PathBuf};
 
@@ -24,9 +25,10 @@ use denoiser::denoiser::{
 
 use aireq::StereoAirEq;
 use channel9::StereoChannel9;
-use dynamic::{analyze_gain, apply_gain, rms_to_db, StereoButterComp2, DEFAULT_TARGET_RMS_DB};
+use dynamic::{analyze_gain, apply_gain, rms_to_db, StereoButterComp2, StereoLimiter, DEFAULT_TARGET_RMS_DB};
 use filters::{HighPassSlope, StereoFilterChain};
 use fixeq::FixEq;
+use output::{measure_integrated_lufs, DEFAULT_TARGET_LUFS};
 
 #[derive(Parser)]
 #[command(name = "poddyclip")]
@@ -293,6 +295,39 @@ fn main() -> Result<()> {
     } else {
         compressor.process_mono(&mut output_samples[0]);
     }
+
+    // =========================================================================
+    // Output Normalization - LUFS + Limiting
+    // =========================================================================
+
+    println!("\n[Output Normalization]");
+
+    // Measure integrated LUFS
+    let lufs = measure_integrated_lufs(&output_samples, input_sr);
+    println!("  Integrated LUFS: {:.1}", lufs);
+
+    // Calculate gain to reach target LUFS
+    let lufs_gain_db = DEFAULT_TARGET_LUFS - lufs;
+    println!(
+        "  Target: {:.1} LUFS, applying {:+.1} dB",
+        DEFAULT_TARGET_LUFS, lufs_gain_db
+    );
+
+    // Apply gain
+    apply_gain(&mut output_samples, lufs_gain_db);
+
+    // Apply true peak limiter at -1 dBTP
+    let limiter = StereoLimiter::new(-1.0, 5.0, 100.0, input_sr as f32);
+    let stats = if is_stereo {
+        let (left, right) = output_samples.split_at_mut(1);
+        limiter.process_stereo(&mut left[0], &mut right[0])
+    } else {
+        limiter.process_mono(&mut output_samples[0])
+    };
+    println!(
+        "  Limiter: ceiling -1.0 dBTP, max GR: {:.1} dB, peak out: {:.1} dBFS",
+        stats.max_reduction_db, stats.peak_output_db
+    );
 
     println!("Saving: {}", output_path.display());
     save_wav(&output_path, &output_samples, input_sr)?;

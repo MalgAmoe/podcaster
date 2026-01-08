@@ -1,0 +1,454 @@
+//! True Peak Limiter with lookahead
+//!
+//! A transparent limiter that uses lookahead to smoothly reduce gain
+//! before peaks arrive, avoiding clipping distortion.
+
+#![allow(dead_code)]
+
+/// Gain reduction statistics from limiter processing
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LimiterStats {
+    /// Maximum gain reduction in dB (negative value)
+    pub max_reduction_db: f32,
+    /// Peak output level in dBFS
+    pub peak_output_db: f32,
+}
+
+/// True peak limiter with lookahead
+pub struct Limiter {
+    ceiling_linear: f32,
+    ceiling_db: f32,
+    lookahead_samples: usize,
+    release_coeff: f32,
+}
+
+impl Limiter {
+    /// Create a new limiter
+    ///
+    /// # Arguments
+    /// * `ceiling_db` - Maximum output level in dBFS (e.g., -1.0)
+    /// * `lookahead_ms` - Lookahead time in milliseconds (5-10ms typical)
+    /// * `release_ms` - Release time in milliseconds (50-200ms typical)
+    /// * `sample_rate` - Sample rate in Hz
+    pub fn new(ceiling_db: f32, lookahead_ms: f32, release_ms: f32, sample_rate: f32) -> Self {
+        let ceiling_linear = 10.0_f32.powf(ceiling_db / 20.0);
+        let lookahead_samples = (lookahead_ms * sample_rate / 1000.0) as usize;
+
+        // Release coefficient: how fast gain recovers after peak
+        let release_samples = release_ms * sample_rate / 1000.0;
+        let release_coeff = (-2.2 / release_samples).exp();
+
+        Self {
+            ceiling_linear,
+            ceiling_db,
+            lookahead_samples,
+            release_coeff,
+        }
+    }
+
+    /// Process mono audio in-place, returns gain reduction stats
+    pub fn process_mono(&self, samples: &mut [f32]) -> LimiterStats {
+        if samples.is_empty() {
+            return LimiterStats::default();
+        }
+
+        // Step 1: Find peak values within lookahead window for each sample
+        let mut peak_envelope = vec![0.0_f32; samples.len()];
+        for i in 0..samples.len() {
+            let mut max_peak = samples[i].abs();
+            // Look ahead by lookahead_samples
+            let end = (i + self.lookahead_samples).min(samples.len());
+            for j in i..end {
+                max_peak = max_peak.max(samples[j].abs());
+            }
+            peak_envelope[i] = max_peak;
+        }
+
+        // Step 2: Calculate required gain reduction
+        let mut gain = vec![1.0_f32; samples.len()];
+        for (i, &peak) in peak_envelope.iter().enumerate() {
+            if peak > self.ceiling_linear {
+                gain[i] = self.ceiling_linear / peak;
+            }
+        }
+
+        // Step 3: Smooth gain with release (attack is instant due to lookahead)
+        for i in 1..gain.len() {
+            let prev = gain[i - 1];
+            // If current gain is higher (less reduction), smooth the recovery
+            if gain[i] > prev {
+                gain[i] = prev * self.release_coeff + gain[i] * (1.0 - self.release_coeff);
+            }
+        }
+
+        // Track min gain (max reduction)
+        let min_gain = gain.iter().cloned().fold(1.0_f32, f32::min);
+
+        // Step 4: Apply gain
+        let mut peak_output = 0.0_f32;
+        for (sample, g) in samples.iter_mut().zip(gain.iter()) {
+            *sample *= g;
+            peak_output = peak_output.max(sample.abs());
+        }
+
+        LimiterStats {
+            max_reduction_db: 20.0 * min_gain.max(1e-10).log10(),
+            peak_output_db: 20.0 * peak_output.max(1e-10).log10(),
+        }
+    }
+
+    /// Process stereo audio in-place with linked gain reduction, returns stats
+    pub fn process_stereo(&self, left: &mut [f32], right: &mut [f32]) -> LimiterStats {
+        if left.is_empty() || right.is_empty() {
+            return LimiterStats::default();
+        }
+
+        let len = left.len().min(right.len());
+
+        // Step 1: Find peak values within lookahead window (linked stereo)
+        let mut peak_envelope = vec![0.0_f32; len];
+        for i in 0..len {
+            let mut max_peak = left[i].abs().max(right[i].abs());
+            let end = (i + self.lookahead_samples).min(len);
+            for j in i..end {
+                max_peak = max_peak.max(left[j].abs().max(right[j].abs()));
+            }
+            peak_envelope[i] = max_peak;
+        }
+
+        // Step 2: Calculate required gain reduction
+        let mut gain = vec![1.0_f32; len];
+        for (i, &peak) in peak_envelope.iter().enumerate() {
+            if peak > self.ceiling_linear {
+                gain[i] = self.ceiling_linear / peak;
+            }
+        }
+
+        // Step 3: Smooth gain with release
+        for i in 1..gain.len() {
+            let prev = gain[i - 1];
+            if gain[i] > prev {
+                gain[i] = prev * self.release_coeff + gain[i] * (1.0 - self.release_coeff);
+            }
+        }
+
+        // Track min gain (max reduction)
+        let min_gain = gain.iter().cloned().fold(1.0_f32, f32::min);
+
+        // Step 4: Apply gain to both channels
+        let mut peak_output = 0.0_f32;
+        for i in 0..len {
+            left[i] *= gain[i];
+            right[i] *= gain[i];
+            peak_output = peak_output.max(left[i].abs().max(right[i].abs()));
+        }
+
+        LimiterStats {
+            max_reduction_db: 20.0 * min_gain.max(1e-10).log10(),
+            peak_output_db: 20.0 * peak_output.max(1e-10).log10(),
+        }
+    }
+}
+
+/// Stereo limiter wrapper for convenience
+pub struct StereoLimiter {
+    limiter: Limiter,
+}
+
+impl StereoLimiter {
+    pub fn new(ceiling_db: f32, lookahead_ms: f32, release_ms: f32, sample_rate: f32) -> Self {
+        Self {
+            limiter: Limiter::new(ceiling_db, lookahead_ms, release_ms, sample_rate),
+        }
+    }
+
+    pub fn process_stereo(&self, left: &mut [f32], right: &mut [f32]) -> LimiterStats {
+        self.limiter.process_stereo(left, right)
+    }
+
+    pub fn process_mono(&self, samples: &mut [f32]) -> LimiterStats {
+        self.limiter.process_mono(samples)
+    }
+}
+
+// =============================================================================
+// Realtime Limiter (sample-by-sample processing for plugins)
+// =============================================================================
+
+/// Realtime limiter for sample-by-sample processing
+/// Uses internal delay buffers for lookahead
+pub struct RealtimeLimiter {
+    ceiling_linear: f32,
+    lookahead_samples: usize,
+    release_coeff: f32,
+
+    // Delay line for audio (lookahead)
+    delay_buffer: Vec<f32>,
+    delay_write_pos: usize,
+
+    // Gain smoothing state
+    current_gain: f32,
+
+    // Peak detection in lookahead window
+    peak_buffer: Vec<f32>,
+}
+
+impl RealtimeLimiter {
+    pub fn new(ceiling_db: f32, lookahead_ms: f32, release_ms: f32, sample_rate: f32) -> Self {
+        let ceiling_linear = 10.0_f32.powf(ceiling_db / 20.0);
+        let lookahead_samples = ((lookahead_ms * sample_rate / 1000.0) as usize).max(1);
+
+        let release_samples = release_ms * sample_rate / 1000.0;
+        let release_coeff = (-2.2 / release_samples).exp();
+
+        Self {
+            ceiling_linear,
+            lookahead_samples,
+            release_coeff,
+            delay_buffer: vec![0.0; lookahead_samples],
+            delay_write_pos: 0,
+            peak_buffer: vec![0.0; lookahead_samples],
+            current_gain: 1.0,
+        }
+    }
+
+    /// Process a single sample, returns (output, gain_reduction_db)
+    pub fn process(&mut self, input: f32) -> (f32, f32) {
+        // Store input in peak buffer at current position
+        self.peak_buffer[self.delay_write_pos] = input.abs();
+
+        // Find max peak in lookahead window
+        let max_peak = self.peak_buffer.iter().cloned().fold(0.0_f32, f32::max);
+
+        // Calculate target gain
+        let target_gain = if max_peak > self.ceiling_linear {
+            self.ceiling_linear / max_peak
+        } else {
+            1.0
+        };
+
+        // Smooth gain changes
+        if target_gain < self.current_gain {
+            // Attack: instant (we have lookahead)
+            self.current_gain = target_gain;
+        } else {
+            // Release: smooth
+            self.current_gain = self.current_gain * self.release_coeff
+                + target_gain * (1.0 - self.release_coeff);
+        }
+
+        // Get delayed sample (from lookahead_samples ago)
+        let delayed_sample = self.delay_buffer[self.delay_write_pos];
+
+        // Store current input in delay buffer
+        self.delay_buffer[self.delay_write_pos] = input;
+
+        // Advance write position
+        self.delay_write_pos = (self.delay_write_pos + 1) % self.lookahead_samples;
+
+        // Apply gain to delayed sample
+        let output = delayed_sample * self.current_gain;
+        let gain_reduction_db = 20.0 * self.current_gain.max(1e-10).log10();
+
+        (output, gain_reduction_db)
+    }
+
+    pub fn reset(&mut self) {
+        self.delay_buffer.fill(0.0);
+        self.peak_buffer.fill(0.0);
+        self.delay_write_pos = 0;
+        self.current_gain = 1.0;
+    }
+
+    pub fn latency_samples(&self) -> usize {
+        self.lookahead_samples
+    }
+}
+
+/// Stereo realtime limiter with linked gain reduction
+pub struct StereoRealtimeLimiter {
+    ceiling_linear: f32,
+    lookahead_samples: usize,
+    release_coeff: f32,
+
+    // Delay lines for audio (lookahead)
+    delay_buffer_left: Vec<f32>,
+    delay_buffer_right: Vec<f32>,
+    delay_write_pos: usize,
+
+    // Gain smoothing state
+    current_gain: f32,
+
+    // Peak detection in lookahead window (linked stereo)
+    peak_buffer: Vec<f32>,
+}
+
+impl StereoRealtimeLimiter {
+    pub fn new(ceiling_db: f32, lookahead_ms: f32, release_ms: f32, sample_rate: f32) -> Self {
+        let ceiling_linear = 10.0_f32.powf(ceiling_db / 20.0);
+        let lookahead_samples = ((lookahead_ms * sample_rate / 1000.0) as usize).max(1);
+
+        let release_samples = release_ms * sample_rate / 1000.0;
+        let release_coeff = (-2.2 / release_samples).exp();
+
+        Self {
+            ceiling_linear,
+            lookahead_samples,
+            release_coeff,
+            delay_buffer_left: vec![0.0; lookahead_samples],
+            delay_buffer_right: vec![0.0; lookahead_samples],
+            delay_write_pos: 0,
+            peak_buffer: vec![0.0; lookahead_samples],
+            current_gain: 1.0,
+        }
+    }
+
+    /// Process a stereo sample pair, returns (left_out, right_out, gain_reduction_db)
+    pub fn process(&mut self, left: f32, right: f32) -> (f32, f32, f32) {
+        // Store max of L/R in peak buffer (linked stereo)
+        self.peak_buffer[self.delay_write_pos] = left.abs().max(right.abs());
+
+        // Find max peak in lookahead window
+        let max_peak = self.peak_buffer.iter().cloned().fold(0.0_f32, f32::max);
+
+        // Calculate target gain
+        let target_gain = if max_peak > self.ceiling_linear {
+            self.ceiling_linear / max_peak
+        } else {
+            1.0
+        };
+
+        // Smooth gain changes
+        if target_gain < self.current_gain {
+            // Attack: instant (we have lookahead)
+            self.current_gain = target_gain;
+        } else {
+            // Release: smooth
+            self.current_gain = self.current_gain * self.release_coeff
+                + target_gain * (1.0 - self.release_coeff);
+        }
+
+        // Get delayed samples
+        let delayed_left = self.delay_buffer_left[self.delay_write_pos];
+        let delayed_right = self.delay_buffer_right[self.delay_write_pos];
+
+        // Store current input in delay buffers
+        self.delay_buffer_left[self.delay_write_pos] = left;
+        self.delay_buffer_right[self.delay_write_pos] = right;
+
+        // Advance write position
+        self.delay_write_pos = (self.delay_write_pos + 1) % self.lookahead_samples;
+
+        // Apply gain to delayed samples
+        let left_out = delayed_left * self.current_gain;
+        let right_out = delayed_right * self.current_gain;
+        let gain_reduction_db = 20.0 * self.current_gain.max(1e-10).log10();
+
+        (left_out, right_out, gain_reduction_db)
+    }
+
+    pub fn reset(&mut self) {
+        self.delay_buffer_left.fill(0.0);
+        self.delay_buffer_right.fill(0.0);
+        self.peak_buffer.fill(0.0);
+        self.delay_write_pos = 0;
+        self.current_gain = 1.0;
+    }
+
+    pub fn latency_samples(&self) -> usize {
+        self.lookahead_samples
+    }
+
+    /// Get current gain reduction in dB (for metering)
+    pub fn get_gain_reduction_db(&self) -> f32 {
+        20.0 * self.current_gain.max(1e-10).log10()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_limiter_below_ceiling() {
+        let limiter = Limiter::new(-1.0, 5.0, 100.0, 48000.0);
+        let mut samples = vec![0.5, 0.3, -0.4, 0.2];
+        let original = samples.clone();
+        limiter.process_mono(&mut samples);
+
+        // Samples below ceiling should pass through unchanged
+        for (i, (&s, &o)) in samples.iter().zip(original.iter()).enumerate() {
+            assert!(
+                (s - o).abs() < 0.001,
+                "Sample {} should be unchanged: {} vs {}",
+                i,
+                s,
+                o
+            );
+        }
+    }
+
+    #[test]
+    fn test_limiter_above_ceiling() {
+        let limiter = Limiter::new(-6.0, 5.0, 100.0, 48000.0); // -6dB = 0.5 linear
+        let mut samples = vec![0.0; 1000];
+        // Create a spike at sample 500
+        samples[500] = 1.0;
+
+        limiter.process_mono(&mut samples);
+
+        // The spike should be limited
+        let ceiling = 10.0_f32.powf(-6.0 / 20.0);
+        for (i, &s) in samples.iter().enumerate() {
+            assert!(
+                s.abs() <= ceiling + 0.001,
+                "Sample {} value {} exceeds ceiling {}",
+                i,
+                s.abs(),
+                ceiling
+            );
+        }
+    }
+
+    #[test]
+    fn test_stereo_linked() {
+        let limiter = Limiter::new(-6.0, 5.0, 100.0, 48000.0);
+        let mut left = vec![0.0; 1000];
+        let mut right = vec![0.0; 1000];
+
+        // Spike only on left channel
+        left[500] = 1.0;
+        right[500] = 0.1;
+
+        limiter.process_stereo(&mut left, &mut right);
+
+        // Both channels should be reduced equally (linked)
+        let ceiling = 10.0_f32.powf(-6.0 / 20.0);
+        assert!(
+            left[500].abs() <= ceiling + 0.001,
+            "Left spike {} exceeds ceiling {}",
+            left[500].abs(),
+            ceiling
+        );
+    }
+
+    #[test]
+    fn test_lookahead_smoothing() {
+        // With lookahead, gain should start reducing before the peak
+        let limiter = Limiter::new(-6.0, 5.0, 100.0, 48000.0);
+        let mut samples = vec![0.0; 1000];
+        samples[500] = 1.0;
+
+        let original_before = samples[400]; // Well before the peak
+        limiter.process_mono(&mut samples);
+
+        // Sample at 400 should be unchanged (before lookahead window)
+        assert!(
+            (samples[400] - original_before).abs() < 0.001,
+            "Sample before lookahead window should be unchanged"
+        );
+
+        // Sample just before peak (within lookahead) may be attenuated
+        // due to the peak being in the lookahead window
+    }
+}
