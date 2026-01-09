@@ -20,20 +20,9 @@ const CORRECTION_FREQ_MAX: f32 = 5000.0;
 /// Minimum spacing between correction peaks (in bins) to avoid picking adjacent frequencies
 const CORRECTION_MIN_SPACING_BINS: usize = 20; // ~200Hz at 48kHz
 
-/// Result of mud frequency analysis
+/// Result of band frequency analysis
 #[derive(Clone, Debug)]
-pub struct MudAnalysis {
-    /// Detected center frequency for de-mud (Hz)
-    pub center_freq: f32,
-    /// Energy level at the detected frequency (dB)
-    pub energy_db: f32,
-    /// Confidence score (0.0 = uncertain, 1.0 = very confident)
-    pub confidence: f32,
-}
-
-/// Result of single correction band analysis
-#[derive(Clone, Debug)]
-pub struct CorrectionBandAnalysis {
+pub struct BandAnalysis {
     /// Detected center frequency (Hz)
     pub center_freq: f32,
     /// Energy level at the detected frequency (dB)
@@ -42,18 +31,12 @@ pub struct CorrectionBandAnalysis {
     pub confidence: f32,
 }
 
-/// Result of correction analysis (two bands)
-#[derive(Clone, Debug)]
-pub struct CorrectionAnalysis {
-    pub band_a: CorrectionBandAnalysis,
-    pub band_b: CorrectionBandAnalysis,
-}
-
 /// Combined analysis for all FixEq bands
 #[derive(Clone, Debug)]
 pub struct FixEqAnalysis {
-    pub mud: MudAnalysis,
-    pub correction: CorrectionAnalysis,
+    pub mud: BandAnalysis,
+    pub correction_a: BandAnalysis,
+    pub correction_b: BandAnalysis,
 }
 
 /// Mix stereo to mono for analysis
@@ -70,26 +53,26 @@ pub const DEFAULT_CORRECTION_B_FREQ: f32 = 3000.0;
 
 /// Unified analysis for all FixEq bands (single FFT pass)
 pub fn analyze_audio(audio: &[f32], sample_rate: u32) -> FixEqAnalysis {
+    let default_analysis = || FixEqAnalysis {
+        mud: BandAnalysis {
+            center_freq: 300.0,
+            energy_db: -60.0,
+            confidence: 0.0,
+        },
+        correction_a: BandAnalysis {
+            center_freq: DEFAULT_CORRECTION_A_FREQ,
+            energy_db: -60.0,
+            confidence: 0.0,
+        },
+        correction_b: BandAnalysis {
+            center_freq: DEFAULT_CORRECTION_B_FREQ,
+            energy_db: -60.0,
+            confidence: 0.0,
+        },
+    };
+
     if audio.is_empty() {
-        return FixEqAnalysis {
-            mud: MudAnalysis {
-                center_freq: 300.0,
-                energy_db: -60.0,
-                confidence: 0.0,
-            },
-            correction: CorrectionAnalysis {
-                band_a: CorrectionBandAnalysis {
-                    center_freq: DEFAULT_CORRECTION_A_FREQ,
-                    energy_db: -60.0,
-                    confidence: 0.0,
-                },
-                band_b: CorrectionBandAnalysis {
-                    center_freq: DEFAULT_CORRECTION_B_FREQ,
-                    energy_db: -60.0,
-                    confidence: 0.0,
-                },
-            },
-        };
+        return default_analysis();
     }
 
     let n_bins = WINDOW_SIZE / 2 + 1;
@@ -142,25 +125,7 @@ pub fn analyze_audio(audio: &[f32], sample_rate: u32) -> FixEqAnalysis {
     }
 
     if frame_count == 0 {
-        return FixEqAnalysis {
-            mud: MudAnalysis {
-                center_freq: 300.0,
-                energy_db: -60.0,
-                confidence: 0.0,
-            },
-            correction: CorrectionAnalysis {
-                band_a: CorrectionBandAnalysis {
-                    center_freq: DEFAULT_CORRECTION_A_FREQ,
-                    energy_db: -60.0,
-                    confidence: 0.0,
-                },
-                band_b: CorrectionBandAnalysis {
-                    center_freq: DEFAULT_CORRECTION_B_FREQ,
-                    energy_db: -60.0,
-                    confidence: 0.0,
-                },
-            },
-        };
+        return default_analysis();
     }
 
     for p in &mut avg_power {
@@ -172,7 +137,7 @@ pub fn analyze_audio(audio: &[f32], sample_rate: u32) -> FixEqAnalysis {
 
     // Analyze all bands using spectral deviation method
     let mud = find_peak_by_deviation(&avg_power, &smoothed, mud_min_bin, mud_max_bin, bin_freq, 300.0);
-    let (corr_a, corr_b) = find_two_peaks_by_deviation(
+    let (correction_a, correction_b) = find_two_peaks_by_deviation(
         &avg_power,
         &smoothed,
         corr_min_bin,
@@ -183,15 +148,9 @@ pub fn analyze_audio(audio: &[f32], sample_rate: u32) -> FixEqAnalysis {
     );
 
     FixEqAnalysis {
-        mud: MudAnalysis {
-            center_freq: mud.0,
-            energy_db: mud.1,
-            confidence: mud.2,
-        },
-        correction: CorrectionAnalysis {
-            band_a: corr_a,
-            band_b: corr_b,
-        },
+        mud,
+        correction_a,
+        correction_b,
     }
 }
 
@@ -213,9 +172,8 @@ fn compute_smoothed_spectrum(power: &[f32], window_size: usize) -> Vec<f32> {
     smoothed
 }
 
-/// Find the most prominent peak in a range using spectral deviation
-/// Compares actual spectrum to smoothed spectrum to find frequencies that "stick out"
-/// Returns (center_freq, energy_db, confidence)
+/// Find the most prominent peak in a range using spectral deviation.
+/// Compares actual spectrum to smoothed spectrum to find frequencies that "stick out".
 fn find_peak_by_deviation(
     avg_power: &[f32],
     smoothed: &[f32],
@@ -223,9 +181,13 @@ fn find_peak_by_deviation(
     max_bin: usize,
     bin_freq: f32,
     default_freq: f32,
-) -> (f32, f32, f32) {
+) -> BandAnalysis {
     if min_bin >= max_bin || max_bin >= avg_power.len() {
-        return (default_freq, -60.0, 0.0);
+        return BandAnalysis {
+            center_freq: default_freq,
+            energy_db: -60.0,
+            confidence: 0.0,
+        };
     }
 
     // Compute deviation ratio in range and find peak
@@ -246,14 +208,13 @@ fn find_peak_by_deviation(
     }
 
     let power = avg_power[peak_bin];
-    let energy_db = 10.0 * power.max(1e-12).log10();
 
-    // Confidence: deviation of 1.5 = 50%, 2.0 = 100%
-    let confidence = ((peak_deviation - 1.0) / 1.0).clamp(0.0, 1.0);
-
-    let center_freq = peak_bin as f32 * bin_freq;
-
-    (center_freq, energy_db, confidence)
+    BandAnalysis {
+        center_freq: peak_bin as f32 * bin_freq,
+        energy_db: 10.0 * power.max(1e-12).log10(),
+        // Confidence: deviation of 1.5 = 50%, 2.0 = 100%
+        confidence: ((peak_deviation - 1.0) / 1.0).clamp(0.0, 1.0),
+    }
 }
 
 /// Find top 2 resonances using spectral deviation method.
@@ -267,13 +228,13 @@ fn find_two_peaks_by_deviation(
     bin_freq: f32,
     default_freq_a: f32,
     default_freq_b: f32,
-) -> (CorrectionBandAnalysis, CorrectionBandAnalysis) {
-    let default_a = CorrectionBandAnalysis {
+) -> (BandAnalysis, BandAnalysis) {
+    let default_a = BandAnalysis {
         center_freq: default_freq_a,
         energy_db: -60.0,
         confidence: 0.0,
     };
-    let default_b = CorrectionBandAnalysis {
+    let default_b = BandAnalysis {
         center_freq: default_freq_b,
         energy_db: -60.0,
         confidence: 0.0,
@@ -324,14 +285,11 @@ fn find_two_peaks_by_deviation(
 
     // Build results - confidence is based on how much the peak deviates (ratio > 1)
     // A deviation of 2.0 means the peak is 2x the local average
-    let build_result = |bin: usize, dev: f32| -> CorrectionBandAnalysis {
-        let power = avg_power[bin];
-        // Confidence: deviation of 1.5 = 50%, 2.0 = 100%
-        let confidence = ((dev - 1.0) / 1.0).clamp(0.0, 1.0);
-        CorrectionBandAnalysis {
+    let build_result = |bin: usize, dev: f32| -> BandAnalysis {
+        BandAnalysis {
             center_freq: bin as f32 * bin_freq,
-            energy_db: 10.0 * power.max(1e-12).log10(),
-            confidence,
+            energy_db: 10.0 * avg_power[bin].max(1e-12).log10(),
+            confidence: ((dev - 1.0) / 1.0).clamp(0.0, 1.0),
         }
     };
 
@@ -348,14 +306,14 @@ fn find_two_peaks_by_deviation(
         } else {
             default_freq_a
         };
-        CorrectionBandAnalysis {
+        BandAnalysis {
             center_freq: second_default,
             energy_db: -60.0,
             confidence: 0.0,
         }
     };
 
-    // Return sorted by frequency (lower first = band_a)
+    // Return sorted by frequency (lower first)
     if result1.center_freq < result2.center_freq {
         (result1, result2)
     } else {

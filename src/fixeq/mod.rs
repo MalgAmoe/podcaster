@@ -10,9 +10,8 @@ pub mod analysis;
 
 #[allow(unused_imports)]
 pub use analysis::{
-    analyze_audio, mix_to_mono, CorrectionAnalysis, CorrectionBandAnalysis,
-    FixEqAnalysis, MudAnalysis, DEFAULT_CORRECTION_A_FREQ,
-    DEFAULT_CORRECTION_B_FREQ,
+    analyze_audio, mix_to_mono, BandAnalysis, FixEqAnalysis,
+    DEFAULT_CORRECTION_A_FREQ, DEFAULT_CORRECTION_B_FREQ,
 };
 
 use crate::filters::dynamic::DynamicBand;
@@ -95,17 +94,17 @@ impl FixEq {
 
         // Correction A strength
         let corr_a_energy_factor =
-            ((analysis.correction.band_a.energy_db + 40.0) / 30.0).clamp(0.0, 1.0);
+            ((analysis.correction_a.energy_db + 40.0) / 30.0).clamp(0.0, 1.0);
         self.correction_a_strength = (preset_factor
-            * analysis.correction.band_a.confidence
+            * analysis.correction_a.confidence
             * corr_a_energy_factor)
             .clamp(0.0, 1.0);
 
         // Correction B strength
         let corr_b_energy_factor =
-            ((analysis.correction.band_b.energy_db + 40.0) / 30.0).clamp(0.0, 1.0);
+            ((analysis.correction_b.energy_db + 40.0) / 30.0).clamp(0.0, 1.0);
         self.correction_b_strength = (preset_factor
-            * analysis.correction.band_b.confidence
+            * analysis.correction_b.confidence
             * corr_b_energy_factor)
             .clamp(0.0, 1.0);
 
@@ -115,11 +114,11 @@ impl FixEq {
             self.sample_rate,
         ));
         self.correction_a_left = Some(DynamicBand::new_correction_at(
-            analysis.correction.band_a.center_freq,
+            analysis.correction_a.center_freq,
             self.sample_rate,
         ));
         self.correction_b_left = Some(DynamicBand::new_correction_at(
-            analysis.correction.band_b.center_freq,
+            analysis.correction_b.center_freq,
             self.sample_rate,
         ));
 
@@ -130,11 +129,11 @@ impl FixEq {
                 self.sample_rate,
             ));
             self.correction_a_right = Some(DynamicBand::new_correction_at(
-                analysis.correction.band_a.center_freq,
+                analysis.correction_a.center_freq,
                 self.sample_rate,
             ));
             self.correction_b_right = Some(DynamicBand::new_correction_at(
-                analysis.correction.band_b.center_freq,
+                analysis.correction_b.center_freq,
                 self.sample_rate,
             ));
         }
