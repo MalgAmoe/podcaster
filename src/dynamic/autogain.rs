@@ -6,10 +6,10 @@
 #![allow(dead_code)]
 
 /// Default target RMS level in dBFS
-pub const DEFAULT_TARGET_RMS_DB: f32 = -18.0;
+pub const DEFAULT_TARGET_RMS_DB: f32 = -24.0;
 
 /// Default target peak level in dBFS (ceiling to prevent clipping)
-pub const DEFAULT_TARGET_PEAK_DB: f32 = -1.0;
+pub const DEFAULT_TARGET_PEAK_DB: f32 = -6.0;
 
 /// Calculate RMS of mono audio samples
 pub fn calculate_rms(samples: &[f32]) -> f32 {
