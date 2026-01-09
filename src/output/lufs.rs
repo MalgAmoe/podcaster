@@ -6,6 +6,8 @@
 
 use std::f32::consts::PI;
 
+/// Default target LUFS for streaming platforms
+pub const DEFAULT_TARGET_LUFS: f32 = -18.0;
 /// Biquad filter coefficients
 #[derive(Clone, Copy)]
 struct BiquadCoeffs {
@@ -118,7 +120,8 @@ impl KWeightingFilter {
 
     fn process(&mut self, sample: f32) -> f32 {
         let shelf_out = self.shelf_state.process(sample, &self.shelf_coeffs);
-        self.highpass_state.process(shelf_out, &self.highpass_coeffs)
+        self.highpass_state
+            .process(shelf_out, &self.highpass_coeffs)
     }
 
     fn reset(&mut self) {
@@ -172,11 +175,8 @@ pub fn measure_integrated_lufs(samples: &[Vec<f32>], sample_rate: u32) -> f32 {
     let num_samples = weighted.first().map(|c| c.len()).unwrap_or(0);
     if num_samples < block_samples {
         // Audio too short, just measure the whole thing
-        let total_ms: f32 = weighted
-            .iter()
-            .map(|ch| mean_square(ch))
-            .sum::<f32>()
-            / weighted.len().max(1) as f32;
+        let total_ms: f32 =
+            weighted.iter().map(|ch| mean_square(ch)).sum::<f32>() / weighted.len().max(1) as f32;
         return ms_to_lufs(total_ms);
     }
 
@@ -237,9 +237,6 @@ pub fn measure_integrated_lufs(samples: &[Vec<f32>], sample_rate: u32) -> f32 {
 pub fn calculate_gain_for_target(current_lufs: f32, target_lufs: f32) -> f32 {
     target_lufs - current_lufs
 }
-
-/// Default target LUFS for streaming platforms
-pub const DEFAULT_TARGET_LUFS: f32 = -14.0;
 
 #[cfg(test)]
 mod tests {

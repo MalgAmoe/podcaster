@@ -68,24 +68,6 @@ impl DynamicBand {
             .with_max_cut(-6.0)
     }
 
-    /// Create a de-mud preset (300Hz default, reduces proximity effect)
-    pub fn new_demud(sample_rate: f32) -> Self {
-        Self::new_demud_at(300.0, sample_rate)
-    }
-
-    /// Create a de-esser preset with custom center frequency
-    pub fn new_deesser_at(center_freq: f32, sample_rate: f32) -> Self {
-        Self::new(center_freq, 2.0, 3.0, sample_rate, 5.0, 60.0) // Fast attack, sharp Q
-            .with_threshold(-25.0)
-            .with_ratio(3.0)
-            .with_max_cut(-8.0)
-    }
-
-    /// Create a de-esser preset (6.5kHz default, reduces sibilance)
-    pub fn new_deesser(sample_rate: f32) -> Self {
-        Self::new_deesser_at(6500.0, sample_rate)
-    }
-
     /// Create a mid-range correction preset with custom center frequency
     /// Used for taming resonances and harshness in 500-5000 Hz range
     pub fn new_correction_at(center_freq: f32, sample_rate: f32) -> Self {
@@ -93,16 +75,6 @@ impl DynamicBand {
             .with_threshold(-22.0)
             .with_ratio(2.5)
             .with_max_cut(-6.0)
-    }
-
-    /// Create a correction preset at 1kHz (default for band A)
-    pub fn new_correction_a(sample_rate: f32) -> Self {
-        Self::new_correction_at(1000.0, sample_rate)
-    }
-
-    /// Create a correction preset at 3kHz (default for band B)
-    pub fn new_correction_b(sample_rate: f32) -> Self {
-        Self::new_correction_at(3000.0, sample_rate)
     }
 
     pub fn with_threshold(mut self, threshold_db: f32) -> Self {

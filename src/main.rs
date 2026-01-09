@@ -218,17 +218,6 @@ fn main() -> Result<()> {
         fixeq.get_demud_strength() * 100.0
     );
     println!(
-        "  Sibilance analysis: {:.0}Hz (energy: {:.1}dB, confidence: {:.0}%)",
-        analysis.sibilance.center_freq,
-        analysis.sibilance.energy_db,
-        analysis.sibilance.confidence * 100.0
-    );
-    println!(
-        "  Applying de-esser @ {:.0}Hz (strength: {:.0}%)...",
-        analysis.sibilance.center_freq,
-        fixeq.get_deesser_strength() * 100.0
-    );
-    println!(
         "  Correction A: {:.0}Hz (energy: {:.1}dB, confidence: {:.0}%, strength: {:.0}%)",
         analysis.correction.band_a.center_freq,
         analysis.correction.band_a.energy_db,

@@ -88,18 +88,6 @@ struct DeMudParams {
 }
 
 #[derive(Params)]
-struct DeEsserParams {
-    #[id = "deesser_enable"]
-    enable: BoolParam,
-
-    #[id = "deesser_macro"]
-    macro_val: FloatParam,
-
-    #[id = "deesser_freq"]
-    frequency: FloatParam,
-}
-
-#[derive(Params)]
 struct CorrectionAParams {
     #[id = "corr_a_enable"]
     enable: BoolParam,
@@ -183,9 +171,6 @@ struct PoddyclipParams {
     demud: DeMudParams,
 
     #[nested(group = "Dynamic EQ")]
-    deesser: DeEsserParams,
-
-    #[nested(group = "Dynamic EQ")]
     correction_a: CorrectionAParams,
 
     #[nested(group = "Dynamic EQ")]
@@ -239,7 +224,6 @@ struct Poddyclip {
 
     // Gain reduction for UI meters
     demud_gain_db: Arc<Mutex<f32>>,
-    deesser_gain_db: Arc<Mutex<f32>>,
     correction_a_gain_db: Arc<Mutex<f32>>,
     correction_b_gain_db: Arc<Mutex<f32>>,
 
@@ -279,7 +263,6 @@ impl Default for Poddyclip {
             fixeq_left: FixEq::new(48000.0),
             fixeq_right: FixEq::new(48000.0),
             demud_gain_db: Arc::new(Mutex::new(0.0)),
-            deesser_gain_db: Arc::new(Mutex::new(0.0)),
             correction_a_gain_db: Arc::new(Mutex::new(0.0)),
             correction_b_gain_db: Arc::new(Mutex::new(0.0)),
             channel9: StereoChannel9::new(48000.0),
@@ -430,32 +413,6 @@ impl Default for PoddyclipParams {
                 )
                 .with_step_size(1.0)
                 .with_value_to_string(formatters::v2s_f32_hz_then_khz(0))
-                .with_unit(" Hz"),
-            },
-
-            deesser: DeEsserParams {
-                enable: BoolParam::new("Enable De-Esser", false),
-                macro_val: FloatParam::new(
-                    "De-Esser Strength",
-                    0.5,
-                    FloatRange::Linear {
-                        min: 0.0,
-                        max: 1.0,
-                    },
-                )
-                .with_step_size(0.01)
-                .with_value_to_string(formatters::v2s_f32_percentage(0)),
-                frequency: FloatParam::new(
-                    "De-Esser Freq",
-                    6500.0,
-                    FloatRange::Skewed {
-                        min: 4000.0,
-                        max: 12000.0,
-                        factor: FloatRange::skew_factor(-0.5),
-                    },
-                )
-                .with_step_size(10.0)
-                .with_value_to_string(formatters::v2s_f32_hz_then_khz(1))
                 .with_unit(" Hz"),
             },
 
@@ -671,7 +628,6 @@ impl Plugin for Poddyclip {
         let params = self.params.clone();
         let viz_data = self.visualization_data.clone();
         let demud_gain = self.demud_gain_db.clone();
-        let deesser_gain = self.deesser_gain_db.clone();
         let correction_a_gain = self.correction_a_gain_db.clone();
         let correction_b_gain = self.correction_b_gain_db.clone();
         let limiter_gain = self.limiter_gain_db.clone();
@@ -825,26 +781,6 @@ impl Plugin for Poddyclip {
                                 ui.label("Strength:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.demud.macro_val,
-                                    setter,
-                                ));
-
-                                ui.add_space(10.0);
-
-                                ui.horizontal(|ui| {
-                                    ui.label("De-Esser:");
-                                    ui.add(widgets::ParamSlider::for_param(
-                                        &params.deesser.enable,
-                                        setter,
-                                    ));
-                                });
-                                ui.label("Frequency:");
-                                ui.add(widgets::ParamSlider::for_param(
-                                    &params.deesser.frequency,
-                                    setter,
-                                ));
-                                ui.label("Strength:");
-                                ui.add(widgets::ParamSlider::for_param(
-                                    &params.deesser.macro_val,
                                     setter,
                                 ));
 
@@ -1022,48 +958,6 @@ impl Plugin for Poddyclip {
                                         egui::Color32::from_rgb(255, 180, 50) // Orange
                                     } else {
                                         egui::Color32::from_rgb(255, 220, 100) // Yellow
-                                    };
-                                    ui.painter().rect_filled(bar_rect, 4.0, color);
-                                }
-                            });
-
-                            ui.add_space(10.0);
-
-                            // De-Esser Gain Reduction Meter
-                            ui.heading("De-Esser Gain Reduction");
-                            ui.add_space(5.0);
-                            let deesser_db = deesser_gain.lock().map(|g| *g).unwrap_or(0.0);
-                            let deesser_reduction = -deesser_db;
-
-                            ui.horizontal(|ui| {
-                                ui.label(format!("{:.1} dB", deesser_db));
-                                let max_reduction = 8.0; // Max is -8dB for de-esser
-                                let ratio = (deesser_reduction / max_reduction).clamp(0.0, 1.0);
-                                let available = ui.available_width() - 10.0;
-                                let (rect, _) = ui.allocate_exact_size(
-                                    egui::vec2(available, 20.0),
-                                    egui::Sense::hover(),
-                                );
-
-                                // Background
-                                ui.painter().rect_filled(
-                                    rect,
-                                    4.0,
-                                    egui::Color32::from_gray(40),
-                                );
-
-                                // Meter bar (cyan/blue for de-esser)
-                                if ratio > 0.0 {
-                                    let bar_rect = egui::Rect::from_min_size(
-                                        rect.min,
-                                        egui::vec2(rect.width() * ratio, rect.height()),
-                                    );
-                                    let color = if ratio > 0.8 {
-                                        egui::Color32::from_rgb(50, 150, 255) // Bright blue
-                                    } else if ratio > 0.5 {
-                                        egui::Color32::from_rgb(80, 180, 255) // Light blue
-                                    } else {
-                                        egui::Color32::from_rgb(100, 200, 255) // Cyan
                                     };
                                     ui.painter().rect_filled(bar_rect, 4.0, color);
                                 }
@@ -1324,16 +1218,6 @@ impl Poddyclip {
             self.fixeq_left.set_demud_strength(0.0);
         }
 
-        // De-esser
-        let deesser_enabled = self.params.deesser.enable.value();
-        self.fixeq_left.set_deesser_enabled(deesser_enabled);
-        if deesser_enabled {
-            self.fixeq_left.set_deesser_frequency(self.params.deesser.frequency.value());
-            self.fixeq_left.set_deesser_strength(self.params.deesser.macro_val.value());
-        } else {
-            self.fixeq_left.set_deesser_strength(0.0);
-        }
-
         // Correction A
         let corr_a_enabled = self.params.correction_a.enable.value();
         self.fixeq_left.set_correction_a_enabled(corr_a_enabled);
@@ -1426,9 +1310,6 @@ impl Poddyclip {
                 if let Ok(mut gain) = self.demud_gain_db.try_lock() {
                     *gain = self.fixeq_left.get_demud_gain_db();
                 }
-                if let Ok(mut gain) = self.deesser_gain_db.try_lock() {
-                    *gain = self.fixeq_left.get_deesser_gain_db();
-                }
                 if let Ok(mut gain) = self.correction_a_gain_db.try_lock() {
                     *gain = self.fixeq_left.get_correction_a_gain_db();
                 }
@@ -1470,23 +1351,6 @@ impl Poddyclip {
         }
         self.fixeq_left.set_demud_strength(demud_strength);
         self.fixeq_right.set_demud_strength(demud_strength);
-
-        // De-esser
-        let deesser_enabled = self.params.deesser.enable.value();
-        let deesser_freq = self.params.deesser.frequency.value();
-        let deesser_strength = if deesser_enabled {
-            self.params.deesser.macro_val.value()
-        } else {
-            0.0
-        };
-        self.fixeq_left.set_deesser_enabled(deesser_enabled);
-        self.fixeq_right.set_deesser_enabled(deesser_enabled);
-        if deesser_enabled {
-            self.fixeq_left.set_deesser_frequency(deesser_freq);
-            self.fixeq_right.set_deesser_frequency(deesser_freq);
-        }
-        self.fixeq_left.set_deesser_strength(deesser_strength);
-        self.fixeq_right.set_deesser_strength(deesser_strength);
 
         // Correction A
         let corr_a_enabled = self.params.correction_a.enable.value();
@@ -1612,9 +1476,6 @@ impl Poddyclip {
             if viz_enabled {
                 if let Ok(mut gain) = self.demud_gain_db.try_lock() {
                     *gain = self.fixeq_left.get_demud_gain_db();
-                }
-                if let Ok(mut gain) = self.deesser_gain_db.try_lock() {
-                    *gain = self.fixeq_left.get_deesser_gain_db();
                 }
                 if let Ok(mut gain) = self.correction_a_gain_db.try_lock() {
                     *gain = self.fixeq_left.get_correction_a_gain_db();
