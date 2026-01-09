@@ -6,6 +6,7 @@ mod dynamic;
 mod filters;
 mod fixeq;
 mod output;
+mod peakcomp;
 
 use std::path::{Path, PathBuf};
 
@@ -27,6 +28,7 @@ use denoiser::denoiser::{
 use aireq::StereoAirEq;
 use deesser::StereoDeEsser;
 use distortion::{StereoChannel9, StereoTapeGlue, StereoTapeHysteresis};
+use peakcomp::StereoVcaPeakComp;
 use dynamic::{analyze_gain, apply_gain, linear_to_db, StereoButterComp2, StereoLimiter, DEFAULT_TARGET_RMS_DB, DEFAULT_TARGET_PEAK_DB};
 use filters::{HighPassSlope, StereoFilterChain};
 use fixeq::FixEq;
@@ -193,7 +195,7 @@ fn main() -> Result<()> {
     );
 
     // Audio is already filtered and gain-normalized from earlier stages
-    let denoised_samples = if is_stereo {
+    let mut denoised_samples = if is_stereo {
         let left = &samples[0];
         let right = &samples[1];
 
@@ -210,7 +212,30 @@ fn main() -> Result<()> {
         vec![output]
     };
 
-    // Apply FixEq (post-denoiser dynamic EQ)
+    // Apply VCA Peak Compressor (right after denoiser)
+    let mut peakcomp = StereoVcaPeakComp::new(input_sr as f32);
+    let peak_profile = peakcomp.configure(&denoised_samples).clone();
+
+    println!(
+        "  Peak profile: RMS {:.1}dB, Peak(95%) {:.1}dB, Crest {:.1}dB",
+        peak_profile.rms_db,
+        peak_profile.peak_95_db,
+        peak_profile.crest_factor_db
+    );
+    println!(
+        "  Peak comp: threshold {:.1}dB (histogram), suggested reduction {:.1}dB",
+        peak_profile.histogram_threshold_db,
+        peak_profile.suggested_reduction_db
+    );
+
+    if is_stereo {
+        let (left, right) = denoised_samples.split_at_mut(1);
+        peakcomp.process_stereo(&mut left[0], &mut right[0]);
+    } else {
+        peakcomp.process_mono(&mut denoised_samples[0]);
+    }
+
+    // Apply FixEq (post-peak comp dynamic EQ)
     let mut fixeq = FixEq::new(input_sr as f32);
     let analysis = fixeq.configure(&denoised_samples, preset).clone();
 

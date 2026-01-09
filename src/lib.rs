@@ -7,6 +7,7 @@ mod denoiser;
 mod dynamic;
 mod filters;
 mod fixeq;
+mod peakcomp;
 mod visualizations;
 
 use nih_plug::prelude::*;
@@ -23,6 +24,7 @@ use denoiser::{
 use aireq::StereoAirEq;
 use deesser::DeEsser;
 use distortion::{StereoChannel9, StereoTapeGlue};
+use peakcomp::VcaPeakComp;
 use dynamic::{StereoButterComp2, StereoRealtimeLimiter};
 use filters::{FilterChain, HighPassSlope};
 use fixeq::FixEq;
@@ -129,6 +131,24 @@ struct DeEsserParams {
 }
 
 #[derive(Params)]
+struct PeakCompParams {
+    #[id = "peakcomp_enable"]
+    enable: BoolParam,
+
+    #[id = "peakcomp_threshold"]
+    threshold: FloatParam,
+
+    #[id = "peakcomp_ratio"]
+    ratio: FloatParam,
+
+    #[id = "peakcomp_attack"]
+    attack: FloatParam,
+
+    #[id = "peakcomp_release"]
+    release: FloatParam,
+}
+
+#[derive(Params)]
 struct Channel9Params {
     #[id = "channel9_enable"]
     enable: BoolParam,
@@ -205,6 +225,9 @@ struct PoddyclipParams {
     #[nested(group = "De-Esser")]
     deesser: DeEsserParams,
 
+    #[nested(group = "Peak Comp")]
+    peakcomp: PeakCompParams,
+
     #[nested(group = "Transformer")]
     channel9: Channel9Params,
 
@@ -264,6 +287,11 @@ struct Poddyclip {
     deesser_right: DeEsser,
     deesser_gain_db: Arc<Mutex<f32>>,
 
+    // VCA Peak Compressor (post-DeEsser clinical peak control)
+    peakcomp_left: VcaPeakComp,
+    peakcomp_right: VcaPeakComp,
+    peakcomp_gain_db: Arc<Mutex<f32>>,
+
     // Channel9 (Neve transformer emulation)
     channel9: StereoChannel9,
 
@@ -308,6 +336,9 @@ impl Default for Poddyclip {
             deesser_left: DeEsser::new_default(48000.0),
             deesser_right: DeEsser::new_default(48000.0),
             deesser_gain_db: Arc::new(Mutex::new(0.0)),
+            peakcomp_left: VcaPeakComp::new_default(48000.0),
+            peakcomp_right: VcaPeakComp::new_default(48000.0),
+            peakcomp_gain_db: Arc::new(Mutex::new(0.0)),
             channel9: StereoChannel9::new(48000.0),
             air_eq: StereoAirEq::new(48000.0),
             buttercomp: StereoButterComp2::new(48000.0),
@@ -548,6 +579,56 @@ impl Default for PoddyclipParams {
                 .with_value_to_string(formatters::v2s_f32_percentage(0)),
             },
 
+            peakcomp: PeakCompParams {
+                enable: BoolParam::new("Enable Peak Comp", false),
+                threshold: FloatParam::new(
+                    "Threshold",
+                    -12.0,
+                    FloatRange::Linear {
+                        min: -40.0,
+                        max: 0.0,
+                    },
+                )
+                .with_step_size(0.5)
+                .with_value_to_string(formatters::v2s_f32_rounded(1))
+                .with_unit(" dB"),
+                ratio: FloatParam::new(
+                    "Ratio",
+                    12.0,
+                    FloatRange::Skewed {
+                        min: 1.0,
+                        max: 20.0,
+                        factor: FloatRange::skew_factor(-1.0),
+                    },
+                )
+                .with_step_size(0.1)
+                .with_value_to_string(Arc::new(|v| format!("{:.1}:1", v))),
+                attack: FloatParam::new(
+                    "Attack",
+                    0.5,
+                    FloatRange::Skewed {
+                        min: 0.1,
+                        max: 10.0,
+                        factor: FloatRange::skew_factor(-1.0),
+                    },
+                )
+                .with_step_size(0.1)
+                .with_value_to_string(formatters::v2s_f32_rounded(1))
+                .with_unit(" ms"),
+                release: FloatParam::new(
+                    "Release",
+                    100.0,
+                    FloatRange::Skewed {
+                        min: 10.0,
+                        max: 500.0,
+                        factor: FloatRange::skew_factor(-1.0),
+                    },
+                )
+                .with_step_size(1.0)
+                .with_value_to_string(formatters::v2s_f32_rounded(0))
+                .with_unit(" ms"),
+            },
+
             channel9: Channel9Params {
                 enable: BoolParam::new("Enable Neve Transformer", false),
                 drive: FloatParam::new(
@@ -725,6 +806,7 @@ impl Plugin for Poddyclip {
         let correction_a_gain = self.correction_a_gain_db.clone();
         let correction_b_gain = self.correction_b_gain_db.clone();
         let deesser_gain = self.deesser_gain_db.clone();
+        let peakcomp_gain = self.peakcomp_gain_db.clone();
         let limiter_gain = self.limiter_gain_db.clone();
 
         create_egui_editor(
@@ -946,6 +1028,41 @@ impl Plugin for Poddyclip {
                                 ui.label("Strength:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.deesser.strength,
+                                    setter,
+                                ));
+
+                                ui.add_space(15.0);
+                                ui.separator();
+
+                                // Peak Compressor
+                                ui.heading("Peak Comp (VCA)");
+                                ui.add_space(5.0);
+
+                                ui.horizontal(|ui| {
+                                    ui.label("Enable:");
+                                    ui.add(widgets::ParamSlider::for_param(
+                                        &params.peakcomp.enable,
+                                        setter,
+                                    ));
+                                });
+                                ui.label("Threshold:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.peakcomp.threshold,
+                                    setter,
+                                ));
+                                ui.label("Ratio:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.peakcomp.ratio,
+                                    setter,
+                                ));
+                                ui.label("Attack:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.peakcomp.attack,
+                                    setter,
+                                ));
+                                ui.label("Release:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.peakcomp.release,
                                     setter,
                                 ));
 
@@ -1233,6 +1350,47 @@ impl Plugin for Poddyclip {
 
                             ui.add_space(10.0);
 
+                            // Peak Comp Gain Reduction Meter
+                            ui.heading("Peak Comp Gain Reduction");
+                            ui.add_space(5.0);
+                            let peakcomp_db = peakcomp_gain.lock().map(|g| *g).unwrap_or(0.0);
+                            let peakcomp_reduction = -peakcomp_db;
+
+                            ui.horizontal(|ui| {
+                                ui.label(format!("{:.1} dB", peakcomp_db));
+                                let max_reduction = 12.0; // Max is -12dB
+                                let ratio = (peakcomp_reduction / max_reduction).clamp(0.0, 1.0);
+                                let available = ui.available_width() - 10.0;
+                                let (rect, _) = ui.allocate_exact_size(
+                                    egui::vec2(available, 20.0),
+                                    egui::Sense::hover(),
+                                );
+
+                                ui.painter().rect_filled(
+                                    rect,
+                                    4.0,
+                                    egui::Color32::from_gray(40),
+                                );
+
+                                // Meter bar (magenta for peak comp)
+                                if ratio > 0.0 {
+                                    let bar_rect = egui::Rect::from_min_size(
+                                        rect.min,
+                                        egui::vec2(rect.width() * ratio, rect.height()),
+                                    );
+                                    let color = if ratio > 0.8 {
+                                        egui::Color32::from_rgb(255, 50, 150) // Bright magenta
+                                    } else if ratio > 0.5 {
+                                        egui::Color32::from_rgb(255, 100, 180) // Light magenta
+                                    } else {
+                                        egui::Color32::from_rgb(255, 150, 200) // Pale magenta
+                                    };
+                                    ui.painter().rect_filled(bar_rect, 4.0, color);
+                                }
+                            });
+
+                            ui.add_space(10.0);
+
                             // Limiter Gain Reduction Meter
                             ui.heading("Limiter Gain Reduction");
                             ui.add_space(5.0);
@@ -1460,7 +1618,16 @@ impl Poddyclip {
                 input_sample // Pass through if no output ready yet
             };
 
-            // Apply FixEq AFTER denoiser
+            // Apply Peak Compressor right after denoiser
+            if self.params.peakcomp.enable.value() {
+                self.peakcomp_left.set_threshold(self.params.peakcomp.threshold.value());
+                self.peakcomp_left.set_ratio(self.params.peakcomp.ratio.value());
+                self.peakcomp_left.set_attack(self.params.peakcomp.attack.value());
+                self.peakcomp_left.set_release(self.params.peakcomp.release.value());
+                output_sample = self.peakcomp_left.process(output_sample);
+            }
+
+            // Apply FixEq AFTER peak comp
             output_sample = self.fixeq_left.process(output_sample);
 
             // Apply De-Esser AFTER FixEq
@@ -1518,6 +1685,9 @@ impl Poddyclip {
                 }
                 if let Ok(mut gain) = self.deesser_gain_db.try_lock() {
                     *gain = self.deesser_left.get_gain_reduction_db();
+                }
+                if let Ok(mut gain) = self.peakcomp_gain_db.try_lock() {
+                    *gain = self.peakcomp_left.get_gain_reduction_db();
                 }
                 if let Ok(mut gain) = self.limiter_gain_db.try_lock() {
                     *gain = limiter_gr_db;
@@ -1641,7 +1811,25 @@ impl Poddyclip {
                 right_in
             };
 
-            // Apply FixEq AFTER denoiser
+            // Apply Peak Compressor right after denoiser (linked stereo)
+            if self.params.peakcomp.enable.value() {
+                let threshold = self.params.peakcomp.threshold.value();
+                let ratio = self.params.peakcomp.ratio.value();
+                let attack = self.params.peakcomp.attack.value();
+                let release = self.params.peakcomp.release.value();
+                self.peakcomp_left.set_threshold(threshold);
+                self.peakcomp_left.set_ratio(ratio);
+                self.peakcomp_left.set_attack(attack);
+                self.peakcomp_left.set_release(release);
+                self.peakcomp_right.set_threshold(threshold);
+                self.peakcomp_right.set_ratio(ratio);
+                self.peakcomp_right.set_attack(attack);
+                self.peakcomp_right.set_release(release);
+                left_out = self.peakcomp_left.process(left_out);
+                right_out = self.peakcomp_right.process(right_out);
+            }
+
+            // Apply FixEq AFTER peak comp
             left_out = self.fixeq_left.process(left_out);
             right_out = self.fixeq_right.process(right_out);
 
@@ -1710,6 +1898,9 @@ impl Poddyclip {
                 }
                 if let Ok(mut gain) = self.deesser_gain_db.try_lock() {
                     *gain = self.deesser_left.get_gain_reduction_db();
+                }
+                if let Ok(mut gain) = self.peakcomp_gain_db.try_lock() {
+                    *gain = self.peakcomp_left.get_gain_reduction_db();
                 }
                 if let Ok(mut gain) = self.limiter_gain_db.try_lock() {
                     *gain = limiter_gr_db;
