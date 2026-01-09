@@ -25,7 +25,7 @@ use denoiser::denoiser::{
 
 use aireq::StereoAirEq;
 use channel9::StereoChannel9;
-use dynamic::{analyze_gain, apply_gain, rms_to_db, StereoButterComp2, StereoLimiter, DEFAULT_TARGET_RMS_DB};
+use dynamic::{analyze_gain, apply_gain, rms_to_db, StereoButterComp2, StereoLimiter, DEFAULT_TARGET_RMS_DB, DEFAULT_TARGET_PEAK_DB};
 use filters::{HighPassSlope, StereoFilterChain};
 use fixeq::FixEq;
 use output::{measure_integrated_lufs, DEFAULT_TARGET_LUFS};
@@ -114,20 +114,26 @@ fn main() -> Result<()> {
     // =========================================================================
 
     println!("\n[Input Gain]");
-    let input_rms = if is_stereo {
-        dynamic::calculate_rms_stereo(&samples[0], &samples[1])
+    let (input_rms, input_peak) = if is_stereo {
+        dynamic::autogain::calculate_rms_and_peak_stereo(&samples[0], &samples[1])
     } else {
-        dynamic::calculate_rms(&samples[0])
+        dynamic::autogain::calculate_rms_and_peak(&samples[0])
     };
     let input_rms_db = rms_to_db(input_rms);
-    let gain_db = analyze_gain(&samples, DEFAULT_TARGET_RMS_DB);
+    let input_peak_db = rms_to_db(input_peak);
+    let gain_db = analyze_gain(&samples, DEFAULT_TARGET_RMS_DB, DEFAULT_TARGET_PEAK_DB);
 
-    println!("  Input RMS: {:.1} dBFS (post-filter)", input_rms_db);
-    println!(
-        "  Target RMS: {:.1} dBFS",
-        DEFAULT_TARGET_RMS_DB
-    );
-    println!("  Applying: {:+.1} dB gain", gain_db);
+    // Check if gain was limited by peak
+    let gain_for_rms = DEFAULT_TARGET_RMS_DB - input_rms_db;
+    let peak_limited = gain_db < gain_for_rms && gain_for_rms > 0.0;
+
+    println!("  Input RMS: {:.1} dBFS, Peak: {:.1} dBFS", input_rms_db, input_peak_db);
+    println!("  Target RMS: {:.1} dBFS, Peak ceiling: {:.1} dBFS", DEFAULT_TARGET_RMS_DB, DEFAULT_TARGET_PEAK_DB);
+    if peak_limited {
+        println!("  Applying: {:+.1} dB gain (limited by peak, would need {:+.1} dB for target RMS)", gain_db, gain_for_rms);
+    } else {
+        println!("  Applying: {:+.1} dB gain", gain_db);
+    }
 
     apply_gain(&mut samples, gain_db);
 
@@ -271,7 +277,7 @@ fn main() -> Result<()> {
     }
 
     // Apply ButterComp2 (smooth leveling)
-    let compress = 0.3; // Subtle compression
+    let compress = 0.8; // Subtle compression
     println!(
         "  Applying ButterComp2 (compress: {:.0}%)...",
         compress * 100.0

@@ -8,6 +8,9 @@
 /// Default target RMS level in dBFS
 pub const DEFAULT_TARGET_RMS_DB: f32 = -18.0;
 
+/// Default target peak level in dBFS (ceiling to prevent clipping)
+pub const DEFAULT_TARGET_PEAK_DB: f32 = -1.0;
+
 /// Calculate RMS of mono audio samples
 pub fn calculate_rms(samples: &[f32]) -> f32 {
     if samples.is_empty() {
@@ -33,6 +36,47 @@ pub fn calculate_rms_stereo(left: &[f32], right: &[f32]) -> f32 {
     (sum_sq / left.len() as f32).sqrt()
 }
 
+/// Calculate peak (max absolute value) of mono audio samples
+pub fn calculate_peak(samples: &[f32]) -> f32 {
+    samples.iter().map(|s| s.abs()).fold(0.0_f32, f32::max)
+}
+
+/// Calculate peak of stereo audio (max across both channels)
+pub fn calculate_peak_stereo(left: &[f32], right: &[f32]) -> f32 {
+    let peak_left = calculate_peak(left);
+    let peak_right = calculate_peak(right);
+    peak_left.max(peak_right)
+}
+
+/// Calculate both RMS and peak in a single pass (mono)
+pub fn calculate_rms_and_peak(samples: &[f32]) -> (f32, f32) {
+    if samples.is_empty() {
+        return (0.0, 0.0);
+    }
+    let mut sum_sq = 0.0_f32;
+    let mut peak = 0.0_f32;
+    for &s in samples {
+        sum_sq += s * s;
+        peak = peak.max(s.abs());
+    }
+    ((sum_sq / samples.len() as f32).sqrt(), peak)
+}
+
+/// Calculate both RMS and peak in a single pass (stereo)
+pub fn calculate_rms_and_peak_stereo(left: &[f32], right: &[f32]) -> (f32, f32) {
+    if left.is_empty() || right.is_empty() {
+        return (0.0, 0.0);
+    }
+    let mut sum_sq = 0.0_f32;
+    let mut peak = 0.0_f32;
+    for (&l, &r) in left.iter().zip(right.iter()) {
+        let mono = (l + r) * 0.5;
+        sum_sq += mono * mono;
+        peak = peak.max(l.abs()).max(r.abs());
+    }
+    ((sum_sq / left.len() as f32).sqrt(), peak)
+}
+
 /// Convert linear RMS to dBFS
 pub fn rms_to_db(rms: f32) -> f32 {
     20.0 * rms.max(1e-10).log10()
@@ -43,22 +87,34 @@ pub fn db_to_linear(db: f32) -> f32 {
     10.0_f32.powf(db / 20.0)
 }
 
-/// Analyze audio and calculate required gain to reach target RMS
+/// Analyze audio and calculate required gain to reach target RMS,
+/// while ensuring peak doesn't exceed target_peak_db.
 ///
 /// Returns gain in dB (positive = boost, negative = cut)
-pub fn analyze_gain(samples: &[Vec<f32>], target_rms_db: f32) -> f32 {
-    let rms = if samples.len() >= 2 {
-        // Stereo: sum to mono first
-        calculate_rms_stereo(&samples[0], &samples[1])
+pub fn analyze_gain(samples: &[Vec<f32>], target_rms_db: f32, target_peak_db: f32) -> f32 {
+    let (rms, peak) = if samples.len() >= 2 {
+        // Stereo: RMS from mono sum, peak from either channel
+        calculate_rms_and_peak_stereo(&samples[0], &samples[1])
     } else if !samples.is_empty() {
         // Mono
-        calculate_rms(&samples[0])
+        calculate_rms_and_peak(&samples[0])
     } else {
         return 0.0;
     };
 
     let rms_db = rms_to_db(rms);
-    target_rms_db - rms_db
+    let peak_db = rms_to_db(peak); // rms_to_db works for any linear->dB conversion
+
+    let gain_for_rms = target_rms_db - rms_db;
+    let gain_for_peak = target_peak_db - peak_db;
+
+    if gain_for_rms > 0.0 {
+        // Boosting: limit gain so peak doesn't exceed ceiling
+        gain_for_rms.min(gain_for_peak)
+    } else {
+        // Cutting: no clipping concern, just use RMS-based gain
+        gain_for_rms
+    }
 }
 
 /// Apply gain to all channels in-place
@@ -107,10 +163,30 @@ mod tests {
 
     #[test]
     fn test_analyze_gain() {
-        // Audio at -30 dBFS should need +12dB to reach -18 dBFS
+        // Audio at -30 dBFS RMS should need +12dB to reach -18 dBFS
+        // With constant signal, RMS = peak, so peak would be -30 dBFS
+        // Boosting by +12dB gives peak at -18 dBFS, well below -1 dBFS ceiling
         let rms_linear = db_to_linear(-30.0);
-        let samples = vec![vec![rms_linear; 1000]]; // Constant value = RMS
-        let gain = analyze_gain(&samples, -18.0);
+        let samples = vec![vec![rms_linear; 1000]]; // Constant value = RMS = peak
+        let gain = analyze_gain(&samples, -18.0, -1.0);
         assert!((gain - 12.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_analyze_gain_peak_limited() {
+        // Audio at -30 dBFS RMS but with a peak at -6 dBFS
+        // Target RMS is -18 dBFS (+12dB boost)
+        // But that would put peak at +6 dBFS (clipping!)
+        // Peak ceiling is -1 dBFS, so max boost is +5dB
+        let rms_linear = db_to_linear(-30.0);
+        let peak_linear = db_to_linear(-6.0);
+
+        // Create samples with low RMS but high peak
+        let mut samples = vec![rms_linear; 1000];
+        samples[500] = peak_linear; // Single peak
+
+        let gain = analyze_gain(&vec![samples], -18.0, -1.0);
+        // Gain should be limited to +5dB (from -6 to -1 peak)
+        assert!((gain - 5.0).abs() < 0.2);
     }
 }
