@@ -1,7 +1,7 @@
 #![cfg(feature = "plugin")]
 
 mod aireq;
-mod channel9;
+mod distortion;
 mod denoiser;
 mod dynamic;
 mod filters;
@@ -20,7 +20,7 @@ use denoiser::{
 };
 
 use aireq::StereoAirEq;
-use channel9::StereoChannel9;
+use distortion::{StereoChannel9, StereoTapeGlue};
 use dynamic::{StereoButterComp2, StereoRealtimeLimiter};
 use filters::{FilterChain, HighPassSlope};
 use fixeq::FixEq;
@@ -139,6 +139,15 @@ struct ButterCompParams {
 }
 
 #[derive(Params)]
+struct TapeGlueParams {
+    #[id = "tapeglue_enable"]
+    enable: BoolParam,
+
+    #[id = "tapeglue_warmth"]
+    warmth: FloatParam,
+}
+
+#[derive(Params)]
 struct LimiterParams {
     #[id = "limiter_enable"]
     enable: BoolParam,
@@ -184,6 +193,9 @@ struct PoddyclipParams {
 
     #[nested(group = "Compressor")]
     buttercomp: ButterCompParams,
+
+    #[nested(group = "Tape")]
+    tape_glue: TapeGlueParams,
 
     #[nested(group = "Limiter")]
     limiter: LimiterParams,
@@ -236,6 +248,9 @@ struct Poddyclip {
     // ButterComp2 (smooth leveling)
     buttercomp: StereoButterComp2,
 
+    // TapeGlue (subtle tape saturation)
+    tape_glue: StereoTapeGlue,
+
     // Limiter (true peak limiting)
     limiter: StereoRealtimeLimiter,
 
@@ -268,6 +283,7 @@ impl Default for Poddyclip {
             channel9: StereoChannel9::new(48000.0),
             air_eq: StereoAirEq::new(48000.0),
             buttercomp: StereoButterComp2::new(48000.0),
+            tape_glue: StereoTapeGlue::new(48000.0),
             limiter: StereoRealtimeLimiter::new(-1.0, 5.0, 100.0, 48000.0),
             limiter_gain_db: Arc::new(Mutex::new(0.0)),
         }
@@ -507,6 +523,20 @@ impl Default for PoddyclipParams {
                 enable: BoolParam::new("Enable ButterComp", true), // On by default
                 compress: FloatParam::new(
                     "Compress",
+                    0.3, // 30% default (subtle)
+                    FloatRange::Linear {
+                        min: 0.0,
+                        max: 1.0,
+                    },
+                )
+                .with_step_size(0.01)
+                .with_value_to_string(formatters::v2s_f32_percentage(0)),
+            },
+
+            tape_glue: TapeGlueParams {
+                enable: BoolParam::new("Enable TapeGlue", true), // On by default
+                warmth: FloatParam::new(
+                    "Warmth",
                     0.3, // 30% default (subtle)
                     FloatRange::Linear {
                         min: 0.0,
@@ -881,6 +911,26 @@ impl Plugin for Poddyclip {
                                 ui.label("Compress:");
                                 ui.add(widgets::ParamSlider::for_param(
                                     &params.buttercomp.compress,
+                                    setter,
+                                ));
+
+                                ui.add_space(15.0);
+                                ui.separator();
+
+                                // TapeGlue (subtle tape saturation)
+                                ui.heading("TapeGlue");
+                                ui.add_space(5.0);
+
+                                ui.horizontal(|ui| {
+                                    ui.label("Enable:");
+                                    ui.add(widgets::ParamSlider::for_param(
+                                        &params.tape_glue.enable,
+                                        setter,
+                                    ));
+                                });
+                                ui.label("Warmth:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.tape_glue.warmth,
                                     setter,
                                 ));
 
@@ -1295,7 +1345,13 @@ impl Poddyclip {
                 output_sample = self.buttercomp.left.process(output_sample);
             }
 
-            // Apply Limiter AFTER ButterComp (final stage)
+            // Apply TapeGlue AFTER ButterComp
+            if self.params.tape_glue.enable.value() {
+                self.tape_glue.set_warmth(self.params.tape_glue.warmth.value() as f64);
+                output_sample = self.tape_glue.left.process(output_sample);
+            }
+
+            // Apply Limiter AFTER TapeGlue (final stage)
             let mut limiter_gr_db = 0.0;
             if self.params.limiter.enable.value() {
                 // Note: For mono, we use the stereo limiter with same sample on both channels
@@ -1463,7 +1519,14 @@ impl Poddyclip {
                 right_out = self.buttercomp.right.process(right_out);
             }
 
-            // Apply Limiter AFTER ButterComp (final stage)
+            // Apply TapeGlue AFTER ButterComp
+            if self.params.tape_glue.enable.value() {
+                self.tape_glue.set_warmth(self.params.tape_glue.warmth.value() as f64);
+                left_out = self.tape_glue.left.process(left_out);
+                right_out = self.tape_glue.right.process(right_out);
+            }
+
+            // Apply Limiter AFTER TapeGlue (final stage)
             let mut limiter_gr_db = 0.0;
             if self.params.limiter.enable.value() {
                 let (l, r, gr) = self.limiter.process(left_out, right_out);

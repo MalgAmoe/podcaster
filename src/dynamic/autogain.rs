@@ -78,7 +78,7 @@ pub fn calculate_rms_and_peak_stereo(left: &[f32], right: &[f32]) -> (f32, f32) 
 }
 
 /// Convert linear RMS to dBFS
-pub fn rms_to_db(rms: f32) -> f32 {
+pub fn linear_to_db(rms: f32) -> f32 {
     20.0 * rms.max(1e-10).log10()
 }
 
@@ -102,8 +102,8 @@ pub fn analyze_gain(samples: &[Vec<f32>], target_rms_db: f32, target_peak_db: f3
         return 0.0;
     };
 
-    let rms_db = rms_to_db(rms);
-    let peak_db = rms_to_db(peak); // rms_to_db works for any linear->dB conversion
+    let rms_db = linear_to_db(rms);
+    let peak_db = linear_to_db(peak); // linear_to_db works for any linear->dB conversion
 
     let gain_for_rms = target_rms_db - rms_db;
     let gain_for_peak = target_peak_db - peak_db;
@@ -153,7 +153,7 @@ mod tests {
     #[test]
     fn test_db_conversion() {
         // -20 dBFS = 0.1 linear
-        let db = rms_to_db(0.1);
+        let db = linear_to_db(0.1);
         assert!((db - (-20.0)).abs() < 0.01);
 
         // Round trip

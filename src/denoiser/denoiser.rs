@@ -162,13 +162,14 @@ impl SpectralSubtractionDenoiser {
 
     fn get_adaptive_lambda(&self) -> f32 {
         // Fast convergence in first few frames
-        if self.frame_count < 5 {
-            0.5 // Very fast initial convergence
-        } else if self.frame_count < WARMUP_FRAMES {
-            0.75 // Medium convergence
-        } else {
-            DEFAULT_LAMBDA // Normal 0.95 - maintains adaptation
-        }
+        // if self.frame_count < 1 {
+        //     0.5 // Very fast initial convergence
+        // } else if self.frame_count < WARMUP_FRAMES {
+        //     0.75 // Medium convergence
+        // } else {
+        //     DEFAULT_LAMBDA // Normal 0.95 - maintains adaptation
+        // }
+        DEFAULT_LAMBDA
     }
 
     fn compute_gain(&self, power: &[f32], alpha: &[f32]) -> Vec<f32> {

@@ -256,7 +256,7 @@ impl RealtimeDenoiser {
 
     fn get_adaptive_lambda(&self) -> f32 {
         // Fast convergence in first few frames
-        if self.frames_processed < 5 {
+        if self.frames_processed < 1 {
             0.5 // Very fast initial convergence
         } else if self.frames_processed < WARMUP_FRAMES {
             0.75 // Medium convergence

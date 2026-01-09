@@ -1,5 +1,5 @@
 mod aireq;
-mod channel9;
+mod distortion;
 mod denoiser;
 mod dynamic;
 mod filters;
@@ -24,8 +24,8 @@ use denoiser::denoiser::{
 };
 
 use aireq::StereoAirEq;
-use channel9::StereoChannel9;
-use dynamic::{analyze_gain, apply_gain, rms_to_db, StereoButterComp2, StereoLimiter, DEFAULT_TARGET_RMS_DB, DEFAULT_TARGET_PEAK_DB};
+use distortion::{StereoChannel9, StereoTapeGlue, StereoTapeHysteresis};
+use dynamic::{analyze_gain, apply_gain, linear_to_db, StereoButterComp2, StereoLimiter, DEFAULT_TARGET_RMS_DB, DEFAULT_TARGET_PEAK_DB};
 use filters::{HighPassSlope, StereoFilterChain};
 use fixeq::FixEq;
 use output::{measure_integrated_lufs, DEFAULT_TARGET_LUFS};
@@ -119,8 +119,8 @@ fn main() -> Result<()> {
     } else {
         dynamic::autogain::calculate_rms_and_peak(&samples[0])
     };
-    let input_rms_db = rms_to_db(input_rms);
-    let input_peak_db = rms_to_db(input_peak);
+    let input_rms_db = linear_to_db(input_rms);
+    let input_peak_db = linear_to_db(input_peak);
     let gain_db = analyze_gain(&samples, DEFAULT_TARGET_RMS_DB, DEFAULT_TARGET_PEAK_DB);
 
     // Check if gain was limited by peak
@@ -266,18 +266,8 @@ fn main() -> Result<()> {
         channel9.process_mono(&mut output_samples[0]);
     }
 
-    // Apply Air EQ (high shelf + LP rolloff)
-    println!("  Applying Air EQ (shelf: 10kHz +2dB, LP: 16kHz)...");
-    let mut aireq = StereoAirEq::new(input_sr as f32);
-    if is_stereo {
-        let (left, right) = output_samples.split_at_mut(1);
-        aireq.process_stereo(&mut left[0], &mut right[0]);
-    } else {
-        aireq.process_mono(&mut output_samples[0]);
-    }
-
     // Apply ButterComp2 (smooth leveling)
-    let compress = 0.8; // Subtle compression
+    let compress = 0.8;
     println!(
         "  Applying ButterComp2 (compress: {:.0}%)...",
         compress * 100.0
@@ -289,6 +279,46 @@ fn main() -> Result<()> {
         compressor.process_stereo(&mut left[0], &mut right[0]);
     } else {
         compressor.process_mono(&mut output_samples[0]);
+    }
+
+    // Apply TapeGlue (subtle tape saturation)
+    // let warmth = 0.22; // Subtle
+    // println!(
+    //     "  Applying TapeGlue (warmth: {:.0}%)...",
+    //     warmth * 100.0
+    // );
+    // let mut tape_glue = StereoTapeGlue::new(input_sr as f64);
+    // tape_glue.set_warmth(warmth);
+    // if is_stereo {
+    //     let (left, right) = output_samples.split_at_mut(1);
+    //     tape_glue.process_stereo(&mut left[0], &mut right[0]);
+    // } else {
+    //     tape_glue.left.process_mono(&mut output_samples[0]);
+    // }
+
+    // Apply TapeHysteresis (full Jiles-Atherton physics model)
+    // let drive = 0.3; // Subtle - full model is more intense
+    // println!(
+    //     "  Applying TapeHysteresis (drive: {:.0}%)...",
+    //     drive * 100.0
+    // );
+    // let mut tape_hyst = StereoTapeHysteresis::new(input_sr as f64);
+    // tape_hyst.set_drive(drive);
+    // if is_stereo {
+    //     let (left, right) = output_samples.split_at_mut(1);
+    //     tape_hyst.process_stereo(&mut left[0], &mut right[0]);
+    // } else {
+    //     tape_hyst.left.process_mono(&mut output_samples[0]);
+    // }
+
+    // Apply Air EQ (high shelf + LP rolloff)
+    println!("  Applying Air EQ (shelf: 10kHz +2dB, LP: 16kHz)...");
+    let mut aireq = StereoAirEq::new(input_sr as f32);
+    if is_stereo {
+        let (left, right) = output_samples.split_at_mut(1);
+        aireq.process_stereo(&mut left[0], &mut right[0]);
+    } else {
+        aireq.process_mono(&mut output_samples[0]);
     }
 
     // =========================================================================

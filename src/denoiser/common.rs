@@ -10,14 +10,14 @@ use std::f32::consts::PI;
 pub const WINDOW_SIZE: usize = 2048;
 pub const HOP_SIZE: usize = 1024;
 pub const EPSILON: f32 = 1e-10;
-pub const WARMUP_FRAMES: usize = 20;
+pub const WARMUP_FRAMES: usize = 10;
 pub const TRANSITION_BINS: usize = 10;
 
 // Noise estimation defaults
-pub const DEFAULT_LAMBDA: f32 = 0.95;
-pub const DEFAULT_SPIKE_THRESHOLD: f32 = 10.0;
-pub const DEFAULT_SFM_SPEECH: f32 = 0.1;
-pub const DEFAULT_SFM_NOISE: f32 = 0.4;
+pub const DEFAULT_LAMBDA: f32 = 0.36; //0.95;
+pub const DEFAULT_SPIKE_THRESHOLD: f32 = 17.5; //10.0;
+pub const DEFAULT_SFM_SPEECH: f32 = 0.29; // 0.1;
+pub const DEFAULT_SFM_NOISE: f32 = 0.45; //0.4;
 
 // =============================================================================
 // Band Configuration (24 Bark critical bands)
@@ -60,24 +60,18 @@ pub const BANDS: [(f32, f32); NUM_BANDS] = [
 // Default delta values for "Moderate" preset (per-band SNR sensitivity)
 pub const DEFAULT_DELTA: [f32; NUM_BANDS] = [
     // Low (7 bands)
-    0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0,
-    // Mid (7 bands)
-    2.2, 2.5, 2.8, 2.8, 2.8, 2.8, 2.5,
-    // High-mid (5 bands)
-    2.3, 2.0, 1.8, 1.8, 1.8,
-    // High (5 bands)
+    0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, // Mid (7 bands)
+    2.2, 2.5, 2.8, 2.8, 2.8, 2.8, 2.5, // High-mid (5 bands)
+    2.3, 2.0, 1.8, 1.8, 1.8, // High (5 bands)
     1.5, 1.3, 1.2, 1.0, 0.9,
 ];
 
 // Default gamma values for "Moderate" preset (per-band temporal smoothing)
 pub const DEFAULT_GAMMA: [f32; NUM_BANDS] = [
     // Low (7 bands)
-    0.50, 0.52, 0.54, 0.56, 0.58, 0.60, 0.62,
-    // Mid (7 bands)
-    0.65, 0.68, 0.72, 0.75, 0.78, 0.80, 0.82,
-    // High-mid (5 bands)
-    0.84, 0.86, 0.87, 0.88, 0.89,
-    // High (5 bands)
+    0.50, 0.52, 0.54, 0.56, 0.58, 0.60, 0.62, // Mid (7 bands)
+    0.65, 0.68, 0.72, 0.75, 0.78, 0.80, 0.82, // High-mid (5 bands)
+    0.84, 0.86, 0.87, 0.88, 0.89, // High (5 bands)
     0.90, 0.91, 0.92, 0.93, 0.94,
 ];
 
@@ -100,10 +94,10 @@ pub const PRESETS: [Preset; 5] = [
     // 1: Gentle - minimal processing, preserve everything
     Preset {
         name: "Gentle",
-        alpha_base: 1.5,
-        alpha_min: 0.5,
-        alpha_max: 2.5,
-        beta: 0.15,
+        alpha_base: 11.4,
+        alpha_min: 6.4,
+        alpha_max: 17.8,
+        beta: 0.085,
         delta: [
             0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, // Low (7)
             1.2, 1.4, 1.6, 1.6, 1.6, 1.6, 1.4, // Mid (7)
@@ -120,10 +114,10 @@ pub const PRESETS: [Preset; 5] = [
     // 2: Light - subtle noise reduction
     Preset {
         name: "Light",
-        alpha_base: 2.0,
-        alpha_min: 0.8,
-        alpha_max: 3.5,
-        beta: 0.08,
+        alpha_base: 11.4,
+        alpha_min: 6.4,
+        alpha_max: 17.8,
+        beta: 0.01,
         delta: [
             0.6, 0.8, 1.0, 1.2, 1.3, 1.5, 1.6, // Low (7)
             1.8, 2.0, 2.2, 2.2, 2.2, 2.2, 2.0, // Mid (7)
@@ -140,20 +134,20 @@ pub const PRESETS: [Preset; 5] = [
     // 3: Moderate - balanced (default)
     Preset {
         name: "Moderate",
-        alpha_base: 3.0,
-        alpha_min: 1.0,
-        alpha_max: 5.0,
-        beta: 0.05,
+        alpha_base: 11.4,
+        alpha_min: 6.4,
+        alpha_max: 17.8,
+        beta: 0.005,
         delta: DEFAULT_DELTA, // Use shared default
         gamma: DEFAULT_GAMMA, // Use shared default
     },
     // 4: Strong - noticeable noise reduction
     Preset {
         name: "Strong",
-        alpha_base: 4.5,
-        alpha_min: 2.5,
-        alpha_max: 7.0,
-        beta: 0.02,
+        alpha_base: 13.0,
+        alpha_min: 9.0,
+        alpha_max: 20.8,
+        beta: 0.002,
         delta: [
             1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, // Low (7)
             2.5, 2.8, 3.2, 3.2, 3.2, 3.2, 2.8, // Mid (7)
@@ -170,10 +164,10 @@ pub const PRESETS: [Preset; 5] = [
     // 5: Aggressive - maximum removal, may affect speech
     Preset {
         name: "Aggressive",
-        alpha_base: 6.0,
-        alpha_min: 2.0,
-        alpha_max: 10.0,
-        beta: 0.008,
+        alpha_base: 13.0,
+        alpha_min: 9.0,
+        alpha_max: 20.8,
+        beta: 0.001,
         delta: [
             1.2, 1.5, 1.8, 2.0, 2.2, 2.4, 2.6, // Low (7)
             3.0, 3.5, 4.0, 4.0, 4.0, 4.0, 3.5, // Mid (7)

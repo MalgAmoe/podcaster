@@ -10,7 +10,7 @@ pub mod limiter;
 #[cfg(feature = "cli")]
 #[allow(unused_imports)]
 pub use autogain::{
-    analyze_gain, apply_gain, calculate_rms, calculate_rms_stereo, rms_to_db,
+    analyze_gain, apply_gain, calculate_rms, calculate_rms_stereo, linear_to_db,
     DEFAULT_TARGET_RMS_DB, DEFAULT_TARGET_PEAK_DB,
 };
 pub use buttercomp::StereoButterComp2;
