@@ -312,7 +312,7 @@ fn main() -> Result<()> {
     apply_gain(&mut output_samples, lufs_gain_db);
 
     // Apply true peak limiter at -1 dBTP
-    let limiter = StereoLimiter::new(-1.0, 5.0, 100.0, input_sr as f32);
+    let mut limiter = StereoLimiter::new(-1.0, 5.0, 100.0, input_sr as f32);
     let stats = if is_stereo {
         let (left, right) = output_samples.split_at_mut(1);
         limiter.process_stereo(&mut left[0], &mut right[0])
