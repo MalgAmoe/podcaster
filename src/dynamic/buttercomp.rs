@@ -11,6 +11,12 @@
 
 #![allow(dead_code)]
 
+/// Flush denormals to zero to prevent CPU spikes
+#[inline]
+fn flush_denormal(x: f64) -> f64 {
+    if x.abs() < 1.18e-37 { 0.0 } else { x }
+}
+
 /// Single channel ButterComp2 processor
 #[derive(Clone, Debug)]
 pub struct ButterComp2 {
@@ -126,6 +132,7 @@ impl ButterComp2 {
         // Update positive target with exponential smoothing
         self.target_pos *= divisor;
         self.target_pos += input_pos * remainder;
+        self.target_pos = flush_denormal(self.target_pos);
         let calc_pos = (1.0 / self.target_pos).powi(2); // Inverse square for soft knee
 
         // Process negative half of waveform
@@ -142,6 +149,7 @@ impl ButterComp2 {
         // Update negative target with exponential smoothing
         self.target_neg *= divisor;
         self.target_neg += input_neg * remainder;
+        self.target_neg = flush_denormal(self.target_neg);
         let calc_neg = (1.0 / self.target_neg).powi(2); // Inverse square for soft knee
 
         // Update control values based on signal polarity and flip state
@@ -150,18 +158,22 @@ impl ButterComp2 {
             if self.flip {
                 self.control_a_pos *= divisor;
                 self.control_a_pos += calc_pos * remainder;
+                self.control_a_pos = flush_denormal(self.control_a_pos);
             } else {
                 self.control_b_pos *= divisor;
                 self.control_b_pos += calc_pos * remainder;
+                self.control_b_pos = flush_denormal(self.control_b_pos);
             }
         } else {
             // Working on negative half
             if self.flip {
                 self.control_a_neg *= divisor;
                 self.control_a_neg += calc_neg * remainder;
+                self.control_a_neg = flush_denormal(self.control_a_neg);
             } else {
                 self.control_b_neg *= divisor;
                 self.control_b_neg += calc_neg * remainder;
+                self.control_b_neg = flush_denormal(self.control_b_neg);
             }
         }
 
@@ -188,7 +200,7 @@ impl ButterComp2 {
         }
 
         // Store output for next sample's release calculation
-        self.last_output = sample;
+        self.last_output = flush_denormal(sample);
 
         // Alternate flip state
         self.flip = !self.flip;
