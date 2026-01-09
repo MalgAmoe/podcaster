@@ -7,7 +7,7 @@
 use std::f32::consts::PI;
 
 /// Default target LUFS for streaming platforms
-pub const DEFAULT_TARGET_LUFS: f32 = -16.0;
+pub const DEFAULT_TARGET_LUFS: f32 = -14.0;
 /// Biquad filter coefficients
 #[derive(Clone, Copy)]
 struct BiquadCoeffs {

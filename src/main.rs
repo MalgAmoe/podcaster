@@ -1,4 +1,5 @@
 mod aireq;
+mod deesser;
 mod distortion;
 mod denoiser;
 mod dynamic;
@@ -24,6 +25,7 @@ use denoiser::denoiser::{
 };
 
 use aireq::StereoAirEq;
+use deesser::StereoDeEsser;
 use distortion::{StereoChannel9, StereoTapeGlue, StereoTapeHysteresis};
 use dynamic::{analyze_gain, apply_gain, linear_to_db, StereoButterComp2, StereoLimiter, DEFAULT_TARGET_RMS_DB, DEFAULT_TARGET_PEAK_DB};
 use filters::{HighPassSlope, StereoFilterChain};
@@ -250,6 +252,29 @@ fn main() -> Result<()> {
         fixeq.process_mono(&mut mono);
         vec![mono]
     };
+
+    // Apply De-Esser (after FixEq)
+    let mut deesser = StereoDeEsser::new(input_sr as f32);
+    let sibilance = deesser.configure(&output_samples).clone();
+    let q = deesser::analysis::calculate_deesser_q(sibilance.bandwidth_hz, sibilance.center_freq);
+    let deesser_strength = deesser.get_strength();
+
+    println!(
+        "  De-esser: {:.0}Hz (bandwidth: {:.0}Hz, Q: {:.1}, energy: {:.1}dB, confidence: {:.0}%, strength: {:.0}%)",
+        sibilance.center_freq,
+        sibilance.bandwidth_hz,
+        q,
+        sibilance.energy_db,
+        sibilance.confidence * 100.0,
+        deesser_strength * 100.0
+    );
+
+    if is_stereo {
+        let (left, right) = output_samples.split_at_mut(1);
+        deesser.process_stereo(&mut left[0], &mut right[0]);
+    } else {
+        deesser.process_mono(&mut output_samples[0]);
+    }
 
     // Apply Channel9 (Neve transformer emulation)
     let drive = 0.2; // Fixed 40% - subtle warmth without emphasizing problems

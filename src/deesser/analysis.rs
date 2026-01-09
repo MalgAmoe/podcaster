@@ -1,0 +1,226 @@
+//! Sibilance analysis for De-Esser
+//!
+//! Analyzes audio to find sibilance characteristics for dynamic processing.
+#![cfg_attr(all(feature = "cli", feature = "plugin"), allow(dead_code))]
+
+use rustfft::{num_complex::Complex, FftPlanner};
+use std::f32::consts::PI;
+
+const WINDOW_SIZE: usize = 4096;
+const HOP_SIZE: usize = 2048;
+
+/// Sibilance frequency range (Hz)
+const SIBILANCE_FREQ_MIN: f32 = 4000.0;
+const SIBILANCE_FREQ_MAX: f32 = 10000.0;
+
+/// Default sibilance frequency (Hz) - middle of typical range
+pub const DEFAULT_SIBILANCE_FREQ: f32 = 6500.0;
+
+/// Result of sibilance analysis
+#[derive(Clone, Debug)]
+pub struct SibilanceAnalysis {
+    /// Detected center frequency (Hz)
+    pub center_freq: f32,
+    /// Bandwidth at -6dB points (Hz)
+    pub bandwidth_hz: f32,
+    /// Energy level at the detected frequency (dB)
+    pub energy_db: f32,
+    /// Confidence score (0.0 = uncertain, 1.0 = very confident)
+    /// Based on ratio of sibilance energy to rest of spectrum
+    pub confidence: f32,
+}
+
+impl Default for SibilanceAnalysis {
+    fn default() -> Self {
+        Self {
+            center_freq: DEFAULT_SIBILANCE_FREQ,
+            bandwidth_hz: 3000.0,
+            energy_db: -60.0,
+            confidence: 0.0,
+        }
+    }
+}
+
+/// Mix stereo to mono for analysis
+pub fn mix_to_mono(left: &[f32], right: &[f32]) -> Vec<f32> {
+    left.iter()
+        .zip(right.iter())
+        .map(|(&l, &r)| (l + r) * 0.5)
+        .collect()
+}
+
+/// Analyze audio for sibilance characteristics
+pub fn analyze_sibilance(audio: &[f32], sample_rate: u32) -> SibilanceAnalysis {
+    if audio.is_empty() {
+        return SibilanceAnalysis::default();
+    }
+
+    let n_bins = WINDOW_SIZE / 2 + 1;
+    let bin_freq = sample_rate as f32 / WINDOW_SIZE as f32;
+
+    // Calculate bin ranges for sibilance
+    let sib_min_bin = (SIBILANCE_FREQ_MIN / bin_freq).ceil() as usize;
+    let sib_max_bin = (SIBILANCE_FREQ_MAX / bin_freq).floor() as usize;
+    let sib_max_bin = sib_max_bin.min(n_bins - 1);
+
+    if sib_min_bin >= sib_max_bin {
+        return SibilanceAnalysis::default();
+    }
+
+    // FFT setup
+    let mut planner = FftPlanner::new();
+    let fft = planner.plan_fft_forward(WINDOW_SIZE);
+    let mut fft_scratch = vec![Complex::new(0.0, 0.0); fft.get_inplace_scratch_len()];
+
+    // Hann window
+    let window: Vec<f32> = (0..WINDOW_SIZE)
+        .map(|i| 0.5 * (1.0 - (2.0 * PI * i as f32 / (WINDOW_SIZE - 1) as f32).cos()))
+        .collect();
+
+    // Accumulate power spectrum across frames
+    let mut avg_power = vec![0.0f32; n_bins];
+    let mut frame_count = 0usize;
+
+    let mut i = 0;
+    while i + WINDOW_SIZE <= audio.len() {
+        let frame = &audio[i..i + WINDOW_SIZE];
+
+        let windowed: Vec<f32> = frame
+            .iter()
+            .zip(window.iter())
+            .map(|(&s, &w)| s * w)
+            .collect();
+
+        let mut spectrum: Vec<Complex<f32>> = windowed
+            .iter()
+            .map(|&s| Complex::new(s, 0.0))
+            .collect();
+        fft.process_with_scratch(&mut spectrum, &mut fft_scratch);
+
+        for (j, c) in spectrum[..n_bins].iter().enumerate() {
+            avg_power[j] += c.norm_sqr();
+        }
+        frame_count += 1;
+        i += HOP_SIZE;
+    }
+
+    if frame_count == 0 {
+        return SibilanceAnalysis::default();
+    }
+
+    for p in &mut avg_power {
+        *p /= frame_count as f32;
+    }
+
+    // Find peak energy in sibilance range
+    let mut peak_bin = sib_min_bin;
+    let mut peak_power = avg_power[sib_min_bin];
+
+    for bin in sib_min_bin..=sib_max_bin {
+        if avg_power[bin] > peak_power {
+            peak_power = avg_power[bin];
+            peak_bin = bin;
+        }
+    }
+
+    // Find -6dB bandwidth around peak
+    let threshold = peak_power * 0.25; // -6dB = 0.25 in power
+
+    let mut low_bin = peak_bin;
+    while low_bin > sib_min_bin && avg_power[low_bin] > threshold {
+        low_bin -= 1;
+    }
+
+    let mut high_bin = peak_bin;
+    while high_bin < sib_max_bin && avg_power[high_bin] > threshold {
+        high_bin += 1;
+    }
+
+    let low_freq = low_bin as f32 * bin_freq;
+    let high_freq = high_bin as f32 * bin_freq;
+    let center_freq = peak_bin as f32 * bin_freq;
+    let bandwidth_hz = (high_freq - low_freq).max(500.0); // Minimum 500Hz bandwidth
+
+    let energy_db = 10.0 * peak_power.max(1e-12).log10();
+
+    // Calculate confidence: ratio of peak energy in sibilance range vs outside
+    let confidence = compute_sibilance_confidence(&avg_power, sib_min_bin, sib_max_bin, peak_power);
+
+    SibilanceAnalysis {
+        center_freq,
+        bandwidth_hz,
+        energy_db,
+        confidence,
+    }
+}
+
+/// Compute sibilance confidence by comparing peak energy in range to average outside
+fn compute_sibilance_confidence(power: &[f32], min_bin: usize, max_bin: usize, peak_power: f32) -> f32 {
+    // Calculate average energy outside sibilance range
+    let mut outside_energy = 0.0f32;
+    let mut outside_count = 0usize;
+
+    for (bin, &p) in power.iter().enumerate() {
+        if bin < min_bin || bin > max_bin {
+            outside_energy += p;
+            outside_count += 1;
+        }
+    }
+
+    let avg_outside = if outside_count > 0 {
+        outside_energy / outside_count as f32
+    } else {
+        peak_power
+    };
+
+    // Confidence based on ratio: how much does sibilance stand out?
+    let ratio = peak_power / avg_outside.max(1e-12);
+    (ratio.log10() / 1.0).clamp(0.0, 1.0)
+}
+
+/// Calculate adaptive Q based on detected bandwidth
+/// Filter bandwidth is 4x detected bandwidth for wide coverage
+pub fn calculate_deesser_q(bandwidth_hz: f32, center_freq: f32) -> f32 {
+    // Filter bandwidth = detected bandwidth * 4.0
+    let filter_bandwidth = bandwidth_hz * 4.0;
+    // Q = center_freq / bandwidth
+    let q = center_freq / filter_bandwidth;
+    q.clamp(0.7, 2.5)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_analyze_empty() {
+        let result = analyze_sibilance(&[], 48000);
+        assert_eq!(result.center_freq, DEFAULT_SIBILANCE_FREQ);
+        assert_eq!(result.confidence, 0.0);
+    }
+
+    #[test]
+    fn test_mix_to_mono() {
+        let left = vec![1.0, 0.5, 0.0];
+        let right = vec![0.0, 0.5, 1.0];
+        let mono = mix_to_mono(&left, &right);
+        assert_eq!(mono, vec![0.5, 0.5, 0.5]);
+    }
+
+    #[test]
+    fn test_deesser_q_calculation() {
+        // Typical sibilance: 6500Hz center, 3000Hz detected bandwidth
+        // Filter bandwidth = 3000 * 4.0 = 12000Hz
+        // Q = 6500 / 12000 ≈ 0.54 → clamped to 0.7
+        let q = calculate_deesser_q(3000.0, 6500.0);
+        assert_eq!(q, 0.7);
+
+        // Very wide bandwidth should clamp to minimum Q
+        let q_wide = calculate_deesser_q(10000.0, 6500.0);
+        assert_eq!(q_wide, 0.7);
+
+        // Narrow bandwidth: 500Hz detected → 2000Hz filter → Q = 6500/2000 = 3.25 → clamped to 2.5
+        let q_narrow = calculate_deesser_q(500.0, 6500.0);
+        assert_eq!(q_narrow, 2.5);
+    }
+}
