@@ -25,7 +25,6 @@ use dynamics::autogain::{analyze_gain, apply_gain, linear_to_db, DEFAULT_TARGET_
 use dynamics::limiter::Limiter;
 use eq::{FilterChain, HighPassSlope, FixEq, StereoEnhanceEq};
 use eq::deesser::StereoDeEsser;
-use eq::deesser_analysis::calculate_deesser_q;
 use traits::Stereo;
 use analysis::lufs::{measure_integrated_lufs, DEFAULT_TARGET_LUFS};
 
@@ -62,335 +61,207 @@ struct Args {
 fn main() -> Result<()> {
     let args = Args::parse();
 
+    // =========================================================================
+    // LOAD
+    // =========================================================================
     println!("Loading: {}", args.input.display());
-    let (samples, input_sr) = load_audio(&args.input)?;
+    let (mut samples, sample_rate) = load_audio(&args.input)?;
+    let is_stereo = samples.len() >= 2;
 
-    let channels = samples.len();
-    let num_samples = samples.first().map(|c| c.len()).unwrap_or(0);
-    let is_stereo = channels == 2;
-
-    println!("Sample rate: {} Hz", input_sr);
+    println!("Sample rate: {} Hz", sample_rate);
     println!("Channels: {}", if is_stereo { "stereo" } else { "mono" });
-    println!("Duration: {:.2}s", num_samples as f32 / input_sr as f32);
+    println!("Duration: {:.2}s", samples[0].len() as f32 / sample_rate as f32);
 
     // =========================================================================
-    // Cleanup Filters - Apply HP/LP before gain analysis
+    // INPUT STAGE
     // =========================================================================
 
-    let mut samples = samples;
-
+    // Cleanup filters
     if !args.no_filters {
-        let hp_slope = if args.hp_slope == 24 {
+        let slope = if args.hp_slope == 24 {
             HighPassSlope::Slope24dB
         } else {
             HighPassSlope::Slope12dB
         };
+        println!("\n[Filters] HP 80Hz @ {}dB/oct, LP 15.5kHz", args.hp_slope);
 
-        println!(
-            "\n[Cleanup Filters] HP: 80Hz @ {} dB/oct, LP: 15.5kHz @ 12 dB/oct",
-            args.hp_slope
+        let mut filters = Stereo::from_pair(
+            FilterChain::new(sample_rate as f32, slope),
+            FilterChain::new(sample_rate as f32, slope),
         );
-
-        let mut stereo_filters = Stereo::from_pair(
-            FilterChain::new(input_sr as f32, hp_slope),
-            FilterChain::new(input_sr as f32, hp_slope),
-        );
-
         if is_stereo {
             let (left, right) = samples.split_at_mut(1);
-            stereo_filters.process_stereo(&mut left[0], &mut right[0]);
+            filters.process_stereo(&mut left[0], &mut right[0]);
         } else {
-            stereo_filters.process_mono(&mut samples[0]);
+            filters.process_mono(&mut samples[0]);
         }
     }
 
-    // =========================================================================
-    // Input Gain - Normalize to target RMS (after filtering)
-    // =========================================================================
-
+    // Input gain
     println!("\n[Input Gain]");
-    let (input_rms, input_peak) = if is_stereo {
+    let (rms, peak) = if is_stereo {
         dynamics::autogain::calculate_rms_and_peak_stereo(&samples[0], &samples[1])
     } else {
         dynamics::autogain::calculate_rms_and_peak(&samples[0])
     };
-    let input_rms_db = linear_to_db(input_rms);
-    let input_peak_db = linear_to_db(input_peak);
     let gain_db = analyze_gain(&samples, DEFAULT_TARGET_RMS_DB, DEFAULT_TARGET_PEAK_DB);
-
-    // Check if gain was limited by peak
-    let gain_for_rms = DEFAULT_TARGET_RMS_DB - input_rms_db;
-    let peak_limited = gain_db < gain_for_rms && gain_for_rms > 0.0;
-
-    println!("  Input RMS: {:.1} dBFS, Peak: {:.1} dBFS", input_rms_db, input_peak_db);
-    println!("  Target RMS: {:.1} dBFS, Peak ceiling: {:.1} dBFS", DEFAULT_TARGET_RMS_DB, DEFAULT_TARGET_PEAK_DB);
-    if peak_limited {
-        println!("  Applying: {:+.1} dB gain (limited by peak, would need {:+.1} dB for target RMS)", gain_db, gain_for_rms);
-    } else {
-        println!("  Applying: {:+.1} dB gain", gain_db);
-    }
-
+    println!("  Input: RMS {:.1}dB, Peak {:.1}dB", linear_to_db(rms), linear_to_db(peak));
+    println!("  Applying: {:+.1}dB", gain_db);
     apply_gain(&mut samples, gain_db);
 
     // =========================================================================
-    // Pass 1: Analysis (on filtered + gain-normalized audio)
+    // DENOISE
     // =========================================================================
+    println!("\n[Denoise]");
+    let preset: usize = args.preset.into();
 
-    println!("\n[Pass 1] Analyzing audio...");
-
-    // Perform single-pass analysis (computes noise floor + all metrics)
-    let result = analyze_audio(&samples[0], input_sr);
-    let noise_floor = result.noise_floor;
-    let analysis = result.analysis;
-
-    // Display analysis results
-    println!("  ✓ Analysis complete");
-    println!();
-    println!("  Audio characteristics:");
-    println!("    SNR: {:.1} dB", analysis.overall_snr_db);
-    println!("    Stationarity: {:.2}", analysis.stationarity_score);
-    println!(
-        "    Speech density: {:.0}%",
-        analysis.speech_density * 100.0
-    );
-    println!(
-        "    Dominant noise freq: {:.0} Hz",
-        analysis.dominant_freq_hz
-    );
-    println!();
-
-    // =========================================================================
-    // Pass 2: Processing
-    // =========================================================================
-
-    let preset = args.preset.into();
-
-    let preset_info = get_preset(preset).expect("Invalid preset");
-    let preset_name = preset_info.name.to_lowercase();
-
-    let output_path = if let Some(ref out) = args.output {
-        out.clone()
-    } else {
-        let stem = args
-            .input
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("audio");
-        PathBuf::from(format!("{stem}_denoised_{preset}_{preset_name}.wav"))
-    };
-
-    println!(
-        "\n[Pass 2] Processing with preset {} ({})...",
-        preset,
-        PRESETS[preset - 1].name
+    // Analyze noise floor (on filtered + gain-normalized audio)
+    let result = analyze_audio(&samples[0], sample_rate);
+    println!("  SNR: {:.1}dB, Speech: {:.0}%",
+        result.analysis.overall_snr_db,
+        result.analysis.speech_density * 100.0
     );
 
-    // Audio is already filtered and gain-normalized from earlier stages
-    let mut denoised_samples = if is_stereo {
-        // L/R independent processing using unified denoiser
-        let mut denoiser_left = RealtimeDenoiser::new_with_preset(input_sr, preset)
-            .expect("Invalid preset");
-        let mut denoiser_right = RealtimeDenoiser::new_with_preset(input_sr, preset)
-            .expect("Invalid preset");
-
-        denoiser_left.init_with_noise_floor(&noise_floor);
-        denoiser_right.init_with_noise_floor(&noise_floor);
-
-        let left_out = denoiser_left.process(&samples[0]);
-        let right_out = denoiser_right.process(&samples[1]);
-
-        vec![left_out, right_out]
-    } else {
-        let mut denoiser = RealtimeDenoiser::new_with_preset(input_sr, preset)
-            .expect("Invalid preset");
-        denoiser.init_with_noise_floor(&noise_floor);
-        let output = denoiser.process(&samples[0]);
-
-        vec![output]
-    };
-
-    // Apply VCA Peak Compressor (right after denoiser)
-    let mut peakcomp = StereoVcaPeakComp::new(input_sr as f32);
-    let peak_profile = peakcomp.configure(&denoised_samples).clone();
-
-    println!(
-        "  Peak profile: RMS {:.1}dB, Peak(95%) {:.1}dB, Crest {:.1}dB",
-        peak_profile.rms_db,
-        peak_profile.peak_95_db,
-        peak_profile.crest_factor_db
-    );
-    println!(
-        "  Peak comp: threshold {:.1}dB (histogram), suggested reduction {:.1}dB",
-        peak_profile.histogram_threshold_db,
-        peak_profile.suggested_reduction_db
-    );
-
+    // Apply denoiser
+    println!("  Preset: {} ({})", preset, get_preset(preset).unwrap().name);
     if is_stereo {
-        let (left, right) = denoised_samples.split_at_mut(1);
+        let mut left_denoiser = RealtimeDenoiser::new_with_preset(sample_rate, preset)
+            .expect("Invalid preset");
+        let mut right_denoiser = RealtimeDenoiser::new_with_preset(sample_rate, preset)
+            .expect("Invalid preset");
+        left_denoiser.init_with_noise_floor(&result.noise_floor);
+        right_denoiser.init_with_noise_floor(&result.noise_floor);
+        samples[0] = left_denoiser.process(&samples[0]);
+        samples[1] = right_denoiser.process(&samples[1]);
+    } else {
+        let mut denoiser = RealtimeDenoiser::new_with_preset(sample_rate, preset)
+            .expect("Invalid preset");
+        denoiser.init_with_noise_floor(&result.noise_floor);
+        samples[0] = denoiser.process(&samples[0]);
+    }
+
+    // =========================================================================
+    // DYNAMICS & EQ
+    // =========================================================================
+    println!("\n[Processing]");
+
+    // Peak compressor
+    let mut peakcomp = StereoVcaPeakComp::new(sample_rate as f32);
+    let profile = peakcomp.configure(&samples).clone();
+    println!("  PeakComp: threshold {:.1}dB", profile.histogram_threshold_db);
+    if is_stereo {
+        let (left, right) = samples.split_at_mut(1);
         peakcomp.process_stereo(&mut left[0], &mut right[0]);
     } else {
-        peakcomp.process_mono(&mut denoised_samples[0]);
+        peakcomp.process_mono(&mut samples[0]);
     }
 
-    // Compute spectral analysis once for FixEq and EnhanceEq
-    let mono_for_analysis = if is_stereo {
-        analysis::utils::mix_to_mono(&denoised_samples[0], &denoised_samples[1])
+    // Spectral analysis (on denoised audio - used by FixEq and EnhanceEq)
+    let mono = if is_stereo {
+        analysis::utils::mix_to_mono(&samples[0], &samples[1])
     } else {
-        denoised_samples[0].clone()
+        samples[0].clone()
     };
-    let spectrum = analysis::SpectralAnalysis::new(&mono_for_analysis, input_sr);
+    let spectrum = analysis::SpectralAnalysis::new(&mono, sample_rate);
 
-    // Apply FixEq (post-peak comp dynamic EQ)
-    let mut fixeq = FixEq::new(input_sr as f32);
-    let analysis = fixeq.configure_from_spectrum(&spectrum, preset, is_stereo).clone();
-
-    println!(
-        "  Mud analysis: {:.0}Hz (energy: {:.1}dB, confidence: {:.0}%)",
-        analysis.mud.center_freq,
-        analysis.mud.energy_db,
-        analysis.mud.confidence * 100.0
-    );
-    println!(
-        "  Applying de-mud @ {:.0}Hz (strength: {:.0}%)...",
-        analysis.mud.center_freq,
-        fixeq.get_demud_strength() * 100.0
-    );
-    println!(
-        "  Correction A: {:.0}Hz (energy: {:.1}dB, confidence: {:.0}%, strength: {:.0}%)",
-        analysis.correction_a.center_freq,
-        analysis.correction_a.energy_db,
-        analysis.correction_a.confidence * 100.0,
-        fixeq.get_correction_a_strength() * 100.0
-    );
-    println!(
-        "  Correction B: {:.0}Hz (energy: {:.1}dB, confidence: {:.0}%, strength: {:.0}%)",
-        analysis.correction_b.center_freq,
-        analysis.correction_b.energy_db,
-        analysis.correction_b.confidence * 100.0,
+    // FixEq
+    let mut fixeq = FixEq::new(sample_rate as f32);
+    fixeq.configure_from_spectrum(&spectrum, preset, is_stereo);
+    println!("  FixEq: demud {:.0}%, corrA {:.0}%, corrB {:.0}%",
+        fixeq.get_demud_strength() * 100.0,
+        fixeq.get_correction_a_strength() * 100.0,
         fixeq.get_correction_b_strength() * 100.0
     );
-
-    let mut output_samples = if is_stereo {
-        let (mut left, mut right) = {
-            let mut iter = denoised_samples.into_iter();
-            (iter.next().unwrap(), iter.next().unwrap())
-        };
-        fixeq.process_stereo(&mut left, &mut right);
-        vec![left, right]
-    } else {
-        let mut mono = denoised_samples.into_iter().next().unwrap();
-        fixeq.process_mono(&mut mono);
-        vec![mono]
-    };
-
-    // Apply De-Esser (after FixEq)
-    let mut deesser = StereoDeEsser::new(input_sr as f32);
-    let sibilance = deesser.configure(&output_samples).clone();
-    let q = calculate_deesser_q(sibilance.bandwidth_hz, sibilance.center_freq);
-    let deesser_strength = deesser.get_strength();
-
-    println!(
-        "  De-esser: {:.0}Hz (bandwidth: {:.0}Hz, Q: {:.1}, energy: {:.1}dB, confidence: {:.0}%, strength: {:.0}%)",
-        sibilance.center_freq,
-        sibilance.bandwidth_hz,
-        q,
-        sibilance.energy_db,
-        sibilance.confidence * 100.0,
-        deesser_strength * 100.0
-    );
-
     if is_stereo {
-        let (left, right) = output_samples.split_at_mut(1);
+        let (left, right) = samples.split_at_mut(1);
+        fixeq.process_stereo(&mut left[0], &mut right[0]);
+    } else {
+        fixeq.process_mono(&mut samples[0]);
+    }
+
+    // De-esser (analyzes current audio state)
+    let mut deesser = StereoDeEsser::new(sample_rate as f32);
+    let sibilance = deesser.configure(&samples).clone();
+    println!("  DeEsser: {:.0}Hz, strength {:.0}%",
+        sibilance.center_freq,
+        deesser.get_strength() * 100.0
+    );
+    if is_stereo {
+        let (left, right) = samples.split_at_mut(1);
         deesser.process_stereo(&mut left[0], &mut right[0]);
     } else {
-        deesser.process_mono(&mut output_samples[0]);
+        deesser.process_mono(&mut samples[0]);
     }
 
-    // Apply Channel9 (Neve transformer emulation)
-    let drive = 0.2; // Fixed 40% - subtle warmth without emphasizing problems
-    println!(
-        "  Applying Neve transformer (drive: {:.0}%)...",
-        drive * 200.0
-    );
-    let mut channel9: Stereo<Channel9> = Stereo::new(input_sr as f32);
-    channel9.set_both(|c| c.set_drive(drive));
+    // Saturation
+    let mut channel9: Stereo<Channel9> = Stereo::new(sample_rate as f32);
+    channel9.set_both(|c| c.set_drive(0.2));
+    println!("  Saturation: drive 40%");
     if is_stereo {
-        let (left, right) = output_samples.split_at_mut(1);
+        let (left, right) = samples.split_at_mut(1);
         channel9.process_stereo(&mut left[0], &mut right[0]);
     } else {
-        channel9.process_mono(&mut output_samples[0]);
+        channel9.process_mono(&mut samples[0]);
     }
 
-    // Apply ButterComp2 (smooth leveling)
-    let compress = 0.8;
-    println!(
-        "  Applying ButterComp2 (compress: {:.0}%)...",
-        compress * 100.0
-    );
-    let mut compressor: Stereo<ButterComp2> = Stereo::new(input_sr as f32);
-    compressor.set_both(|c| c.set_compress(compress));
+    // Compressor
+    let mut compressor: Stereo<ButterComp2> = Stereo::new(sample_rate as f32);
+    compressor.set_both(|c| c.set_compress(0.8));
+    println!("  Compressor: 80%");
     if is_stereo {
-        let (left, right) = output_samples.split_at_mut(1);
+        let (left, right) = samples.split_at_mut(1);
         compressor.process_stereo(&mut left[0], &mut right[0]);
     } else {
-        compressor.process_mono(&mut output_samples[0]);
+        compressor.process_mono(&mut samples[0]);
     }
 
-    // Apply Enhance EQ (presence + dynamic air shelf + LP rolloff)
-    let mut enhanceeq = StereoEnhanceEq::new(input_sr as f32);
+    // Enhance EQ (uses earlier spectrum)
+    let mut enhanceeq = StereoEnhanceEq::new(sample_rate as f32);
     enhanceeq.configure_from_spectrum(&spectrum);
-
-    println!(
-        "  EnhanceEQ: lowmid {:.1}dB, presence {:+.1}dB, air {:+.1}dB",
-        enhanceeq.get_lowmid_gain(),
+    println!("  EnhanceEQ: presence {:+.1}dB, air {:+.1}dB",
         enhanceeq.get_presence_gain(),
         enhanceeq.get_shelf_gain()
     );
-
     if is_stereo {
-        let (left, right) = output_samples.split_at_mut(1);
+        let (left, right) = samples.split_at_mut(1);
         enhanceeq.process_stereo(&mut left[0], &mut right[0]);
     } else {
-        enhanceeq.process_mono(&mut output_samples[0]);
+        enhanceeq.process_mono(&mut samples[0]);
     }
 
     // =========================================================================
-    // Output Normalization - LUFS + Limiting
+    // OUTPUT STAGE
     // =========================================================================
+    println!("\n[Output]");
 
-    println!("\n[Output Normalization]");
-
-    // Measure integrated LUFS
-    let lufs = measure_integrated_lufs(&output_samples, input_sr);
-    println!("  Integrated LUFS: {:.1}", lufs);
-
-    // Calculate gain to reach target LUFS
+    // LUFS normalization
+    let lufs = measure_integrated_lufs(&samples, sample_rate);
     let lufs_gain_db = DEFAULT_TARGET_LUFS - lufs;
-    println!(
-        "  Target: {:.1} LUFS, applying {:+.1} dB",
-        DEFAULT_TARGET_LUFS, lufs_gain_db
-    );
+    println!("  LUFS: {:.1} -> target {:.1} ({:+.1}dB)", lufs, DEFAULT_TARGET_LUFS, lufs_gain_db);
+    apply_gain(&mut samples, lufs_gain_db);
 
-    // Apply gain
-    apply_gain(&mut output_samples, lufs_gain_db);
-
-    // Apply true peak limiter at -1 dBTP
-    let mut limiter = Limiter::new(-1.0, 5.0, 100.0, input_sr as f32);
+    // Limiter
+    let mut limiter = Limiter::new(-1.0, 5.0, 100.0, sample_rate as f32);
     let stats = if is_stereo {
-        let (left, right) = output_samples.split_at_mut(1);
+        let (left, right) = samples.split_at_mut(1);
         limiter.process_stereo(&mut left[0], &mut right[0])
     } else {
-        limiter.process_mono(&mut output_samples[0])
+        limiter.process_mono(&mut samples[0])
     };
-    println!(
-        "  Limiter: ceiling -1.0 dBTP, max GR: {:.1} dB, peak out: {:.1} dBFS",
-        stats.max_reduction_db, stats.peak_output_db
-    );
+    println!("  Limiter: -1dBTP, max GR {:.1}dB", stats.max_reduction_db);
 
-    println!("Saving: {}", output_path.display());
-    save_wav(&output_path, &output_samples, input_sr)?;
+    // =========================================================================
+    // SAVE
+    // =========================================================================
+    let output_path = args.output.unwrap_or_else(|| {
+        let stem = args.input.file_stem().and_then(|s| s.to_str()).unwrap_or("audio");
+        let name = PRESETS[preset - 1].name.to_lowercase();
+        PathBuf::from(format!("{stem}_denoised_{preset}_{name}.wav"))
+    });
 
-    println!("\nDone.");
+    println!("\nSaving: {}", output_path.display());
+    save_wav(&output_path, &samples, sample_rate)?;
+    println!("Done.");
     Ok(())
 }
 
