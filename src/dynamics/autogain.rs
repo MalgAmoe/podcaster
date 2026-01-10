@@ -77,15 +77,8 @@ pub fn calculate_rms_and_peak_stereo(left: &[f32], right: &[f32]) -> (f32, f32) 
     ((sum_sq / left.len() as f32).sqrt(), peak)
 }
 
-/// Convert linear RMS to dBFS
-pub fn linear_to_db(rms: f32) -> f32 {
-    20.0 * rms.max(1e-10).log10()
-}
-
-/// Convert dB to linear gain
-pub fn db_to_linear(db: f32) -> f32 {
-    10.0_f32.powf(db / 20.0)
-}
+// Re-export from shared utilities
+pub use crate::analysis::utils::{db_to_linear, linear_to_db};
 
 /// Analyze audio and calculate required gain to reach target RMS,
 /// while ensuring peak doesn't exceed target_peak_db.

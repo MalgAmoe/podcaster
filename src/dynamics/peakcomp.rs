@@ -5,21 +5,9 @@
 
 #![allow(dead_code)]
 
-pub mod analysis;
-
-pub use analysis::{analyze_peak_profile, mix_to_mono, PeakProfile};
-
+use crate::analysis::utils::{db_to_linear, linear_to_db, mix_to_mono};
+use super::peakcomp_analysis::{analyze_peak_profile, PeakProfile};
 use std::collections::VecDeque;
-
-/// Convert linear amplitude to dB
-fn linear_to_db(linear: f32) -> f32 {
-    20.0 * linear.max(1e-10).log10()
-}
-
-/// Convert dB to linear amplitude
-fn db_to_linear(db: f32) -> f32 {
-    10.0_f32.powf(db / 20.0)
-}
 
 /// VCA-style peak compressor with look-ahead
 #[derive(Clone, Debug)]
@@ -196,11 +184,17 @@ impl crate::traits::AudioProcessor for VcaPeakComp {
 
 impl crate::traits::MonoProcessor for VcaPeakComp {}
 
+impl crate::traits::Processor for VcaPeakComp {
+    fn new(sample_rate: f32) -> Self {
+        Self::new_default(sample_rate)
+    }
+}
+
 /// Stereo VCA peak compressor with linked detection
 #[derive(Clone, Debug)]
 pub struct StereoVcaPeakComp {
-    left: VcaPeakComp,
-    right: VcaPeakComp,
+    pub left: VcaPeakComp,
+    pub right: VcaPeakComp,
     is_stereo: bool,
     sample_rate: f32,
     last_profile: Option<PeakProfile>,
@@ -319,6 +313,54 @@ impl StereoVcaPeakComp {
             *l = delayed_l * gain;
             *r = delayed_r * gain;
         }
+    }
+
+    /// Process a single stereo sample pair with linked detection
+    /// Returns (left_out, right_out)
+    pub fn process_sample_stereo(&mut self, left_in: f32, right_in: f32) -> (f32, f32) {
+        // Linked detection: use max of both channels
+        let peak = left_in.abs().max(right_in.abs());
+
+        // Add to both lookahead buffers
+        self.left.lookahead_buffer.push_back(left_in);
+        self.right.lookahead_buffer.push_back(right_in);
+
+        // Check if buffers are full (latency compensation)
+        if self.left.lookahead_buffer.len() <= self.left.lookahead_samples {
+            return (0.0, 0.0);
+        }
+
+        // Get delayed samples
+        let delayed_l = self.left.lookahead_buffer.pop_front().unwrap_or(0.0);
+        let delayed_r = self.right.lookahead_buffer.pop_front().unwrap_or(0.0);
+
+        // Find peak in look-ahead window (linked across channels)
+        let mut peak_in_window = peak;
+        for (&ls, &rs) in self
+            .left
+            .lookahead_buffer
+            .iter()
+            .zip(self.right.lookahead_buffer.iter())
+        {
+            peak_in_window = peak_in_window.max(ls.abs()).max(rs.abs());
+        }
+
+        // Calculate gain reduction using left compressor (linked)
+        let peak_db = linear_to_db(peak_in_window);
+        let target_gr_db = self.left.calculate_gain_reduction(peak_db);
+
+        // Envelope follower (shared between channels)
+        if target_gr_db > self.left.gain_reduction_db {
+            self.left.gain_reduction_db = self.left.attack_coeff * self.left.gain_reduction_db
+                + (1.0 - self.left.attack_coeff) * target_gr_db;
+        } else {
+            self.left.gain_reduction_db = self.left.release_coeff * self.left.gain_reduction_db
+                + (1.0 - self.left.release_coeff) * target_gr_db;
+        }
+
+        // Apply same gain to both channels (linked)
+        let gain = db_to_linear(-self.left.gain_reduction_db);
+        (delayed_l * gain, delayed_r * gain)
     }
 
     /// Process mono audio in-place

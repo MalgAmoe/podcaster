@@ -5,11 +5,9 @@
 
 #![allow(dead_code)]
 
-pub mod analysis;
-
-pub use analysis::{analyze_sibilance, mix_to_mono, SibilanceAnalysis, DEFAULT_SIBILANCE_FREQ};
-
-use crate::filters::dynamic::DynamicBand;
+use super::deesser_analysis::{analyze_sibilance, calculate_deesser_q, SibilanceAnalysis, DEFAULT_SIBILANCE_FREQ};
+use super::dynamic::DynamicBand;
+use crate::analysis::utils::mix_to_mono;
 
 const D_ATTACK: f32 = 0.2;
 const D_RELEASE: f32 = 0.130;
@@ -152,7 +150,7 @@ impl StereoDeEsser {
         let analysis = analyze_sibilance(&mono, self.sample_rate as u32);
 
         // Calculate adaptive Q from detected bandwidth
-        let q = analysis::calculate_deesser_q(analysis.bandwidth_hz, analysis.center_freq);
+        let q = calculate_deesser_q(analysis.bandwidth_hz, analysis.center_freq);
 
         // Configure both channels
         self.left.set_frequency(analysis.center_freq);
@@ -225,5 +223,9 @@ impl crate::traits::StereoProcessor for StereoDeEsser {
 
     fn reset(&mut self) {
         self.reset()
+    }
+
+    fn latency_samples(&self) -> usize {
+        0 // DeEsser has no lookahead, zero latency
     }
 }

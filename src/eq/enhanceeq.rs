@@ -9,7 +9,7 @@
 
 #![allow(dead_code)]
 
-use crate::filters::{HighShelfSvf, SvfBiquad};
+use super::filters::{HighShelfSvf, SvfBiquad};
 
 /// Default low-mid cut frequency
 const DEFAULT_LOWMID_FREQ: f32 = 250.0;
@@ -451,5 +451,9 @@ impl crate::traits::StereoProcessor for StereoEnhanceEq {
 
     fn reset(&mut self) {
         self.reset()
+    }
+
+    fn latency_samples(&self) -> usize {
+        0 // EnhanceEq has no lookahead, zero latency
     }
 }

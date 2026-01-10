@@ -3,6 +3,8 @@
 //! Analyzes audio to determine peak characteristics and automatic threshold.
 #![cfg_attr(all(feature = "cli", feature = "plugin"), allow(dead_code))]
 
+use crate::analysis::utils::linear_to_db;
+
 /// Number of histogram bins for peak analysis
 const HISTOGRAM_BINS: usize = 100;
 const HISTOGRAM_MIN_DB: f32 = -60.0;
@@ -36,11 +38,6 @@ impl Default for PeakProfile {
             suggested_reduction_db: 0.0,
         }
     }
-}
-
-/// Convert linear amplitude to dB
-fn linear_to_db(linear: f32) -> f32 {
-    20.0 * linear.max(1e-10).log10()
 }
 
 /// Calculate RMS of samples
@@ -157,13 +154,6 @@ pub fn analyze_peak_profile(samples: &[f32]) -> PeakProfile {
     }
 }
 
-/// Mix stereo to mono for analysis
-pub fn mix_to_mono(left: &[f32], right: &[f32]) -> Vec<f32> {
-    left.iter()
-        .zip(right.iter())
-        .map(|(&l, &r)| (l + r) * 0.5)
-        .collect()
-}
 
 #[cfg(test)]
 mod tests {
@@ -194,11 +184,4 @@ mod tests {
         assert_eq!(reduction, 0.0);
     }
 
-    #[test]
-    fn test_mix_to_mono() {
-        let left = vec![1.0, 0.5, 0.0];
-        let right = vec![0.0, 0.5, 1.0];
-        let mono = mix_to_mono(&left, &right);
-        assert_eq!(mono, vec![0.5, 0.5, 0.5]);
-    }
 }

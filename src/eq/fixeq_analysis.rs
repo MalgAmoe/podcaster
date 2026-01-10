@@ -35,8 +35,6 @@ pub struct FixEqAnalysis {
     pub correction_b: BandAnalysis,
 }
 
-/// Re-export mix_to_mono from analysis module
-pub use crate::analysis::mix_to_mono;
 
 /// Default correction frequencies (Hz)
 pub const DEFAULT_CORRECTION_A_FREQ: f32 = 1000.0;

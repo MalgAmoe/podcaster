@@ -1,0 +1,16 @@
+//! Dynamic processing modules
+//!
+//! Contains processors for gain staging, compression/leveling, and limiting.
+
+#[cfg(feature = "cli")]
+pub mod autogain;
+pub mod buttercomp;
+pub mod limiter;
+pub mod peakcomp;
+pub mod peakcomp_analysis;
+
+// Re-exports used by plugin (lib.rs)
+pub use buttercomp::ButterComp2;
+#[allow(unused_imports)]
+pub use limiter::StereoRealtimeLimiter;
+pub use peakcomp::StereoVcaPeakComp;

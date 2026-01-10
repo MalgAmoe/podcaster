@@ -268,6 +268,12 @@ impl crate::traits::AudioProcessor for FilterChain {
 
 impl crate::traits::MonoProcessor for FilterChain {}
 
+impl crate::traits::Processor for FilterChain {
+    fn new(sample_rate: f32) -> Self {
+        Self::new(sample_rate, HighPassSlope::Slope24dB)
+    }
+}
+
 // =============================================================================
 // 1st Order High Shelf using SVF Topology (6 dB/oct, gentle slope)
 // =============================================================================

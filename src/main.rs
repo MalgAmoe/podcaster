@@ -1,13 +1,8 @@
 mod analysis;
-mod enhanceeq;
-mod deesser;
-mod distortion;
+mod saturation;
 mod denoiser;
-mod dynamic;
-mod filters;
-mod fixeq;
-mod output;
-mod peakcomp;
+mod dynamics;
+mod eq;
 mod traits;
 
 use std::path::{Path, PathBuf};
@@ -24,15 +19,15 @@ use symphonia::core::probe::Hint;
 
 use denoiser::{analyze_audio, get_preset, RealtimeDenoiser, DEFAULT_PRESET, PRESETS};
 
-use enhanceeq::StereoEnhanceEq;
-use deesser::StereoDeEsser;
-use distortion::Channel9;
-use peakcomp::StereoVcaPeakComp;
-use dynamic::{analyze_gain, apply_gain, linear_to_db, ButterComp2, Limiter, DEFAULT_TARGET_RMS_DB, DEFAULT_TARGET_PEAK_DB};
+use saturation::Channel9;
+use dynamics::{StereoVcaPeakComp, ButterComp2};
+use dynamics::autogain::{analyze_gain, apply_gain, linear_to_db, DEFAULT_TARGET_RMS_DB, DEFAULT_TARGET_PEAK_DB};
+use dynamics::limiter::Limiter;
+use eq::{FilterChain, HighPassSlope, FixEq, StereoEnhanceEq};
+use eq::deesser::StereoDeEsser;
+use eq::deesser_analysis::calculate_deesser_q;
 use traits::Stereo;
-use filters::{FilterChain, HighPassSlope};
-use fixeq::FixEq;
-use output::{measure_integrated_lufs, DEFAULT_TARGET_LUFS};
+use analysis::lufs::{measure_integrated_lufs, DEFAULT_TARGET_LUFS};
 
 #[derive(Parser)]
 #[command(name = "poddyclip")]
@@ -115,9 +110,9 @@ fn main() -> Result<()> {
 
     println!("\n[Input Gain]");
     let (input_rms, input_peak) = if is_stereo {
-        dynamic::autogain::calculate_rms_and_peak_stereo(&samples[0], &samples[1])
+        dynamics::autogain::calculate_rms_and_peak_stereo(&samples[0], &samples[1])
     } else {
-        dynamic::autogain::calculate_rms_and_peak(&samples[0])
+        dynamics::autogain::calculate_rms_and_peak(&samples[0])
     };
     let input_rms_db = linear_to_db(input_rms);
     let input_peak_db = linear_to_db(input_peak);
@@ -239,7 +234,7 @@ fn main() -> Result<()> {
 
     // Compute spectral analysis once for FixEq and EnhanceEq
     let mono_for_analysis = if is_stereo {
-        analysis::mix_to_mono(&denoised_samples[0], &denoised_samples[1])
+        analysis::utils::mix_to_mono(&denoised_samples[0], &denoised_samples[1])
     } else {
         denoised_samples[0].clone()
     };
@@ -291,7 +286,7 @@ fn main() -> Result<()> {
     // Apply De-Esser (after FixEq)
     let mut deesser = StereoDeEsser::new(input_sr as f32);
     let sibilance = deesser.configure(&output_samples).clone();
-    let q = deesser::analysis::calculate_deesser_q(sibilance.bandwidth_hz, sibilance.center_freq);
+    let q = calculate_deesser_q(sibilance.bandwidth_hz, sibilance.center_freq);
     let deesser_strength = deesser.get_strength();
 
     println!(

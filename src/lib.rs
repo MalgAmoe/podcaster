@@ -1,14 +1,10 @@
 #![cfg(feature = "plugin")]
 
 mod analysis;
-mod enhanceeq;
-mod deesser;
-mod distortion;
+mod saturation;
 mod denoiser;
-mod dynamic;
-mod filters;
-mod fixeq;
-mod peakcomp;
+mod dynamics;
+mod eq;
 mod traits;
 mod visualizations;
 
@@ -21,14 +17,10 @@ use denoiser::{
     DEFAULT_SFM_NOISE, DEFAULT_SFM_SPEECH, DEFAULT_SPIKE_THRESHOLD, NUM_BANDS, PRESETS,
 };
 
-use enhanceeq::StereoEnhanceEq;
-use deesser::DeEsser;
-use distortion::{Channel9, TapeGlue};
-use peakcomp::VcaPeakComp;
-use dynamic::{ButterComp2, StereoRealtimeLimiter};
+use saturation::{Channel9, TapeGlue};
+use dynamics::{StereoVcaPeakComp, ButterComp2, StereoRealtimeLimiter};
+use eq::{DeEsser, FilterChain, FixEq, HighPassSlope, StereoEnhanceEq};
 use traits::Stereo;
-use filters::{FilterChain, HighPassSlope};
-use fixeq::FixEq;
 
 // =============================================================================
 // Parameter Structs
@@ -265,8 +257,7 @@ struct Poddyclip {
     params: Arc<PoddyclipParams>,
 
     // Filters (applied before denoising)
-    filter_left: FilterChain,
-    filter_right: FilterChain,
+    filter: Stereo<FilterChain>,
     prev_hp_slope: HighPassSlope,
 
     // Streaming denoiser (handles frame buffering internally)
@@ -279,9 +270,8 @@ struct Poddyclip {
     // Visualization data shared with GUI
     visualization_data: Arc<Mutex<VisualizationData>>,
 
-    // FixEq (post-denoiser dynamic EQ)
-    fixeq_left: FixEq,
-    fixeq_right: FixEq,
+    // FixEq (post-denoiser dynamic EQ) - single instance handles both channels
+    fixeq: FixEq,
 
     // Gain reduction for UI meters
     demud_gain_db: Arc<Mutex<f32>>,
@@ -289,13 +279,11 @@ struct Poddyclip {
     correction_b_gain_db: Arc<Mutex<f32>>,
 
     // De-Esser (post-FixEq sibilance reduction)
-    deesser_left: DeEsser,
-    deesser_right: DeEsser,
+    deesser: Stereo<DeEsser>,
     deesser_gain_db: Arc<Mutex<f32>>,
 
-    // VCA Peak Compressor (post-DeEsser clinical peak control)
-    peakcomp_left: VcaPeakComp,
-    peakcomp_right: VcaPeakComp,
+    // VCA Peak Compressor (post-DeEsser clinical peak control) - linked stereo
+    peakcomp: StereoVcaPeakComp,
     peakcomp_gain_db: Arc<Mutex<f32>>,
 
     // Channel9 (Neve transformer emulation)
@@ -321,8 +309,7 @@ impl Default for Poddyclip {
     fn default() -> Self {
         Self {
             params: Arc::new(PoddyclipParams::default()),
-            filter_left: FilterChain::new(48000.0, HighPassSlope::Slope24dB),
-            filter_right: FilterChain::new(48000.0, HighPassSlope::Slope24dB),
+            filter: Stereo::<FilterChain>::new(48000.0),
             prev_hp_slope: HighPassSlope::Slope24dB,
             denoiser: Stereo::from_pair(
                 StreamingDenoiser::new(48000),
@@ -331,16 +318,13 @@ impl Default for Poddyclip {
             sample_rate: 48000.0,
             prev_reset_state: false,
             visualization_data: Arc::new(Mutex::new(VisualizationData::default())),
-            fixeq_left: FixEq::new(48000.0),
-            fixeq_right: FixEq::new(48000.0),
+            fixeq: FixEq::new(48000.0),
             demud_gain_db: Arc::new(Mutex::new(0.0)),
             correction_a_gain_db: Arc::new(Mutex::new(0.0)),
             correction_b_gain_db: Arc::new(Mutex::new(0.0)),
-            deesser_left: DeEsser::new_default(48000.0),
-            deesser_right: DeEsser::new_default(48000.0),
+            deesser: Stereo::<DeEsser>::new(48000.0),
             deesser_gain_db: Arc::new(Mutex::new(0.0)),
-            peakcomp_left: VcaPeakComp::new_default(48000.0),
-            peakcomp_right: VcaPeakComp::new_default(48000.0),
+            peakcomp: StereoVcaPeakComp::new(48000.0),
             peakcomp_gain_db: Arc::new(Mutex::new(0.0)),
             channel9: Stereo::<Channel9>::new(48000.0),
             enhance_eq: StereoEnhanceEq::new(48000.0),
@@ -1544,8 +1528,10 @@ impl Plugin for Poddyclip {
         // Check if HP slope parameter changed - rebuild filters if needed
         let current_hp_slope = self.params.filters.hp_slope.value();
         if current_hp_slope != self.prev_hp_slope {
-            self.filter_left = FilterChain::new(self.sample_rate, current_hp_slope);
-            self.filter_right = FilterChain::new(self.sample_rate, current_hp_slope);
+            self.filter = Stereo::from_pair(
+                FilterChain::new(self.sample_rate, current_hp_slope),
+                FilterChain::new(self.sample_rate, current_hp_slope),
+            );
             self.prev_hp_slope = current_hp_slope;
         }
 
@@ -1553,8 +1539,7 @@ impl Plugin for Poddyclip {
         let reset_state = self.params.reset_noise.value();
         if reset_state != self.prev_reset_state {
             // State changed (either edge) - reset everything
-            self.filter_left.reset();
-            self.filter_right.reset();
+            self.filter.reset();
             self.denoiser.reset();
         }
         self.prev_reset_state = reset_state;
@@ -1676,38 +1661,41 @@ impl Poddyclip {
         // =================================================================
         self.denoiser.left.set_visualization_enabled(viz_enabled);
 
-        // Peak Compressor
+        // Peak Compressor (linked stereo - set both channels)
         if peakcomp_enabled {
-            self.peakcomp_left.set_threshold(peakcomp_threshold);
-            self.peakcomp_left.set_ratio(peakcomp_ratio);
-            self.peakcomp_left.set_attack(peakcomp_attack);
-            self.peakcomp_left.set_release(peakcomp_release);
+            self.peakcomp.set_threshold(peakcomp_threshold);
+            self.peakcomp.set_ratio(peakcomp_ratio);
+            self.peakcomp.set_attack(peakcomp_attack);
+            self.peakcomp.set_release(peakcomp_release);
         }
 
-        // FixEq
-        self.fixeq_left.set_demud_enabled(demud_enabled);
+        // FixEq (single instance, mono mode)
+        self.fixeq.set_stereo(false);
+        self.fixeq.set_demud_enabled(demud_enabled);
         if demud_enabled {
-            self.fixeq_left.set_demud_frequency(demud_freq);
+            self.fixeq.set_demud_frequency(demud_freq);
         }
-        self.fixeq_left.set_demud_strength(demud_strength);
+        self.fixeq.set_demud_strength(demud_strength);
 
-        self.fixeq_left.set_correction_a_enabled(corr_a_enabled);
+        self.fixeq.set_correction_a_enabled(corr_a_enabled);
         if corr_a_enabled {
-            self.fixeq_left.set_correction_a_frequency(corr_a_freq);
+            self.fixeq.set_correction_a_frequency(corr_a_freq);
         }
-        self.fixeq_left.set_correction_a_strength(corr_a_strength);
+        self.fixeq.set_correction_a_strength(corr_a_strength);
 
-        self.fixeq_left.set_correction_b_enabled(corr_b_enabled);
+        self.fixeq.set_correction_b_enabled(corr_b_enabled);
         if corr_b_enabled {
-            self.fixeq_left.set_correction_b_frequency(corr_b_freq);
+            self.fixeq.set_correction_b_frequency(corr_b_freq);
         }
-        self.fixeq_left.set_correction_b_strength(corr_b_strength);
+        self.fixeq.set_correction_b_strength(corr_b_strength);
 
-        // De-Esser
+        // De-Esser (set both channels via set_both)
         if deesser_enabled {
-            self.deesser_left.set_frequency(deesser_freq);
-            self.deesser_left.set_q(deesser_q);
-            self.deesser_left.set_strength(deesser_strength);
+            self.deesser.set_both(|d| {
+                d.set_frequency(deesser_freq);
+                d.set_q(deesser_q);
+                d.set_strength(deesser_strength);
+            });
         }
 
         // Channel9
@@ -1744,7 +1732,7 @@ impl Poddyclip {
 
             // Apply filters before denoising
             let filtered_sample = if filter_enabled {
-                self.filter_left.process(input_sample)
+                self.filter.left.process(input_sample)
             } else {
                 input_sample
             };
@@ -1752,17 +1740,17 @@ impl Poddyclip {
             // Process through streaming denoiser
             let mut output_sample = self.denoiser.left.process_sample(filtered_sample);
 
-            // Apply Peak Compressor
+            // Apply Peak Compressor (mono uses left channel only)
             if peakcomp_enabled {
-                output_sample = self.peakcomp_left.process(output_sample);
+                output_sample = self.peakcomp.left.process(output_sample);
             }
 
-            // Apply FixEq
-            output_sample = self.fixeq_left.process(output_sample);
+            // Apply FixEq (uses process_mono for mono input)
+            output_sample = self.fixeq.process(output_sample);
 
             // Apply De-Esser
             if deesser_enabled {
-                output_sample = self.deesser_left.process(output_sample);
+                output_sample = self.deesser.left.process(output_sample);
             }
 
             // Apply Channel9
@@ -1805,19 +1793,19 @@ impl Poddyclip {
                 *viz = self.denoiser.left.get_visualization_data();
             }
             if let Ok(mut gain) = self.demud_gain_db.try_lock() {
-                *gain = self.fixeq_left.get_demud_gain_db();
+                *gain = self.fixeq.get_demud_gain_db();
             }
             if let Ok(mut gain) = self.correction_a_gain_db.try_lock() {
-                *gain = self.fixeq_left.get_correction_a_gain_db();
+                *gain = self.fixeq.get_correction_a_gain_db();
             }
             if let Ok(mut gain) = self.correction_b_gain_db.try_lock() {
-                *gain = self.fixeq_left.get_correction_b_gain_db();
+                *gain = self.fixeq.get_correction_b_gain_db();
             }
             if let Ok(mut gain) = self.deesser_gain_db.try_lock() {
-                *gain = self.deesser_left.get_gain_reduction_db();
+                *gain = self.deesser.left.get_gain_reduction_db();
             }
             if let Ok(mut gain) = self.peakcomp_gain_db.try_lock() {
-                *gain = self.peakcomp_left.get_gain_reduction_db();
+                *gain = self.peakcomp.get_gain_reduction_db();
             }
             if let Ok(mut gain) = self.limiter_gain_db.try_lock() {
                 *gain = last_limiter_gr_db;
@@ -1901,54 +1889,41 @@ impl Poddyclip {
         self.denoiser.left.set_visualization_enabled(viz_enabled);
         self.denoiser.right.set_visualization_enabled(false);
 
-        // Peak Compressor (both channels)
+        // Peak Compressor (linked stereo - set both channels)
         if peakcomp_enabled {
-            self.peakcomp_left.set_threshold(peakcomp_threshold);
-            self.peakcomp_left.set_ratio(peakcomp_ratio);
-            self.peakcomp_left.set_attack(peakcomp_attack);
-            self.peakcomp_left.set_release(peakcomp_release);
-            self.peakcomp_right.set_threshold(peakcomp_threshold);
-            self.peakcomp_right.set_ratio(peakcomp_ratio);
-            self.peakcomp_right.set_attack(peakcomp_attack);
-            self.peakcomp_right.set_release(peakcomp_release);
+            self.peakcomp.set_threshold(peakcomp_threshold);
+            self.peakcomp.set_ratio(peakcomp_ratio);
+            self.peakcomp.set_attack(peakcomp_attack);
+            self.peakcomp.set_release(peakcomp_release);
         }
 
-        // FixEq (both channels)
-        self.fixeq_left.set_demud_enabled(demud_enabled);
-        self.fixeq_right.set_demud_enabled(demud_enabled);
+        // FixEq (single instance, stereo mode)
+        self.fixeq.set_stereo(true);
+        self.fixeq.set_demud_enabled(demud_enabled);
         if demud_enabled {
-            self.fixeq_left.set_demud_frequency(demud_freq);
-            self.fixeq_right.set_demud_frequency(demud_freq);
+            self.fixeq.set_demud_frequency(demud_freq);
         }
-        self.fixeq_left.set_demud_strength(demud_strength);
-        self.fixeq_right.set_demud_strength(demud_strength);
+        self.fixeq.set_demud_strength(demud_strength);
 
-        self.fixeq_left.set_correction_a_enabled(corr_a_enabled);
-        self.fixeq_right.set_correction_a_enabled(corr_a_enabled);
+        self.fixeq.set_correction_a_enabled(corr_a_enabled);
         if corr_a_enabled {
-            self.fixeq_left.set_correction_a_frequency(corr_a_freq);
-            self.fixeq_right.set_correction_a_frequency(corr_a_freq);
+            self.fixeq.set_correction_a_frequency(corr_a_freq);
         }
-        self.fixeq_left.set_correction_a_strength(corr_a_strength);
-        self.fixeq_right.set_correction_a_strength(corr_a_strength);
+        self.fixeq.set_correction_a_strength(corr_a_strength);
 
-        self.fixeq_left.set_correction_b_enabled(corr_b_enabled);
-        self.fixeq_right.set_correction_b_enabled(corr_b_enabled);
+        self.fixeq.set_correction_b_enabled(corr_b_enabled);
         if corr_b_enabled {
-            self.fixeq_left.set_correction_b_frequency(corr_b_freq);
-            self.fixeq_right.set_correction_b_frequency(corr_b_freq);
+            self.fixeq.set_correction_b_frequency(corr_b_freq);
         }
-        self.fixeq_left.set_correction_b_strength(corr_b_strength);
-        self.fixeq_right.set_correction_b_strength(corr_b_strength);
+        self.fixeq.set_correction_b_strength(corr_b_strength);
 
-        // De-Esser (both channels)
+        // De-Esser (both channels via set_both)
         if deesser_enabled {
-            self.deesser_left.set_frequency(deesser_freq);
-            self.deesser_left.set_q(deesser_q);
-            self.deesser_left.set_strength(deesser_strength);
-            self.deesser_right.set_frequency(deesser_freq);
-            self.deesser_right.set_q(deesser_q);
-            self.deesser_right.set_strength(deesser_strength);
+            self.deesser.set_both(|d| {
+                d.set_frequency(deesser_freq);
+                d.set_q(deesser_q);
+                d.set_strength(deesser_strength);
+            });
         }
 
         // Channel9 (both channels)
@@ -1986,12 +1961,12 @@ impl Poddyclip {
 
             // Apply filters before denoising
             let filtered_left = if filter_enabled {
-                self.filter_left.process(left_in)
+                self.filter.left.process(left_in)
             } else {
                 left_in
             };
             let filtered_right = if filter_enabled {
-                self.filter_right.process(right_in)
+                self.filter.right.process(right_in)
             } else {
                 right_in
             };
@@ -2000,20 +1975,19 @@ impl Poddyclip {
             let mut left_out = self.denoiser.left.process_sample(filtered_left);
             let mut right_out = self.denoiser.right.process_sample(filtered_right);
 
-            // Apply Peak Compressor
+            // Apply Peak Compressor (linked stereo detection)
             if peakcomp_enabled {
-                left_out = self.peakcomp_left.process(left_out);
-                right_out = self.peakcomp_right.process(right_out);
+                (left_out, right_out) = self.peakcomp.process_sample_stereo(left_out, right_out);
             }
 
-            // Apply FixEq
-            left_out = self.fixeq_left.process(left_out);
-            right_out = self.fixeq_right.process(right_out);
+            // Apply FixEq (stereo mode, uses separate L/R bands)
+            left_out = self.fixeq.process_sample_left(left_out);
+            right_out = self.fixeq.process_sample_right(right_out);
 
             // Apply De-Esser
             if deesser_enabled {
-                left_out = self.deesser_left.process(left_out);
-                right_out = self.deesser_right.process(right_out);
+                left_out = self.deesser.left.process(left_out);
+                right_out = self.deesser.right.process(right_out);
             }
 
             // Apply Channel9
@@ -2064,19 +2038,19 @@ impl Poddyclip {
                 *viz = self.denoiser.left.get_visualization_data();
             }
             if let Ok(mut gain) = self.demud_gain_db.try_lock() {
-                *gain = self.fixeq_left.get_demud_gain_db();
+                *gain = self.fixeq.get_demud_gain_db();
             }
             if let Ok(mut gain) = self.correction_a_gain_db.try_lock() {
-                *gain = self.fixeq_left.get_correction_a_gain_db();
+                *gain = self.fixeq.get_correction_a_gain_db();
             }
             if let Ok(mut gain) = self.correction_b_gain_db.try_lock() {
-                *gain = self.fixeq_left.get_correction_b_gain_db();
+                *gain = self.fixeq.get_correction_b_gain_db();
             }
             if let Ok(mut gain) = self.deesser_gain_db.try_lock() {
-                *gain = self.deesser_left.get_gain_reduction_db();
+                *gain = self.deesser.left.get_gain_reduction_db();
             }
             if let Ok(mut gain) = self.peakcomp_gain_db.try_lock() {
-                *gain = self.peakcomp_left.get_gain_reduction_db();
+                *gain = self.peakcomp.get_gain_reduction_db();
             }
             if let Ok(mut gain) = self.limiter_gain_db.try_lock() {
                 *gain = last_limiter_gr_db;

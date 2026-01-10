@@ -41,13 +41,6 @@ impl Default for SibilanceAnalysis {
     }
 }
 
-/// Mix stereo to mono for analysis
-pub fn mix_to_mono(left: &[f32], right: &[f32]) -> Vec<f32> {
-    left.iter()
-        .zip(right.iter())
-        .map(|(&l, &r)| (l + r) * 0.5)
-        .collect()
-}
 
 /// Analyze audio for sibilance characteristics
 pub fn analyze_sibilance(audio: &[f32], sample_rate: u32) -> SibilanceAnalysis {
@@ -191,6 +184,7 @@ pub fn calculate_deesser_q(bandwidth_hz: f32, center_freq: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analysis::utils::mix_to_mono;
 
     #[test]
     fn test_analyze_empty() {

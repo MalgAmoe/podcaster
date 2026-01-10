@@ -7,7 +7,7 @@
 //! - Bell filter (narrow Q processing)
 #![cfg_attr(all(feature = "cli", feature = "plugin"), allow(dead_code))]
 
-use super::common::SvfBiquad;
+use super::filters::SvfBiquad;
 
 /// A single dynamic EQ band with sidechain detection and bell filter processing
 #[derive(Clone, Debug)]

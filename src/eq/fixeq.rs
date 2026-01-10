@@ -6,15 +6,8 @@
 
 #![allow(dead_code)]
 
-pub mod analysis;
-
-#[allow(unused_imports)]
-pub use analysis::{
-    analyze_from_spectrum, mix_to_mono, BandAnalysis, FixEqAnalysis,
-    DEFAULT_CORRECTION_A_FREQ, DEFAULT_CORRECTION_B_FREQ,
-};
-
-use crate::filters::dynamic::DynamicBand;
+use super::dynamic::DynamicBand;
+use super::fixeq_analysis::{analyze_from_spectrum, FixEqAnalysis};
 
 /// FixEq processor containing all dynamic EQ bands.
 /// Handles stereo/mono internally.
@@ -159,7 +152,7 @@ impl FixEq {
     }
 
     /// Process a single left channel sample
-    fn process_sample_left(&mut self, input: f32) -> f32 {
+    pub fn process_sample_left(&mut self, input: f32) -> f32 {
         let mut output = input;
 
         if let Some(demud) = &mut self.demud_left {
@@ -178,7 +171,7 @@ impl FixEq {
     }
 
     /// Process a single right channel sample
-    fn process_sample_right(&mut self, input: f32) -> f32 {
+    pub fn process_sample_right(&mut self, input: f32) -> f32 {
         let mut output = input;
 
         if let Some(demud) = &mut self.demud_right {
