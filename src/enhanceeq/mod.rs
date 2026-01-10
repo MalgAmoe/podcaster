@@ -267,6 +267,26 @@ impl EnhanceEq {
     }
 }
 
+impl crate::traits::AudioProcessor for EnhanceEq {
+    fn process_buffer(&mut self, buffer: &mut [f32]) {
+        for sample in buffer.iter_mut() {
+            *sample = self.process(*sample);
+        }
+    }
+
+    fn reset(&mut self) {
+        self.reset()
+    }
+}
+
+impl crate::traits::MonoProcessor for EnhanceEq {}
+
+impl crate::traits::Processor for EnhanceEq {
+    fn new(sample_rate: f32) -> Self {
+        Self::new(sample_rate)
+    }
+}
+
 /// Stereo Enhance EQ processor
 #[derive(Clone, Debug)]
 pub struct StereoEnhanceEq {
@@ -421,5 +441,15 @@ impl StereoEnhanceEq {
     pub fn reset(&mut self) {
         self.left.reset();
         self.right.reset();
+    }
+}
+
+impl crate::traits::StereoProcessor for StereoEnhanceEq {
+    fn process_stereo(&mut self, left: &mut [f32], right: &mut [f32]) {
+        StereoEnhanceEq::process_stereo(self, left, right)
+    }
+
+    fn reset(&mut self) {
+        self.reset()
     }
 }

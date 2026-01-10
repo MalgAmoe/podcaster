@@ -9,10 +9,4 @@ pub mod common;
 pub mod dynamic;
 
 // Re-export common types
-#[cfg_attr(feature = "cli", allow(unused_imports))]
 pub use common::{FilterChain, HighPassSlope, HighShelfSvf, SvfBiquad};
-
-// CLI also uses StereoFilterChain
-#[cfg(feature = "cli")]
-#[allow(unused_imports)]
-pub use common::StereoFilterChain;

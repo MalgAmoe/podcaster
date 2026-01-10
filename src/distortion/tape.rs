@@ -402,46 +402,23 @@ impl TapeHysteresis {
     }
 }
 
-/// Stereo tape hysteresis processor
-#[derive(Clone, Debug)]
-pub struct StereoTapeHysteresis {
-    pub left: TapeHysteresis,
-    pub right: TapeHysteresis,
+impl crate::traits::AudioProcessor for TapeHysteresis {
+    fn process_buffer(&mut self, buffer: &mut [f32]) {
+        for sample in buffer.iter_mut() {
+            *sample = self.process(*sample);
+        }
+    }
+
+    fn reset(&mut self) {
+        self.reset()
+    }
 }
 
-impl StereoTapeHysteresis {
-    pub fn new(sample_rate: f64) -> Self {
-        Self {
-            left: TapeHysteresis::new(sample_rate),
-            right: TapeHysteresis::new(sample_rate),
-        }
-    }
+impl crate::traits::MonoProcessor for TapeHysteresis {}
 
-    pub fn set_drive(&mut self, drive: f64) {
-        self.left.set_drive(drive);
-        self.right.set_drive(drive);
-    }
-
-    pub fn set_saturation(&mut self, saturation: f64) {
-        self.left.set_saturation(saturation);
-        self.right.set_saturation(saturation);
-    }
-
-    pub fn set_bias(&mut self, bias: f64) {
-        self.left.set_bias(bias);
-        self.right.set_bias(bias);
-    }
-
-    pub fn process_stereo(&mut self, left: &mut [f32], right: &mut [f32]) {
-        for (l, r) in left.iter_mut().zip(right.iter_mut()) {
-            *l = self.left.process(*l);
-            *r = self.right.process(*r);
-        }
-    }
-
-    pub fn reset(&mut self) {
-        self.left.reset();
-        self.right.reset();
+impl crate::traits::ProcessorF64 for TapeHysteresis {
+    fn new(sample_rate: f64) -> Self {
+        Self::new(sample_rate)
     }
 }
 
@@ -548,40 +525,23 @@ impl TapeGlue {
     }
 }
 
-/// Stereo TapeGlue
-#[derive(Clone, Debug)]
-pub struct StereoTapeGlue {
-    pub left: TapeGlue,
-    pub right: TapeGlue,
+impl crate::traits::AudioProcessor for TapeGlue {
+    fn process_buffer(&mut self, buffer: &mut [f32]) {
+        for sample in buffer.iter_mut() {
+            *sample = self.process(*sample);
+        }
+    }
+
+    fn reset(&mut self) {
+        self.reset()
+    }
 }
 
-impl StereoTapeGlue {
-    pub fn new(sample_rate: f64) -> Self {
-        Self {
-            left: TapeGlue::new(sample_rate),
-            right: TapeGlue::new(sample_rate),
-        }
-    }
+impl crate::traits::MonoProcessor for TapeGlue {}
 
-    pub fn set_warmth(&mut self, warmth: f64) {
-        self.left.set_warmth(warmth);
-        self.right.set_warmth(warmth);
-    }
-
-    pub fn process_stereo(&mut self, left: &mut [f32], right: &mut [f32]) {
-        for (l, r) in left.iter_mut().zip(right.iter_mut()) {
-            *l = self.left.process(*l);
-            *r = self.right.process(*r);
-        }
-    }
-
-    pub fn process_mono(&mut self, buffer: &mut [f32]) {
-        self.left.process_mono(buffer);
-    }
-
-    pub fn reset(&mut self) {
-        self.left.reset();
-        self.right.reset();
+impl crate::traits::ProcessorF64 for TapeGlue {
+    fn new(sample_rate: f64) -> Self {
+        Self::new(sample_rate)
     }
 }
 

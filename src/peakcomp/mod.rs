@@ -178,6 +178,24 @@ impl VcaPeakComp {
     }
 }
 
+impl crate::traits::AudioProcessor for VcaPeakComp {
+    fn process_buffer(&mut self, buffer: &mut [f32]) {
+        for sample in buffer.iter_mut() {
+            *sample = self.process(*sample);
+        }
+    }
+
+    fn reset(&mut self) {
+        self.reset()
+    }
+
+    fn latency_samples(&self) -> usize {
+        self.lookahead_samples
+    }
+}
+
+impl crate::traits::MonoProcessor for VcaPeakComp {}
+
 /// Stereo VCA peak compressor with linked detection
 #[derive(Clone, Debug)]
 pub struct StereoVcaPeakComp {
@@ -329,5 +347,19 @@ impl StereoVcaPeakComp {
     pub fn reset(&mut self) {
         self.left.reset();
         self.right.reset();
+    }
+}
+
+impl crate::traits::StereoProcessor for StereoVcaPeakComp {
+    fn process_stereo(&mut self, left: &mut [f32], right: &mut [f32]) {
+        StereoVcaPeakComp::process_stereo(self, left, right)
+    }
+
+    fn reset(&mut self) {
+        self.reset()
+    }
+
+    fn latency_samples(&self) -> usize {
+        self.left.get_latency_samples()
     }
 }

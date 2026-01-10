@@ -9,6 +9,7 @@ mod dynamic;
 mod filters;
 mod fixeq;
 mod peakcomp;
+mod traits;
 mod visualizations;
 
 use nih_plug::prelude::*;
@@ -16,17 +17,16 @@ use nih_plug_egui::{create_egui_editor, egui, widgets, EguiState};
 use std::sync::{Arc, Mutex};
 
 use denoiser::{
-    DenoiserParams, RealtimeDenoiser, VisualizationData, DEFAULT_ALPHA_BASE, DEFAULT_ALPHA_MAX,
-    DEFAULT_ALPHA_MIN, DEFAULT_BETA, DEFAULT_LAMBDA,
-    DEFAULT_SFM_NOISE, DEFAULT_SFM_SPEECH, DEFAULT_SPIKE_THRESHOLD, HOP_SIZE, NUM_BANDS,
-    PRESETS, WINDOW_SIZE,
+    DenoiserParams, StreamingDenoiser, VisualizationData, DEFAULT_LAMBDA,
+    DEFAULT_SFM_NOISE, DEFAULT_SFM_SPEECH, DEFAULT_SPIKE_THRESHOLD, NUM_BANDS, PRESETS,
 };
 
 use enhanceeq::StereoEnhanceEq;
 use deesser::DeEsser;
-use distortion::{StereoChannel9, StereoTapeGlue};
+use distortion::{Channel9, TapeGlue};
 use peakcomp::VcaPeakComp;
-use dynamic::{StereoButterComp2, StereoRealtimeLimiter};
+use dynamic::{ButterComp2, StereoRealtimeLimiter};
+use traits::Stereo;
 use filters::{FilterChain, HighPassSlope};
 use fixeq::FixEq;
 
@@ -269,16 +269,9 @@ struct Poddyclip {
     filter_right: FilterChain,
     prev_hp_slope: HighPassSlope,
 
-    denoiser_left: RealtimeDenoiser,
-    denoiser_right: RealtimeDenoiser,
+    // Streaming denoiser (handles frame buffering internally)
+    denoiser: Stereo<StreamingDenoiser>,
     sample_rate: f32,
-
-    // Buffering for frame-based processing (sliding window)
-    input_ring_left: Vec<f32>,
-    input_ring_right: Vec<f32>,
-    output_buffer_left: Vec<f32>,
-    output_buffer_right: Vec<f32>,
-    samples_since_process: usize,
 
     // Track reset button state
     prev_reset_state: bool,
@@ -306,16 +299,16 @@ struct Poddyclip {
     peakcomp_gain_db: Arc<Mutex<f32>>,
 
     // Channel9 (Neve transformer emulation)
-    channel9: StereoChannel9,
+    channel9: Stereo<Channel9>,
 
     // Enhance EQ (lowmid cut + presence + dynamic air)
     enhance_eq: StereoEnhanceEq,
 
     // ButterComp2 (smooth leveling)
-    buttercomp: StereoButterComp2,
+    buttercomp: Stereo<ButterComp2>,
 
     // TapeGlue (subtle tape saturation)
-    tape_glue: StereoTapeGlue,
+    tape_glue: Stereo<TapeGlue>,
 
     // Limiter (true peak limiting)
     limiter: StereoRealtimeLimiter,
@@ -331,14 +324,11 @@ impl Default for Poddyclip {
             filter_left: FilterChain::new(48000.0, HighPassSlope::Slope24dB),
             filter_right: FilterChain::new(48000.0, HighPassSlope::Slope24dB),
             prev_hp_slope: HighPassSlope::Slope24dB,
-            denoiser_left: RealtimeDenoiser::new(48000),
-            denoiser_right: RealtimeDenoiser::new(48000),
+            denoiser: Stereo::from_pair(
+                StreamingDenoiser::new(48000),
+                StreamingDenoiser::new(48000),
+            ),
             sample_rate: 48000.0,
-            input_ring_left: vec![0.0; WINDOW_SIZE],
-            input_ring_right: vec![0.0; WINDOW_SIZE],
-            output_buffer_left: Vec::new(),
-            output_buffer_right: Vec::new(),
-            samples_since_process: 0,
             prev_reset_state: false,
             visualization_data: Arc::new(Mutex::new(VisualizationData::default())),
             fixeq_left: FixEq::new(48000.0),
@@ -352,10 +342,10 @@ impl Default for Poddyclip {
             peakcomp_left: VcaPeakComp::new_default(48000.0),
             peakcomp_right: VcaPeakComp::new_default(48000.0),
             peakcomp_gain_db: Arc::new(Mutex::new(0.0)),
-            channel9: StereoChannel9::new(48000.0),
+            channel9: Stereo::<Channel9>::new(48000.0),
             enhance_eq: StereoEnhanceEq::new(48000.0),
-            buttercomp: StereoButterComp2::new(48000.0),
-            tape_glue: StereoTapeGlue::new(48000.0),
+            buttercomp: Stereo::<ButterComp2>::new(48000.0),
+            tape_glue: Stereo::<TapeGlue>::new_f64(48000.0),
             limiter: StereoRealtimeLimiter::new(-1.0, 5.0, 100.0, 48000.0),
             limiter_gain_db: Arc::new(Mutex::new(0.0)),
         }
@@ -383,12 +373,13 @@ impl Default for PoddyclipParams {
             },
 
             subtraction: SubtractionParams {
+                // Use Moderate preset (index 2) as defaults
                 alpha_base: FloatParam::new(
                     "Alpha Base",
-                    DEFAULT_ALPHA_BASE,
+                    PRESETS[2].alpha_base,
                     FloatRange::Linear {
                         min: 0.0,
-                        max: 20.0,
+                        max: 25.0,
                     },
                 )
                 .with_step_size(0.1)
@@ -396,10 +387,10 @@ impl Default for PoddyclipParams {
 
                 alpha_min: FloatParam::new(
                     "Alpha Min",
-                    DEFAULT_ALPHA_MIN,
+                    PRESETS[2].alpha_min,
                     FloatRange::Linear {
                         min: 0.0,
-                        max: 20.0,
+                        max: 25.0,
                     },
                 )
                 .with_step_size(0.1)
@@ -407,10 +398,10 @@ impl Default for PoddyclipParams {
 
                 alpha_max: FloatParam::new(
                     "Alpha Max",
-                    DEFAULT_ALPHA_MAX,
+                    PRESETS[2].alpha_max,
                     FloatRange::Linear {
                         min: 0.0,
-                        max: 20.0,
+                        max: 25.0,
                     },
                 )
                 .with_step_size(0.1)
@@ -418,8 +409,8 @@ impl Default for PoddyclipParams {
 
                 beta: FloatParam::new(
                     "Beta (Floor)",
-                    DEFAULT_BETA,
-                    FloatRange::Linear { min: 0.0, max: 1.0 },
+                    PRESETS[2].beta,
+                    FloatRange::Linear { min: 0.0, max: 0.1 },
                 )
                 .with_step_size(0.001)
                 .with_value_to_string(formatters::v2s_f32_rounded(3)),
@@ -1528,8 +1519,10 @@ impl Plugin for Poddyclip {
         self.sample_rate = buffer_config.sample_rate;
 
         // Reinitialize denoisers with correct sample rate
-        self.denoiser_left = RealtimeDenoiser::new(buffer_config.sample_rate as u32);
-        self.denoiser_right = RealtimeDenoiser::new(buffer_config.sample_rate as u32);
+        self.denoiser = Stereo::from_pair(
+            StreamingDenoiser::new(buffer_config.sample_rate as u32),
+            StreamingDenoiser::new(buffer_config.sample_rate as u32),
+        );
 
         // Reinitialize limiter with correct sample rate
         self.limiter = StereoRealtimeLimiter::new(-1.0, 5.0, 100.0, buffer_config.sample_rate);
@@ -1538,17 +1531,7 @@ impl Plugin for Poddyclip {
     }
 
     fn reset(&mut self) {
-        self.denoiser_left.reset();
-        self.denoiser_right.reset();
-
-        // Clear all buffers
-        self.input_ring_left.fill(0.0);
-        self.input_ring_right.fill(0.0);
-        self.output_buffer_left.clear();
-        self.output_buffer_right.clear();
-        self.samples_since_process = 0;
-
-        // Reset limiter
+        self.denoiser.reset();
         self.limiter.reset();
     }
 
@@ -1572,13 +1555,7 @@ impl Plugin for Poddyclip {
             // State changed (either edge) - reset everything
             self.filter_left.reset();
             self.filter_right.reset();
-            self.denoiser_left.reset();
-            self.denoiser_right.reset();
-            self.input_ring_left.fill(0.0);
-            self.input_ring_right.fill(0.0);
-            self.output_buffer_left.clear();
-            self.output_buffer_right.clear();
-            self.samples_since_process = 0;
+            self.denoiser.reset();
         }
         self.prev_reset_state = reset_state;
 
@@ -1593,19 +1570,19 @@ impl Plugin for Poddyclip {
         }
 
         // Report latency (lookahead needed for STFT)
-        context.set_latency_samples(self.denoiser_left.latency_samples());
+        context.set_latency_samples(self.denoiser.left.latency_samples() as u32);
 
         // Process based on channel count
         match num_channels {
             1 => {
                 // Mono processing
-                self.denoiser_left.set_params(params);
+                self.denoiser.left.set_params(params);
                 self.process_mono_channel(buffer, 0);
             }
             2 => {
                 // Stereo L/R independent
-                self.denoiser_left.set_params(params.clone());
-                self.denoiser_right.set_params(params);
+                self.denoiser.left.set_params(params.clone());
+                self.denoiser.right.set_params(params);
                 self.process_stereo_lr(buffer);
             }
             _ => {
@@ -1625,41 +1602,142 @@ impl Plugin for Poddyclip {
 
 impl Poddyclip {
     fn process_mono_channel(&mut self, buffer: &mut Buffer, _channel_idx: usize) {
-        // Check if editor is open to enable visualization
+        // =================================================================
+        // Read ALL parameters ONCE per buffer (not per sample!)
+        // =================================================================
         let viz_enabled = self.params.editor_state.is_open();
-        self.denoiser_left.set_visualization_enabled(viz_enabled);
-
         let filter_enabled = self.params.filters.enable.value();
 
-        // FixEq parameters - De-mud
+        // Peak Compressor params
+        let peakcomp_enabled = self.params.peakcomp.enable.value();
+        let peakcomp_threshold = self.params.peakcomp.threshold.value();
+        let peakcomp_ratio = self.params.peakcomp.ratio.value();
+        let peakcomp_attack = self.params.peakcomp.attack.value();
+        let peakcomp_release = self.params.peakcomp.release.value();
+
+        // FixEq params - De-mud
         let demud_enabled = self.params.demud.enable.value();
+        let demud_freq = self.params.demud.frequency.value();
+        let demud_strength = if demud_enabled {
+            self.params.demud.macro_val.value()
+        } else {
+            0.0
+        };
+
+        // FixEq params - Correction A
+        let corr_a_enabled = self.params.correction_a.enable.value();
+        let corr_a_freq = self.params.correction_a.frequency.value();
+        let corr_a_strength = if corr_a_enabled {
+            self.params.correction_a.macro_val.value()
+        } else {
+            0.0
+        };
+
+        // FixEq params - Correction B
+        let corr_b_enabled = self.params.correction_b.enable.value();
+        let corr_b_freq = self.params.correction_b.frequency.value();
+        let corr_b_strength = if corr_b_enabled {
+            self.params.correction_b.macro_val.value()
+        } else {
+            0.0
+        };
+
+        // De-Esser params
+        let deesser_enabled = self.params.deesser.enable.value();
+        let deesser_freq = self.params.deesser.frequency.value();
+        let deesser_q = self.params.deesser.q.value();
+        let deesser_strength = self.params.deesser.strength.value();
+
+        // Channel9 params
+        let channel9_enabled = self.params.channel9.enable.value();
+        let channel9_drive = self.params.channel9.drive.value();
+
+        // EnhanceEQ params
+        let enhance_eq_enabled = self.params.enhance_eq.enable.value();
+        let enhance_lowmid_freq = self.params.enhance_eq.lowmid_freq.value();
+        let enhance_lowmid_gain = self.params.enhance_eq.lowmid_gain.value();
+        let enhance_presence_freq = self.params.enhance_eq.presence_freq.value();
+        let enhance_presence_gain = self.params.enhance_eq.presence_gain.value();
+        let enhance_air_gain = self.params.enhance_eq.air_gain.value();
+
+        // ButterComp params
+        let buttercomp_enabled = self.params.buttercomp.enable.value();
+        let buttercomp_compress = self.params.buttercomp.compress.value();
+
+        // TapeGlue params
+        let tape_glue_enabled = self.params.tape_glue.enable.value();
+        let tape_glue_warmth = self.params.tape_glue.warmth.value() as f64;
+
+        // Limiter params
+        let limiter_enabled = self.params.limiter.enable.value();
+
+        // =================================================================
+        // Sync params to processors ONCE per buffer
+        // =================================================================
+        self.denoiser.left.set_visualization_enabled(viz_enabled);
+
+        // Peak Compressor
+        if peakcomp_enabled {
+            self.peakcomp_left.set_threshold(peakcomp_threshold);
+            self.peakcomp_left.set_ratio(peakcomp_ratio);
+            self.peakcomp_left.set_attack(peakcomp_attack);
+            self.peakcomp_left.set_release(peakcomp_release);
+        }
+
+        // FixEq
         self.fixeq_left.set_demud_enabled(demud_enabled);
         if demud_enabled {
-            self.fixeq_left.set_demud_frequency(self.params.demud.frequency.value());
-            self.fixeq_left.set_demud_strength(self.params.demud.macro_val.value());
-        } else {
-            self.fixeq_left.set_demud_strength(0.0);
+            self.fixeq_left.set_demud_frequency(demud_freq);
         }
+        self.fixeq_left.set_demud_strength(demud_strength);
 
-        // Correction A
-        let corr_a_enabled = self.params.correction_a.enable.value();
         self.fixeq_left.set_correction_a_enabled(corr_a_enabled);
         if corr_a_enabled {
-            self.fixeq_left.set_correction_a_frequency(self.params.correction_a.frequency.value());
-            self.fixeq_left.set_correction_a_strength(self.params.correction_a.macro_val.value());
-        } else {
-            self.fixeq_left.set_correction_a_strength(0.0);
+            self.fixeq_left.set_correction_a_frequency(corr_a_freq);
         }
+        self.fixeq_left.set_correction_a_strength(corr_a_strength);
 
-        // Correction B
-        let corr_b_enabled = self.params.correction_b.enable.value();
         self.fixeq_left.set_correction_b_enabled(corr_b_enabled);
         if corr_b_enabled {
-            self.fixeq_left.set_correction_b_frequency(self.params.correction_b.frequency.value());
-            self.fixeq_left.set_correction_b_strength(self.params.correction_b.macro_val.value());
-        } else {
-            self.fixeq_left.set_correction_b_strength(0.0);
+            self.fixeq_left.set_correction_b_frequency(corr_b_freq);
         }
+        self.fixeq_left.set_correction_b_strength(corr_b_strength);
+
+        // De-Esser
+        if deesser_enabled {
+            self.deesser_left.set_frequency(deesser_freq);
+            self.deesser_left.set_q(deesser_q);
+            self.deesser_left.set_strength(deesser_strength);
+        }
+
+        // Channel9
+        if channel9_enabled {
+            self.channel9.left.set_drive(channel9_drive);
+        }
+
+        // EnhanceEQ
+        if enhance_eq_enabled {
+            self.enhance_eq.left.set_lowmid_freq(enhance_lowmid_freq);
+            self.enhance_eq.left.set_lowmid_gain(enhance_lowmid_gain);
+            self.enhance_eq.left.set_presence_freq(enhance_presence_freq);
+            self.enhance_eq.left.set_presence_gain(enhance_presence_gain);
+            self.enhance_eq.left.set_shelf_gain(enhance_air_gain);
+        }
+
+        // ButterComp
+        if buttercomp_enabled {
+            self.buttercomp.left.set_compress(buttercomp_compress);
+        }
+
+        // TapeGlue
+        if tape_glue_enabled {
+            self.tape_glue.left.set_warmth(tape_glue_warmth);
+        }
+
+        // =================================================================
+        // Process samples (no parameter reads inside loop)
+        // =================================================================
+        let mut last_limiter_gr_db = 0.0;
 
         for mut channel_samples in buffer.iter_samples() {
             let input_sample = channel_samples.get_mut(0).copied().unwrap_or(0.0);
@@ -1671,127 +1749,97 @@ impl Poddyclip {
                 input_sample
             };
 
-            // Slide the window: shift left and add new sample at the end
-            self.input_ring_left.rotate_left(1);
-            self.input_ring_left[WINDOW_SIZE - 1] = filtered_sample;
-            self.samples_since_process += 1;
+            // Process through streaming denoiser
+            let mut output_sample = self.denoiser.left.process_sample(filtered_sample);
 
-            // Process every HOP_SIZE samples
-            if self.samples_since_process >= HOP_SIZE {
-                let output_frame = self.denoiser_left.process_frame(&self.input_ring_left);
-                self.output_buffer_left.extend(output_frame);
-                self.samples_since_process = 0;
-
-                // Update visualization data after processing
-                if viz_enabled {
-                    if let Ok(mut viz) = self.visualization_data.try_lock() {
-                        *viz = self.denoiser_left.get_visualization_data();
-                    }
-                }
-            }
-
-            // Output from buffer
-            let mut output_sample = if !self.output_buffer_left.is_empty() {
-                self.output_buffer_left.remove(0)
-            } else {
-                input_sample // Pass through if no output ready yet
-            };
-
-            // Apply Peak Compressor right after denoiser
-            if self.params.peakcomp.enable.value() {
-                self.peakcomp_left.set_threshold(self.params.peakcomp.threshold.value());
-                self.peakcomp_left.set_ratio(self.params.peakcomp.ratio.value());
-                self.peakcomp_left.set_attack(self.params.peakcomp.attack.value());
-                self.peakcomp_left.set_release(self.params.peakcomp.release.value());
+            // Apply Peak Compressor
+            if peakcomp_enabled {
                 output_sample = self.peakcomp_left.process(output_sample);
             }
 
-            // Apply FixEq AFTER peak comp
+            // Apply FixEq
             output_sample = self.fixeq_left.process(output_sample);
 
-            // Apply De-Esser AFTER FixEq
-            if self.params.deesser.enable.value() {
-                self.deesser_left.set_frequency(self.params.deesser.frequency.value());
-                self.deesser_left.set_q(self.params.deesser.q.value());
-                self.deesser_left.set_strength(self.params.deesser.strength.value());
+            // Apply De-Esser
+            if deesser_enabled {
                 output_sample = self.deesser_left.process(output_sample);
             }
 
-            // Apply Channel9 (Neve transformer) AFTER De-Esser
-            if self.params.channel9.enable.value() {
-                self.channel9.set_drive(self.params.channel9.drive.value());
+            // Apply Channel9
+            if channel9_enabled {
                 output_sample = self.channel9.left.process(output_sample);
             }
 
-            // Apply Enhance EQ AFTER Channel9
-            if self.params.enhance_eq.enable.value() {
-                self.enhance_eq.left.set_lowmid_freq(self.params.enhance_eq.lowmid_freq.value());
-                self.enhance_eq.left.set_lowmid_gain(self.params.enhance_eq.lowmid_gain.value());
-                self.enhance_eq.left.set_presence_freq(self.params.enhance_eq.presence_freq.value());
-                self.enhance_eq.left.set_presence_gain(self.params.enhance_eq.presence_gain.value());
-                self.enhance_eq.left.set_shelf_gain(self.params.enhance_eq.air_gain.value());
+            // Apply EnhanceEQ
+            if enhance_eq_enabled {
                 output_sample = self.enhance_eq.left.process(output_sample);
             }
 
-            // Apply ButterComp AFTER Enhance EQ
-            if self.params.buttercomp.enable.value() {
-                self.buttercomp.left.set_compress(self.params.buttercomp.compress.value());
+            // Apply ButterComp
+            if buttercomp_enabled {
                 output_sample = self.buttercomp.left.process(output_sample);
             }
 
-            // Apply TapeGlue AFTER ButterComp
-            if self.params.tape_glue.enable.value() {
-                self.tape_glue.set_warmth(self.params.tape_glue.warmth.value() as f64);
+            // Apply TapeGlue
+            if tape_glue_enabled {
                 output_sample = self.tape_glue.left.process(output_sample);
             }
 
-            // Apply Limiter AFTER TapeGlue (final stage)
-            let mut limiter_gr_db = 0.0;
-            if self.params.limiter.enable.value() {
-                // Note: For mono, we use the stereo limiter with same sample on both channels
-                // This ensures consistent behavior. We could also create a mono realtime limiter.
+            // Apply Limiter (final stage)
+            if limiter_enabled {
                 let (out, _, gr) = self.limiter.process(output_sample, output_sample);
                 output_sample = out;
-                limiter_gr_db = gr;
-            }
-
-            // Update gain reduction for UI
-            if viz_enabled {
-                if let Ok(mut gain) = self.demud_gain_db.try_lock() {
-                    *gain = self.fixeq_left.get_demud_gain_db();
-                }
-                if let Ok(mut gain) = self.correction_a_gain_db.try_lock() {
-                    *gain = self.fixeq_left.get_correction_a_gain_db();
-                }
-                if let Ok(mut gain) = self.correction_b_gain_db.try_lock() {
-                    *gain = self.fixeq_left.get_correction_b_gain_db();
-                }
-                if let Ok(mut gain) = self.deesser_gain_db.try_lock() {
-                    *gain = self.deesser_left.get_gain_reduction_db();
-                }
-                if let Ok(mut gain) = self.peakcomp_gain_db.try_lock() {
-                    *gain = self.peakcomp_left.get_gain_reduction_db();
-                }
-                if let Ok(mut gain) = self.limiter_gain_db.try_lock() {
-                    *gain = limiter_gr_db;
-                }
+                last_limiter_gr_db = gr;
             }
 
             if let Some(sample) = channel_samples.get_mut(0) {
                 *sample = output_sample;
             }
         }
+
+        // =================================================================
+        // Update visualization ONCE after processing buffer
+        // =================================================================
+        if viz_enabled {
+            if let Ok(mut viz) = self.visualization_data.try_lock() {
+                *viz = self.denoiser.left.get_visualization_data();
+            }
+            if let Ok(mut gain) = self.demud_gain_db.try_lock() {
+                *gain = self.fixeq_left.get_demud_gain_db();
+            }
+            if let Ok(mut gain) = self.correction_a_gain_db.try_lock() {
+                *gain = self.fixeq_left.get_correction_a_gain_db();
+            }
+            if let Ok(mut gain) = self.correction_b_gain_db.try_lock() {
+                *gain = self.fixeq_left.get_correction_b_gain_db();
+            }
+            if let Ok(mut gain) = self.deesser_gain_db.try_lock() {
+                *gain = self.deesser_left.get_gain_reduction_db();
+            }
+            if let Ok(mut gain) = self.peakcomp_gain_db.try_lock() {
+                *gain = self.peakcomp_left.get_gain_reduction_db();
+            }
+            if let Ok(mut gain) = self.limiter_gain_db.try_lock() {
+                *gain = last_limiter_gr_db;
+            }
+        }
     }
 
     fn process_stereo_lr(&mut self, buffer: &mut Buffer) {
-        // Check if editor is open to enable visualization
+        // =================================================================
+        // Read ALL parameters ONCE per buffer (not per sample!)
+        // =================================================================
         let viz_enabled = self.params.editor_state.is_open();
-        self.denoiser_left.set_visualization_enabled(viz_enabled);
-        self.denoiser_right.set_visualization_enabled(false); // Only visualize left
-
         let filter_enabled = self.params.filters.enable.value();
 
-        // FixEq parameters - De-mud
+        // Peak Compressor params
+        let peakcomp_enabled = self.params.peakcomp.enable.value();
+        let peakcomp_threshold = self.params.peakcomp.threshold.value();
+        let peakcomp_ratio = self.params.peakcomp.ratio.value();
+        let peakcomp_attack = self.params.peakcomp.attack.value();
+        let peakcomp_release = self.params.peakcomp.release.value();
+
+        // FixEq params - De-mud
         let demud_enabled = self.params.demud.enable.value();
         let demud_freq = self.params.demud.frequency.value();
         let demud_strength = if demud_enabled {
@@ -1799,6 +1847,73 @@ impl Poddyclip {
         } else {
             0.0
         };
+
+        // FixEq params - Correction A
+        let corr_a_enabled = self.params.correction_a.enable.value();
+        let corr_a_freq = self.params.correction_a.frequency.value();
+        let corr_a_strength = if corr_a_enabled {
+            self.params.correction_a.macro_val.value()
+        } else {
+            0.0
+        };
+
+        // FixEq params - Correction B
+        let corr_b_enabled = self.params.correction_b.enable.value();
+        let corr_b_freq = self.params.correction_b.frequency.value();
+        let corr_b_strength = if corr_b_enabled {
+            self.params.correction_b.macro_val.value()
+        } else {
+            0.0
+        };
+
+        // De-Esser params
+        let deesser_enabled = self.params.deesser.enable.value();
+        let deesser_freq = self.params.deesser.frequency.value();
+        let deesser_q = self.params.deesser.q.value();
+        let deesser_strength = self.params.deesser.strength.value();
+
+        // Channel9 params
+        let channel9_enabled = self.params.channel9.enable.value();
+        let channel9_drive = self.params.channel9.drive.value();
+
+        // EnhanceEQ params
+        let enhance_eq_enabled = self.params.enhance_eq.enable.value();
+        let enhance_lowmid_freq = self.params.enhance_eq.lowmid_freq.value();
+        let enhance_lowmid_gain = self.params.enhance_eq.lowmid_gain.value();
+        let enhance_presence_freq = self.params.enhance_eq.presence_freq.value();
+        let enhance_presence_gain = self.params.enhance_eq.presence_gain.value();
+        let enhance_air_gain = self.params.enhance_eq.air_gain.value();
+
+        // ButterComp params
+        let buttercomp_enabled = self.params.buttercomp.enable.value();
+        let buttercomp_compress = self.params.buttercomp.compress.value();
+
+        // TapeGlue params
+        let tape_glue_enabled = self.params.tape_glue.enable.value();
+        let tape_glue_warmth = self.params.tape_glue.warmth.value() as f64;
+
+        // Limiter params
+        let limiter_enabled = self.params.limiter.enable.value();
+
+        // =================================================================
+        // Sync params to processors ONCE per buffer
+        // =================================================================
+        self.denoiser.left.set_visualization_enabled(viz_enabled);
+        self.denoiser.right.set_visualization_enabled(false);
+
+        // Peak Compressor (both channels)
+        if peakcomp_enabled {
+            self.peakcomp_left.set_threshold(peakcomp_threshold);
+            self.peakcomp_left.set_ratio(peakcomp_ratio);
+            self.peakcomp_left.set_attack(peakcomp_attack);
+            self.peakcomp_left.set_release(peakcomp_release);
+            self.peakcomp_right.set_threshold(peakcomp_threshold);
+            self.peakcomp_right.set_ratio(peakcomp_ratio);
+            self.peakcomp_right.set_attack(peakcomp_attack);
+            self.peakcomp_right.set_release(peakcomp_release);
+        }
+
+        // FixEq (both channels)
         self.fixeq_left.set_demud_enabled(demud_enabled);
         self.fixeq_right.set_demud_enabled(demud_enabled);
         if demud_enabled {
@@ -1808,14 +1923,6 @@ impl Poddyclip {
         self.fixeq_left.set_demud_strength(demud_strength);
         self.fixeq_right.set_demud_strength(demud_strength);
 
-        // Correction A
-        let corr_a_enabled = self.params.correction_a.enable.value();
-        let corr_a_freq = self.params.correction_a.frequency.value();
-        let corr_a_strength = if corr_a_enabled {
-            self.params.correction_a.macro_val.value()
-        } else {
-            0.0
-        };
         self.fixeq_left.set_correction_a_enabled(corr_a_enabled);
         self.fixeq_right.set_correction_a_enabled(corr_a_enabled);
         if corr_a_enabled {
@@ -1825,14 +1932,6 @@ impl Poddyclip {
         self.fixeq_left.set_correction_a_strength(corr_a_strength);
         self.fixeq_right.set_correction_a_strength(corr_a_strength);
 
-        // Correction B
-        let corr_b_enabled = self.params.correction_b.enable.value();
-        let corr_b_freq = self.params.correction_b.frequency.value();
-        let corr_b_strength = if corr_b_enabled {
-            self.params.correction_b.macro_val.value()
-        } else {
-            0.0
-        };
         self.fixeq_left.set_correction_b_enabled(corr_b_enabled);
         self.fixeq_right.set_correction_b_enabled(corr_b_enabled);
         if corr_b_enabled {
@@ -1841,6 +1940,45 @@ impl Poddyclip {
         }
         self.fixeq_left.set_correction_b_strength(corr_b_strength);
         self.fixeq_right.set_correction_b_strength(corr_b_strength);
+
+        // De-Esser (both channels)
+        if deesser_enabled {
+            self.deesser_left.set_frequency(deesser_freq);
+            self.deesser_left.set_q(deesser_q);
+            self.deesser_left.set_strength(deesser_strength);
+            self.deesser_right.set_frequency(deesser_freq);
+            self.deesser_right.set_q(deesser_q);
+            self.deesser_right.set_strength(deesser_strength);
+        }
+
+        // Channel9 (both channels)
+        if channel9_enabled {
+            self.channel9.set_both(|c| c.set_drive(channel9_drive));
+        }
+
+        // EnhanceEQ (uses StereoEnhanceEq setters)
+        if enhance_eq_enabled {
+            self.enhance_eq.set_lowmid_freq(enhance_lowmid_freq);
+            self.enhance_eq.set_lowmid_gain(enhance_lowmid_gain);
+            self.enhance_eq.set_presence_freq(enhance_presence_freq);
+            self.enhance_eq.set_presence_gain(enhance_presence_gain);
+            self.enhance_eq.set_shelf_gain(enhance_air_gain);
+        }
+
+        // ButterComp (both channels)
+        if buttercomp_enabled {
+            self.buttercomp.set_both(|c| c.set_compress(buttercomp_compress));
+        }
+
+        // TapeGlue (both channels)
+        if tape_glue_enabled {
+            self.tape_glue.set_both(|t| t.set_warmth(tape_glue_warmth));
+        }
+
+        // =================================================================
+        // Process samples (no parameter reads inside loop)
+        // =================================================================
+        let mut last_limiter_gr_db = 0.0;
 
         for mut channel_samples in buffer.iter_samples() {
             let left_in = channel_samples.get_mut(0).copied().unwrap_or(0.0);
@@ -1858,140 +1996,56 @@ impl Poddyclip {
                 right_in
             };
 
-            // Slide windows and add new samples
-            self.input_ring_left.rotate_left(1);
-            self.input_ring_left[WINDOW_SIZE - 1] = filtered_left;
-            self.input_ring_right.rotate_left(1);
-            self.input_ring_right[WINDOW_SIZE - 1] = filtered_right;
-            self.samples_since_process += 1;
+            // Process through streaming denoiser
+            let mut left_out = self.denoiser.left.process_sample(filtered_left);
+            let mut right_out = self.denoiser.right.process_sample(filtered_right);
 
-            // Process every HOP_SIZE samples
-            if self.samples_since_process >= HOP_SIZE {
-                let left_frame = self.denoiser_left.process_frame(&self.input_ring_left);
-                let right_frame = self.denoiser_right.process_frame(&self.input_ring_right);
-                self.output_buffer_left.extend(left_frame);
-                self.output_buffer_right.extend(right_frame);
-                self.samples_since_process = 0;
-
-                // Update visualization from left channel
-                if viz_enabled {
-                    if let Ok(mut viz) = self.visualization_data.try_lock() {
-                        *viz = self.denoiser_left.get_visualization_data();
-                    }
-                }
-            }
-
-            // Output from buffers
-            let mut left_out = if !self.output_buffer_left.is_empty() {
-                self.output_buffer_left.remove(0)
-            } else {
-                left_in
-            };
-
-            let mut right_out = if !self.output_buffer_right.is_empty() {
-                self.output_buffer_right.remove(0)
-            } else {
-                right_in
-            };
-
-            // Apply Peak Compressor right after denoiser (linked stereo)
-            if self.params.peakcomp.enable.value() {
-                let threshold = self.params.peakcomp.threshold.value();
-                let ratio = self.params.peakcomp.ratio.value();
-                let attack = self.params.peakcomp.attack.value();
-                let release = self.params.peakcomp.release.value();
-                self.peakcomp_left.set_threshold(threshold);
-                self.peakcomp_left.set_ratio(ratio);
-                self.peakcomp_left.set_attack(attack);
-                self.peakcomp_left.set_release(release);
-                self.peakcomp_right.set_threshold(threshold);
-                self.peakcomp_right.set_ratio(ratio);
-                self.peakcomp_right.set_attack(attack);
-                self.peakcomp_right.set_release(release);
+            // Apply Peak Compressor
+            if peakcomp_enabled {
                 left_out = self.peakcomp_left.process(left_out);
                 right_out = self.peakcomp_right.process(right_out);
             }
 
-            // Apply FixEq AFTER peak comp
+            // Apply FixEq
             left_out = self.fixeq_left.process(left_out);
             right_out = self.fixeq_right.process(right_out);
 
-            // Apply De-Esser AFTER FixEq
-            if self.params.deesser.enable.value() {
-                let deesser_freq = self.params.deesser.frequency.value();
-                let deesser_q = self.params.deesser.q.value();
-                let deesser_strength = self.params.deesser.strength.value();
-                self.deesser_left.set_frequency(deesser_freq);
-                self.deesser_left.set_q(deesser_q);
-                self.deesser_left.set_strength(deesser_strength);
-                self.deesser_right.set_frequency(deesser_freq);
-                self.deesser_right.set_q(deesser_q);
-                self.deesser_right.set_strength(deesser_strength);
+            // Apply De-Esser
+            if deesser_enabled {
                 left_out = self.deesser_left.process(left_out);
                 right_out = self.deesser_right.process(right_out);
             }
 
-            // Apply Channel9 (Neve transformer) AFTER De-Esser
-            if self.params.channel9.enable.value() {
-                self.channel9.set_drive(self.params.channel9.drive.value());
+            // Apply Channel9
+            if channel9_enabled {
                 left_out = self.channel9.left.process(left_out);
                 right_out = self.channel9.right.process(right_out);
             }
 
-            // Apply Enhance EQ AFTER Channel9
-            if self.params.enhance_eq.enable.value() {
-                self.enhance_eq.set_lowmid_freq(self.params.enhance_eq.lowmid_freq.value());
-                self.enhance_eq.set_lowmid_gain(self.params.enhance_eq.lowmid_gain.value());
-                self.enhance_eq.set_presence_freq(self.params.enhance_eq.presence_freq.value());
-                self.enhance_eq.set_presence_gain(self.params.enhance_eq.presence_gain.value());
-                self.enhance_eq.set_shelf_gain(self.params.enhance_eq.air_gain.value());
+            // Apply EnhanceEQ
+            if enhance_eq_enabled {
                 left_out = self.enhance_eq.left.process(left_out);
                 right_out = self.enhance_eq.right.process(right_out);
             }
 
-            // Apply ButterComp AFTER Enhance EQ
-            if self.params.buttercomp.enable.value() {
-                self.buttercomp.set_compress(self.params.buttercomp.compress.value());
+            // Apply ButterComp
+            if buttercomp_enabled {
                 left_out = self.buttercomp.left.process(left_out);
                 right_out = self.buttercomp.right.process(right_out);
             }
 
-            // Apply TapeGlue AFTER ButterComp
-            if self.params.tape_glue.enable.value() {
-                self.tape_glue.set_warmth(self.params.tape_glue.warmth.value() as f64);
+            // Apply TapeGlue
+            if tape_glue_enabled {
                 left_out = self.tape_glue.left.process(left_out);
                 right_out = self.tape_glue.right.process(right_out);
             }
 
-            // Apply Limiter AFTER TapeGlue (final stage)
-            let mut limiter_gr_db = 0.0;
-            if self.params.limiter.enable.value() {
+            // Apply Limiter (final stage)
+            if limiter_enabled {
                 let (l, r, gr) = self.limiter.process(left_out, right_out);
                 left_out = l;
                 right_out = r;
-                limiter_gr_db = gr;
-            }
-
-            // Update gain reduction for UI (from left channel only)
-            if viz_enabled {
-                if let Ok(mut gain) = self.demud_gain_db.try_lock() {
-                    *gain = self.fixeq_left.get_demud_gain_db();
-                }
-                if let Ok(mut gain) = self.correction_a_gain_db.try_lock() {
-                    *gain = self.fixeq_left.get_correction_a_gain_db();
-                }
-                if let Ok(mut gain) = self.correction_b_gain_db.try_lock() {
-                    *gain = self.fixeq_left.get_correction_b_gain_db();
-                }
-                if let Ok(mut gain) = self.deesser_gain_db.try_lock() {
-                    *gain = self.deesser_left.get_gain_reduction_db();
-                }
-                if let Ok(mut gain) = self.peakcomp_gain_db.try_lock() {
-                    *gain = self.peakcomp_left.get_gain_reduction_db();
-                }
-                if let Ok(mut gain) = self.limiter_gain_db.try_lock() {
-                    *gain = limiter_gr_db;
-                }
+                last_limiter_gr_db = gr;
             }
 
             if let Some(sample) = channel_samples.get_mut(0) {
@@ -1999,6 +2053,33 @@ impl Poddyclip {
             }
             if let Some(sample) = channel_samples.get_mut(1) {
                 *sample = right_out;
+            }
+        }
+
+        // =================================================================
+        // Update visualization ONCE after processing buffer
+        // =================================================================
+        if viz_enabled {
+            if let Ok(mut viz) = self.visualization_data.try_lock() {
+                *viz = self.denoiser.left.get_visualization_data();
+            }
+            if let Ok(mut gain) = self.demud_gain_db.try_lock() {
+                *gain = self.fixeq_left.get_demud_gain_db();
+            }
+            if let Ok(mut gain) = self.correction_a_gain_db.try_lock() {
+                *gain = self.fixeq_left.get_correction_a_gain_db();
+            }
+            if let Ok(mut gain) = self.correction_b_gain_db.try_lock() {
+                *gain = self.fixeq_left.get_correction_b_gain_db();
+            }
+            if let Ok(mut gain) = self.deesser_gain_db.try_lock() {
+                *gain = self.deesser_left.get_gain_reduction_db();
+            }
+            if let Ok(mut gain) = self.peakcomp_gain_db.try_lock() {
+                *gain = self.peakcomp_left.get_gain_reduction_db();
+            }
+            if let Ok(mut gain) = self.limiter_gain_db.try_lock() {
+                *gain = last_limiter_gr_db;
             }
         }
     }

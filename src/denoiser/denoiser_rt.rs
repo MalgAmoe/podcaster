@@ -1,14 +1,15 @@
-//! Real-time Spectral Subtraction Denoiser
+//! Unified Spectral Subtraction Denoiser
 //!
-//! Optimized for plugin use with all parameters exposed
-#![cfg_attr(all(feature = "cli", feature = "plugin"), allow(dead_code))]
+//! Core implementation used by both CLI (batch processing) and plugin (real-time).
+//! Supports preset-based configuration for CLI and dynamic parameter updates for plugin.
 
 use super::common::*;
 use rustfft::{num_complex::Complex, FftPlanner};
+use std::collections::VecDeque;
 use std::sync::Arc;
 
-// Re-export shared band configuration
-pub use super::common::{BANDS, NUM_BANDS};
+// Re-export shared types
+pub use super::common::{DenoiserParams, BANDS, NUM_BANDS};
 
 // =============================================================================
 // Visualization Data
@@ -42,58 +43,6 @@ impl Default for VisualizationData {
             band_gain_db: [0.0; NUM_BANDS],
             band_snr_db: [0.0; NUM_BANDS],
             sample_rate: 48000,
-        }
-    }
-}
-
-// =============================================================================
-// Parameter Defaults
-// =============================================================================
-
-// Plugin-specific defaults for alpha and beta (others in common.rs)
-pub const DEFAULT_ALPHA_BASE: f32 = 3.0;
-pub const DEFAULT_ALPHA_MIN: f32 = 1.0;
-pub const DEFAULT_ALPHA_MAX: f32 = 5.0;
-pub const DEFAULT_BETA: f32 = 0.05;
-
-// DEFAULT_DELTA and DEFAULT_GAMMA are now in common.rs
-
-// =============================================================================
-// Processing Parameters (updateable in real-time)
-// =============================================================================
-
-#[derive(Clone, Debug)]
-pub struct DenoiserParams {
-    // Subtraction
-    pub alpha_base: f32,
-    pub alpha_min: f32,
-    pub alpha_max: f32,
-    pub beta: f32,
-
-    // Noise estimation
-    pub lambda: f32,
-    pub spike_threshold: f32,
-    pub sfm_speech: f32,
-    pub sfm_noise: f32,
-
-    // Per-band parameters
-    pub delta: [f32; NUM_BANDS],
-    pub gamma: [f32; NUM_BANDS],
-}
-
-impl Default for DenoiserParams {
-    fn default() -> Self {
-        Self {
-            alpha_base: DEFAULT_ALPHA_BASE,
-            alpha_min: DEFAULT_ALPHA_MIN,
-            alpha_max: DEFAULT_ALPHA_MAX,
-            beta: DEFAULT_BETA,
-            lambda: DEFAULT_LAMBDA,
-            spike_threshold: DEFAULT_SPIKE_THRESHOLD,
-            sfm_speech: DEFAULT_SFM_SPEECH,
-            sfm_noise: DEFAULT_SFM_NOISE,
-            delta: DEFAULT_DELTA,
-            gamma: DEFAULT_GAMMA,
         }
     }
 }
@@ -140,6 +89,16 @@ pub struct RealtimeDenoiser {
 
 impl RealtimeDenoiser {
     pub fn new(sample_rate: u32) -> Self {
+        Self::new_with_params(sample_rate, DenoiserParams::default())
+    }
+
+    /// Create denoiser with a preset level (1-5, like CLI)
+    pub fn new_with_preset(sample_rate: u32, preset: usize) -> Option<Self> {
+        DenoiserParams::from_preset(preset).map(|params| Self::new_with_params(sample_rate, params))
+    }
+
+    /// Create denoiser with custom params
+    pub fn new_with_params(sample_rate: u32, params: DenoiserParams) -> Self {
         let window_size = WINDOW_SIZE;
         let hop_size = HOP_SIZE;
         let n_bins = window_size / 2 + 1;
@@ -149,7 +108,6 @@ impl RealtimeDenoiser {
         let ifft = planner.plan_fft_inverse(window_size);
         let fft_scratch = vec![Complex::new(0.0, 0.0); fft.get_inplace_scratch_len()];
 
-        let params = DenoiserParams::default();
         let gamma_curve = compute_gamma_curve(window_size, sample_rate, &params.gamma);
 
         Self {
@@ -173,6 +131,51 @@ impl RealtimeDenoiser {
             visualization_enabled: false,
             cached_viz_data: VisualizationData::default(),
         }
+    }
+
+    /// Initialize with pre-computed noise floor from analysis pass (CLI usage)
+    pub fn init_with_noise_floor(&mut self, noise_floor: &[f32]) {
+        assert_eq!(
+            noise_floor.len(),
+            self.n_bins,
+            "Noise floor size mismatch"
+        );
+        self.noise_pow.copy_from_slice(noise_floor);
+        self.needs_initialization = false;
+    }
+
+    /// Process entire audio buffer (batch mode, for CLI usage)
+    pub fn process(&mut self, audio: &[f32]) -> Vec<f32> {
+        let original_len = audio.len();
+
+        // Pad to multiple of hop size
+        let pad_len = (self.hop_size - audio.len() % self.hop_size) % self.hop_size;
+        let mut padded = audio.to_vec();
+        padded.resize(audio.len() + pad_len, 0.0);
+
+        // Pre-pad for first window
+        let pre_pad = self.window_size - self.hop_size;
+        let mut input = vec![0.0; pre_pad];
+        input.extend(padded);
+
+        let mut output = Vec::new();
+
+        // Process frame by frame
+        let mut i = 0;
+        while i + self.window_size <= input.len() {
+            let frame = &input[i..i + self.window_size];
+            let out_frame = self.process_frame(frame);
+            output.extend(out_frame);
+            i += self.hop_size;
+        }
+
+        // Remove pre-padding and trim to original length
+        if output.len() > pre_pad {
+            output = output[pre_pad..].to_vec();
+        }
+        output.truncate(original_len);
+
+        output
     }
 
     pub fn set_params(&mut self, params: DenoiserParams) {
@@ -467,3 +470,116 @@ impl RealtimeDenoiser {
         (self.window_size - self.hop_size) as u32
     }
 }
+
+impl crate::traits::FrameProcessor for RealtimeDenoiser {
+    fn process_frame(&mut self, frame: &[f32]) -> Vec<f32> {
+        RealtimeDenoiser::process_frame(self, frame)
+    }
+
+    fn reset(&mut self) {
+        self.reset()
+    }
+
+    fn window_size(&self) -> usize {
+        self.window_size
+    }
+
+    fn hop_size(&self) -> usize {
+        self.hop_size
+    }
+
+    fn latency_samples(&self) -> usize {
+        self.window_size - self.hop_size
+    }
+}
+
+// =============================================================================
+// Streaming Denoiser (Buffer-based wrapper)
+// =============================================================================
+
+/// Buffer-based wrapper around RealtimeDenoiser.
+/// Handles frame accumulation and output buffering internally,
+/// providing a simple `process_buffer(&mut [f32])` interface.
+pub struct StreamingDenoiser {
+    denoiser: RealtimeDenoiser,
+    input_ring: Vec<f32>,
+    output_buffer: VecDeque<f32>,
+    window_size: usize,
+    hop_size: usize,
+}
+
+impl StreamingDenoiser {
+    pub fn new(sample_rate: u32) -> Self {
+        let denoiser = RealtimeDenoiser::new(sample_rate);
+        let window_size = denoiser.window_size;
+        let hop_size = denoiser.hop_size;
+
+        Self {
+            denoiser,
+            input_ring: Vec::with_capacity(window_size),
+            output_buffer: VecDeque::with_capacity(window_size),
+            window_size,
+            hop_size,
+        }
+    }
+
+    /// Set denoiser parameters
+    pub fn set_params(&mut self, params: DenoiserParams) {
+        self.denoiser.set_params(params);
+    }
+
+    /// Enable/disable visualization data collection
+    pub fn set_visualization_enabled(&mut self, enabled: bool) {
+        self.denoiser.set_visualization_enabled(enabled);
+    }
+
+    /// Get visualization data (for GUI display)
+    pub fn get_visualization_data(&self) -> VisualizationData {
+        self.denoiser.get_visualization_data()
+    }
+
+    /// Get latency in samples
+    pub fn latency_samples(&self) -> usize {
+        self.window_size - self.hop_size
+    }
+
+    /// Process a single sample (for sample-by-sample plugin processing)
+    /// Returns the output sample (0.0 during initial latency period)
+    #[inline]
+    pub fn process_sample(&mut self, input: f32) -> f32 {
+        // Accumulate input sample
+        self.input_ring.push(input);
+
+        // Process frame when we have enough samples
+        if self.input_ring.len() >= self.window_size {
+            let output_frame = self.denoiser.process_frame(&self.input_ring);
+            self.output_buffer.extend(output_frame);
+
+            // Shift input ring by hop_size (overlap-add)
+            self.input_ring.drain(..self.hop_size);
+        }
+
+        // Output sample (0.0 during initial latency period)
+        self.output_buffer.pop_front().unwrap_or(0.0)
+    }
+}
+
+impl crate::traits::AudioProcessor for StreamingDenoiser {
+    fn process_buffer(&mut self, buffer: &mut [f32]) {
+        for sample in buffer.iter_mut() {
+            *sample = self.process_sample(*sample);
+        }
+    }
+
+    fn reset(&mut self) {
+        self.denoiser.reset();
+        self.input_ring.clear();
+        self.output_buffer.clear();
+    }
+
+    fn latency_samples(&self) -> usize {
+        self.window_size - self.hop_size
+    }
+}
+
+impl crate::traits::MonoProcessor for StreamingDenoiser {}

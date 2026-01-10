@@ -6,17 +6,21 @@ pub(crate) mod common;
 #[allow(unused_imports)]
 pub use common::*;
 
+// Core denoiser - available for both CLI and plugin
+pub mod denoiser_rt;
+
+// Re-export core types for both features
+#[allow(unused_imports)]
+pub use denoiser_rt::{DenoiserParams, RealtimeDenoiser, StreamingDenoiser, VisualizationData};
+
+// Analysis functions - CLI only (plugin doesn't need them)
 #[cfg(feature = "cli")]
 pub mod denoiser;
 
-#[cfg(feature = "plugin")]
-pub mod denoiser_rt;
-
-// Re-export everything from the active module
 #[cfg(feature = "cli")]
 #[allow(unused_imports)]
-pub use denoiser::*;
+pub use denoiser::{analyze_audio, AudioAnalysisResult, SimpleAnalysis};
 
-#[cfg(feature = "plugin")]
-#[allow(unused_imports)]
-pub use denoiser_rt::*;
+// Legacy alias for CLI migration
+#[cfg(feature = "cli")]
+pub type SpectralSubtractionDenoiser = RealtimeDenoiser;

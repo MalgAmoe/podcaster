@@ -95,6 +95,26 @@ impl DeEsser {
     }
 }
 
+impl crate::traits::AudioProcessor for DeEsser {
+    fn process_buffer(&mut self, buffer: &mut [f32]) {
+        for sample in buffer.iter_mut() {
+            *sample = self.process(*sample);
+        }
+    }
+
+    fn reset(&mut self) {
+        self.reset()
+    }
+}
+
+impl crate::traits::MonoProcessor for DeEsser {}
+
+impl crate::traits::Processor for DeEsser {
+    fn new(sample_rate: f32) -> Self {
+        Self::new_default(sample_rate)
+    }
+}
+
 /// Stereo de-esser with analysis-based configuration
 #[derive(Clone, Debug)]
 pub struct StereoDeEsser {
@@ -195,5 +215,15 @@ impl StereoDeEsser {
     pub fn reset(&mut self) {
         self.left.reset();
         self.right.reset();
+    }
+}
+
+impl crate::traits::StereoProcessor for StereoDeEsser {
+    fn process_stereo(&mut self, left: &mut [f32], right: &mut [f32]) {
+        StereoDeEsser::process_stereo(self, left, right)
+    }
+
+    fn reset(&mut self) {
+        self.reset()
     }
 }

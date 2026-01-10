@@ -254,6 +254,20 @@ impl FilterChain {
     }
 }
 
+impl crate::traits::AudioProcessor for FilterChain {
+    fn process_buffer(&mut self, buffer: &mut [f32]) {
+        for sample in buffer.iter_mut() {
+            *sample = self.process(*sample);
+        }
+    }
+
+    fn reset(&mut self) {
+        self.reset()
+    }
+}
+
+impl crate::traits::MonoProcessor for FilterChain {}
+
 // =============================================================================
 // 1st Order High Shelf using SVF Topology (6 dB/oct, gentle slope)
 // =============================================================================
@@ -321,48 +335,3 @@ impl HighShelfSvf {
     }
 }
 
-// =============================================================================
-// Stereo Chain
-// =============================================================================
-
-#[derive(Clone, Debug)]
-#[cfg_attr(not(feature = "cli"), allow(dead_code))]
-pub struct StereoFilterChain {
-    left: FilterChain,
-    right: FilterChain,
-}
-
-#[cfg_attr(not(feature = "cli"), allow(dead_code))]
-impl StereoFilterChain {
-    pub fn new(sample_rate: f32, hp_slope: HighPassSlope) -> Self {
-        Self {
-            left: FilterChain::new(sample_rate, hp_slope),
-            right: FilterChain::new(sample_rate, hp_slope),
-        }
-    }
-
-    #[cfg_attr(feature = "cli", allow(dead_code))]
-    pub fn set_sample_rate(&mut self, sample_rate: f32) {
-        self.left.set_sample_rate(sample_rate);
-        self.right.set_sample_rate(sample_rate);
-    }
-
-    pub fn process_mono(&mut self, buffer: &mut [f32]) {
-        for sample in buffer.iter_mut() {
-            *sample = self.left.process(*sample);
-        }
-    }
-
-    pub fn process_stereo(&mut self, left: &mut [f32], right: &mut [f32]) {
-        for (l, r) in left.iter_mut().zip(right.iter_mut()) {
-            *l = self.left.process(*l);
-            *r = self.right.process(*r);
-        }
-    }
-
-    #[cfg_attr(feature = "cli", allow(dead_code))]
-    pub fn reset(&mut self) {
-        self.left.reset();
-        self.right.reset();
-    }
-}

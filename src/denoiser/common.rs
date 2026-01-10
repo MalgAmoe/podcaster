@@ -194,6 +194,92 @@ pub fn get_preset(level: usize) -> Option<&'static Preset> {
 }
 
 // =============================================================================
+// DenoiserParams - Unified parameter struct for CLI and plugin
+// =============================================================================
+
+/// Runtime parameters for the denoiser.
+/// Used by both CLI (via preset conversion) and plugin (via direct control).
+#[derive(Clone, Debug)]
+pub struct DenoiserParams {
+    // Subtraction
+    pub alpha_base: f32,
+    pub alpha_min: f32,
+    pub alpha_max: f32,
+    pub beta: f32,
+
+    // Noise estimation
+    pub lambda: f32,
+    pub spike_threshold: f32,
+    pub sfm_speech: f32,
+    pub sfm_noise: f32,
+
+    // Per-band parameters
+    pub delta: [f32; NUM_BANDS],
+    pub gamma: [f32; NUM_BANDS],
+}
+
+impl DenoiserParams {
+    /// Create params from a preset number (1-5)
+    pub fn from_preset(level: usize) -> Option<Self> {
+        get_preset(level).map(|p| Self {
+            alpha_base: p.alpha_base,
+            alpha_min: p.alpha_min,
+            alpha_max: p.alpha_max,
+            beta: p.beta,
+            lambda: DEFAULT_LAMBDA,
+            spike_threshold: DEFAULT_SPIKE_THRESHOLD,
+            sfm_speech: DEFAULT_SFM_SPEECH,
+            sfm_noise: DEFAULT_SFM_NOISE,
+            delta: p.delta,
+            gamma: p.gamma,
+        })
+    }
+
+    /// Interpolate between two adjacent presets (0.0 = preset 1, 1.0 = preset 5)
+    /// Useful for plugin's continuous "strength" slider
+    pub fn from_strength(strength: f32) -> Self {
+        let strength = strength.clamp(0.0, 1.0);
+        let scaled = strength * 4.0; // 0.0-4.0
+        let lower_idx = (scaled as usize).min(3); // 0-3
+        let upper_idx = lower_idx + 1; // 1-4
+        let t = scaled - lower_idx as f32; // 0.0-1.0 between presets
+
+        let lower = &PRESETS[lower_idx];
+        let upper = &PRESETS[upper_idx];
+
+        // Lerp all parameters
+        let lerp = |a: f32, b: f32| a + (b - a) * t;
+        let lerp_arr = |a: &[f32; NUM_BANDS], b: &[f32; NUM_BANDS]| -> [f32; NUM_BANDS] {
+            let mut result = [0.0; NUM_BANDS];
+            for i in 0..NUM_BANDS {
+                result[i] = lerp(a[i], b[i]);
+            }
+            result
+        };
+
+        Self {
+            alpha_base: lerp(lower.alpha_base, upper.alpha_base),
+            alpha_min: lerp(lower.alpha_min, upper.alpha_min),
+            alpha_max: lerp(lower.alpha_max, upper.alpha_max),
+            beta: lerp(lower.beta, upper.beta),
+            lambda: DEFAULT_LAMBDA,
+            spike_threshold: DEFAULT_SPIKE_THRESHOLD,
+            sfm_speech: DEFAULT_SFM_SPEECH,
+            sfm_noise: DEFAULT_SFM_NOISE,
+            delta: lerp_arr(&lower.delta, &upper.delta),
+            gamma: lerp_arr(&lower.gamma, &upper.gamma),
+        }
+    }
+}
+
+impl Default for DenoiserParams {
+    fn default() -> Self {
+        // Default to Moderate preset (level 3)
+        Self::from_preset(3).unwrap()
+    }
+}
+
+// =============================================================================
 // Window Functions
 // =============================================================================
 

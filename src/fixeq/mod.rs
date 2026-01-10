@@ -400,3 +400,24 @@ impl FixEq {
         }
     }
 }
+
+impl crate::traits::AudioProcessor for FixEq {
+    fn process_buffer(&mut self, buffer: &mut [f32]) {
+        for sample in buffer.iter_mut() {
+            *sample = self.process(*sample);
+        }
+    }
+
+    fn reset(&mut self) {
+        self.reset()
+    }
+}
+
+impl crate::traits::MonoProcessor for FixEq {}
+
+impl crate::traits::Processor for FixEq {
+    fn new(sample_rate: f32) -> Self {
+        Self::new(sample_rate)
+    }
+}
+

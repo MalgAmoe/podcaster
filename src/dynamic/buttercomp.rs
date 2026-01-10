@@ -228,63 +228,23 @@ impl ButterComp2 {
     }
 }
 
-/// Stereo ButterComp2 processor
-#[derive(Clone, Debug)]
-pub struct StereoButterComp2 {
-    pub left: ButterComp2,
-    pub right: ButterComp2,
-}
-
-impl StereoButterComp2 {
-    pub fn new(sample_rate: f32) -> Self {
-        Self {
-            left: ButterComp2::new(sample_rate),
-            right: ButterComp2::new(sample_rate),
+impl crate::traits::AudioProcessor for ButterComp2 {
+    fn process_buffer(&mut self, buffer: &mut [f32]) {
+        for sample in buffer.iter_mut() {
+            *sample = self.process(*sample);
         }
     }
 
-    pub fn set_compress(&mut self, compress: f32) {
-        self.left.set_compress(compress);
-        self.right.set_compress(compress);
-    }
-
-    pub fn get_compress(&self) -> f32 {
-        self.left.get_compress()
-    }
-
-    pub fn set_output(&mut self, output: f32) {
-        self.left.set_output(output);
-        self.right.set_output(output);
-    }
-
-    pub fn get_output(&self) -> f32 {
-        self.left.get_output()
-    }
-
-    pub fn set_wet(&mut self, wet: f32) {
-        self.left.set_wet(wet);
-        self.right.set_wet(wet);
-    }
-
-    pub fn get_wet(&self) -> f32 {
-        self.left.get_wet()
-    }
-
-    /// Process stereo buffers in-place
-    pub fn process_stereo(&mut self, left: &mut [f32], right: &mut [f32]) {
-        for (l, r) in left.iter_mut().zip(right.iter_mut()) {
-            *l = self.left.process(*l);
-            *r = self.right.process(*r);
-        }
-    }
-
-    /// Process mono buffer in-place
-    pub fn process_mono(&mut self, buffer: &mut [f32]) {
-        self.left.process_mono(buffer);
-    }
-
-    pub fn reset(&mut self) {
-        self.left.reset();
-        self.right.reset();
+    fn reset(&mut self) {
+        self.reset()
     }
 }
+
+impl crate::traits::MonoProcessor for ButterComp2 {}
+
+impl crate::traits::Processor for ButterComp2 {
+    fn new(sample_rate: f32) -> Self {
+        Self::new(sample_rate)
+    }
+}
+

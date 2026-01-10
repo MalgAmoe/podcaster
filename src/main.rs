@@ -8,6 +8,7 @@ mod filters;
 mod fixeq;
 mod output;
 mod peakcomp;
+mod traits;
 
 use std::path::{Path, PathBuf};
 
@@ -21,17 +22,15 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
-use denoiser::common::{get_preset, DEFAULT_PRESET, PRESETS};
-use denoiser::denoiser::{
-    analyze_audio, process_stereo_lr, SpectralSubtractionDenoiser, SAMPLE_RATE,
-};
+use denoiser::{analyze_audio, get_preset, RealtimeDenoiser, DEFAULT_PRESET, PRESETS};
 
 use enhanceeq::StereoEnhanceEq;
 use deesser::StereoDeEsser;
-use distortion::{StereoChannel9, StereoTapeGlue, StereoTapeHysteresis};
+use distortion::Channel9;
 use peakcomp::StereoVcaPeakComp;
-use dynamic::{analyze_gain, apply_gain, linear_to_db, StereoButterComp2, StereoLimiter, DEFAULT_TARGET_RMS_DB, DEFAULT_TARGET_PEAK_DB};
-use filters::{HighPassSlope, StereoFilterChain};
+use dynamic::{analyze_gain, apply_gain, linear_to_db, ButterComp2, Limiter, DEFAULT_TARGET_RMS_DB, DEFAULT_TARGET_PEAK_DB};
+use traits::Stereo;
+use filters::{FilterChain, HighPassSlope};
 use fixeq::FixEq;
 use output::{measure_integrated_lufs, DEFAULT_TARGET_LUFS};
 
@@ -79,13 +78,6 @@ fn main() -> Result<()> {
     println!("Channels: {}", if is_stereo { "stereo" } else { "mono" });
     println!("Duration: {:.2}s", num_samples as f32 / input_sr as f32);
 
-    if input_sr != SAMPLE_RATE {
-        eprintln!(
-            "WARNING: Sample rate {} != {}. Results may vary.",
-            input_sr, SAMPLE_RATE
-        );
-    }
-
     // =========================================================================
     // Cleanup Filters - Apply HP/LP before gain analysis
     // =========================================================================
@@ -104,7 +96,10 @@ fn main() -> Result<()> {
             args.hp_slope
         );
 
-        let mut stereo_filters = StereoFilterChain::new(input_sr as f32, hp_slope);
+        let mut stereo_filters = Stereo::from_pair(
+            FilterChain::new(input_sr as f32, hp_slope),
+            FilterChain::new(input_sr as f32, hp_slope),
+        );
 
         if is_stereo {
             let (left, right) = samples.split_at_mut(1);
@@ -197,16 +192,22 @@ fn main() -> Result<()> {
 
     // Audio is already filtered and gain-normalized from earlier stages
     let mut denoised_samples = if is_stereo {
-        let left = &samples[0];
-        let right = &samples[1];
+        // L/R independent processing using unified denoiser
+        let mut denoiser_left = RealtimeDenoiser::new_with_preset(input_sr, preset)
+            .expect("Invalid preset");
+        let mut denoiser_right = RealtimeDenoiser::new_with_preset(input_sr, preset)
+            .expect("Invalid preset");
 
-        // L/R independent processing
-        let (left_out, right_out) =
-            process_stereo_lr(left, right, input_sr, preset, Some(&noise_floor));
+        denoiser_left.init_with_noise_floor(&noise_floor);
+        denoiser_right.init_with_noise_floor(&noise_floor);
+
+        let left_out = denoiser_left.process(&samples[0]);
+        let right_out = denoiser_right.process(&samples[1]);
 
         vec![left_out, right_out]
     } else {
-        let mut denoiser = SpectralSubtractionDenoiser::new(input_sr, preset);
+        let mut denoiser = RealtimeDenoiser::new_with_preset(input_sr, preset)
+            .expect("Invalid preset");
         denoiser.init_with_noise_floor(&noise_floor);
         let output = denoiser.process(&samples[0]);
 
@@ -316,8 +317,8 @@ fn main() -> Result<()> {
         "  Applying Neve transformer (drive: {:.0}%)...",
         drive * 200.0
     );
-    let mut channel9 = StereoChannel9::new(input_sr as f32);
-    channel9.set_drive(drive);
+    let mut channel9: Stereo<Channel9> = Stereo::new(input_sr as f32);
+    channel9.set_both(|c| c.set_drive(drive));
     if is_stereo {
         let (left, right) = output_samples.split_at_mut(1);
         channel9.process_stereo(&mut left[0], &mut right[0]);
@@ -331,44 +332,14 @@ fn main() -> Result<()> {
         "  Applying ButterComp2 (compress: {:.0}%)...",
         compress * 100.0
     );
-    let mut compressor = StereoButterComp2::new(input_sr as f32);
-    compressor.set_compress(compress);
+    let mut compressor: Stereo<ButterComp2> = Stereo::new(input_sr as f32);
+    compressor.set_both(|c| c.set_compress(compress));
     if is_stereo {
         let (left, right) = output_samples.split_at_mut(1);
         compressor.process_stereo(&mut left[0], &mut right[0]);
     } else {
         compressor.process_mono(&mut output_samples[0]);
     }
-
-    // Apply TapeGlue (subtle tape saturation)
-    // let warmth = 0.22; // Subtle
-    // println!(
-    //     "  Applying TapeGlue (warmth: {:.0}%)...",
-    //     warmth * 100.0
-    // );
-    // let mut tape_glue = StereoTapeGlue::new(input_sr as f64);
-    // tape_glue.set_warmth(warmth);
-    // if is_stereo {
-    //     let (left, right) = output_samples.split_at_mut(1);
-    //     tape_glue.process_stereo(&mut left[0], &mut right[0]);
-    // } else {
-    //     tape_glue.left.process_mono(&mut output_samples[0]);
-    // }
-
-    // Apply TapeHysteresis (full Jiles-Atherton physics model)
-    // let drive = 0.3; // Subtle - full model is more intense
-    // println!(
-    //     "  Applying TapeHysteresis (drive: {:.0}%)...",
-    //     drive * 100.0
-    // );
-    // let mut tape_hyst = StereoTapeHysteresis::new(input_sr as f64);
-    // tape_hyst.set_drive(drive);
-    // if is_stereo {
-    //     let (left, right) = output_samples.split_at_mut(1);
-    //     tape_hyst.process_stereo(&mut left[0], &mut right[0]);
-    // } else {
-    //     tape_hyst.left.process_mono(&mut output_samples[0]);
-    // }
 
     // Apply Enhance EQ (presence + dynamic air shelf + LP rolloff)
     let mut enhanceeq = StereoEnhanceEq::new(input_sr as f32);
@@ -409,7 +380,7 @@ fn main() -> Result<()> {
     apply_gain(&mut output_samples, lufs_gain_db);
 
     // Apply true peak limiter at -1 dBTP
-    let mut limiter = StereoLimiter::new(-1.0, 5.0, 100.0, input_sr as f32);
+    let mut limiter = Limiter::new(-1.0, 5.0, 100.0, input_sr as f32);
     let stats = if is_stereo {
         let (left, right) = output_samples.split_at_mut(1);
         limiter.process_stereo(&mut left[0], &mut right[0])

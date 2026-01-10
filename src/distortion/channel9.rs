@@ -270,54 +270,23 @@ impl Channel9 {
     }
 }
 
-/// Stereo Channel9 processor
-#[derive(Clone, Debug)]
-pub struct StereoChannel9 {
-    pub left: Channel9,
-    pub right: Channel9,
-}
-
-impl StereoChannel9 {
-    pub fn new(sample_rate: f32) -> Self {
-        Self {
-            left: Channel9::new(sample_rate),
-            right: Channel9::new(sample_rate),
+impl crate::traits::AudioProcessor for Channel9 {
+    fn process_buffer(&mut self, buffer: &mut [f32]) {
+        for sample in buffer.iter_mut() {
+            *sample = self.process(*sample);
         }
     }
 
-    pub fn set_drive(&mut self, drive: f32) {
-        self.left.set_drive(drive);
-        self.right.set_drive(drive);
-    }
-
-    pub fn get_drive(&self) -> f32 {
-        self.left.get_drive()
-    }
-
-    pub fn set_output(&mut self, output: f32) {
-        self.left.set_output(output);
-        self.right.set_output(output);
-    }
-
-    pub fn get_output(&self) -> f32 {
-        self.left.get_output()
-    }
-
-    /// Process stereo buffers in-place
-    pub fn process_stereo(&mut self, left: &mut [f32], right: &mut [f32]) {
-        for (l, r) in left.iter_mut().zip(right.iter_mut()) {
-            *l = self.left.process(*l);
-            *r = self.right.process(*r);
-        }
-    }
-
-    /// Process mono buffer in-place
-    pub fn process_mono(&mut self, buffer: &mut [f32]) {
-        self.left.process_mono(buffer);
-    }
-
-    pub fn reset(&mut self) {
-        self.left.reset();
-        self.right.reset();
+    fn reset(&mut self) {
+        self.reset()
     }
 }
+
+impl crate::traits::MonoProcessor for Channel9 {}
+
+impl crate::traits::Processor for Channel9 {
+    fn new(sample_rate: f32) -> Self {
+        Self::new(sample_rate)
+    }
+}
+

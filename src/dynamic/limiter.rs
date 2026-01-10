@@ -198,30 +198,24 @@ impl Limiter {
         self.lookahead_buffer_right.clear();
         self.current_gain = 1.0;
     }
+
+    /// Get latency in samples
+    pub fn get_latency_samples(&self) -> usize {
+        self.lookahead_samples
+    }
 }
 
-/// Stereo limiter wrapper for convenience
-pub struct StereoLimiter {
-    limiter: Limiter,
-}
-
-impl StereoLimiter {
-    pub fn new(ceiling_db: f32, lookahead_ms: f32, release_ms: f32, sample_rate: f32) -> Self {
-        Self {
-            limiter: Limiter::new(ceiling_db, lookahead_ms, release_ms, sample_rate),
-        }
+impl crate::traits::AudioProcessor for Limiter {
+    fn process_buffer(&mut self, buffer: &mut [f32]) {
+        self.process_mono(buffer);
     }
 
-    pub fn process_stereo(&mut self, left: &mut [f32], right: &mut [f32]) -> LimiterStats {
-        self.limiter.process_stereo(left, right)
+    fn reset(&mut self) {
+        self.reset()
     }
 
-    pub fn process_mono(&mut self, samples: &mut [f32]) -> LimiterStats {
-        self.limiter.process_mono(samples)
-    }
-
-    pub fn reset(&mut self) {
-        self.limiter.reset();
+    fn latency_samples(&self) -> usize {
+        self.lookahead_samples
     }
 }
 
@@ -318,6 +312,25 @@ impl RealtimeLimiter {
         self.lookahead_samples
     }
 }
+
+impl crate::traits::AudioProcessor for RealtimeLimiter {
+    fn process_buffer(&mut self, buffer: &mut [f32]) {
+        for sample in buffer.iter_mut() {
+            let (output, _gr) = self.process(*sample);
+            *sample = output;
+        }
+    }
+
+    fn reset(&mut self) {
+        self.reset()
+    }
+
+    fn latency_samples(&self) -> usize {
+        self.lookahead_samples
+    }
+}
+
+impl crate::traits::MonoProcessor for RealtimeLimiter {}
 
 /// Stereo realtime limiter with linked gain reduction
 pub struct StereoRealtimeLimiter {
@@ -416,6 +429,24 @@ impl StereoRealtimeLimiter {
     /// Get current gain reduction in dB (for metering)
     pub fn get_gain_reduction_db(&self) -> f32 {
         20.0 * self.current_gain.max(1e-10).log10()
+    }
+}
+
+impl crate::traits::StereoProcessor for StereoRealtimeLimiter {
+    fn process_stereo(&mut self, left: &mut [f32], right: &mut [f32]) {
+        for (l, r) in left.iter_mut().zip(right.iter_mut()) {
+            let (out_l, out_r, _gr) = self.process(*l, *r);
+            *l = out_l;
+            *r = out_r;
+        }
+    }
+
+    fn reset(&mut self) {
+        self.reset()
+    }
+
+    fn latency_samples(&self) -> usize {
+        self.lookahead_samples
     }
 }
 
