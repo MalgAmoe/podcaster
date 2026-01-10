@@ -1,6 +1,7 @@
 #![cfg(feature = "plugin")]
 
-mod aireq;
+mod analysis;
+mod enhanceeq;
 mod deesser;
 mod distortion;
 mod denoiser;
@@ -21,7 +22,7 @@ use denoiser::{
     PRESETS, WINDOW_SIZE,
 };
 
-use aireq::StereoAirEq;
+use enhanceeq::StereoEnhanceEq;
 use deesser::DeEsser;
 use distortion::{StereoChannel9, StereoTapeGlue};
 use peakcomp::VcaPeakComp;
@@ -158,12 +159,24 @@ struct Channel9Params {
 }
 
 #[derive(Params)]
-struct AirEqParams {
-    #[id = "aireq_enable"]
+struct EnhanceEqParams {
+    #[id = "enhanceeq_enable"]
     enable: BoolParam,
 
-    #[id = "aireq_gain"]
-    gain: FloatParam,
+    #[id = "enhanceeq_lowmid_freq"]
+    lowmid_freq: FloatParam,
+
+    #[id = "enhanceeq_lowmid_gain"]
+    lowmid_gain: FloatParam,
+
+    #[id = "enhanceeq_presence_freq"]
+    presence_freq: FloatParam,
+
+    #[id = "enhanceeq_presence_gain"]
+    presence_gain: FloatParam,
+
+    #[id = "enhanceeq_air_gain"]
+    air_gain: FloatParam,
 }
 
 #[derive(Params)]
@@ -231,8 +244,8 @@ struct PoddyclipParams {
     #[nested(group = "Transformer")]
     channel9: Channel9Params,
 
-    #[nested(group = "Air EQ")]
-    air_eq: AirEqParams,
+    #[nested(group = "Enhance EQ")]
+    enhance_eq: EnhanceEqParams,
 
     #[nested(group = "Compressor")]
     buttercomp: ButterCompParams,
@@ -295,8 +308,8 @@ struct Poddyclip {
     // Channel9 (Neve transformer emulation)
     channel9: StereoChannel9,
 
-    // Air EQ (high shelf + LP)
-    air_eq: StereoAirEq,
+    // Enhance EQ (lowmid cut + presence + dynamic air)
+    enhance_eq: StereoEnhanceEq,
 
     // ButterComp2 (smooth leveling)
     buttercomp: StereoButterComp2,
@@ -340,7 +353,7 @@ impl Default for Poddyclip {
             peakcomp_right: VcaPeakComp::new_default(48000.0),
             peakcomp_gain_db: Arc::new(Mutex::new(0.0)),
             channel9: StereoChannel9::new(48000.0),
-            air_eq: StereoAirEq::new(48000.0),
+            enhance_eq: StereoEnhanceEq::new(48000.0),
             buttercomp: StereoButterComp2::new(48000.0),
             tape_glue: StereoTapeGlue::new(48000.0),
             limiter: StereoRealtimeLimiter::new(-1.0, 5.0, 100.0, 48000.0),
@@ -649,11 +662,57 @@ impl Default for PoddyclipParams {
                 })),
             },
 
-            air_eq: AirEqParams {
-                enable: BoolParam::new("Enable Air EQ", true), // On by default
-                gain: FloatParam::new(
+            enhance_eq: EnhanceEqParams {
+                enable: BoolParam::new("Enable Enhance EQ", true), // On by default
+                lowmid_freq: FloatParam::new(
+                    "Low-Mid Freq",
+                    250.0, // 250Hz default
+                    FloatRange::Skewed {
+                        min: 150.0,
+                        max: 400.0,
+                        factor: FloatRange::skew_factor(-0.3),
+                    },
+                )
+                .with_step_size(5.0)
+                .with_value_to_string(formatters::v2s_f32_hz_then_khz(0))
+                .with_unit(" Hz"),
+                lowmid_gain: FloatParam::new(
+                    "Low-Mid Cut",
+                    -1.5, // -1.5dB default cut
+                    FloatRange::Linear {
+                        min: -6.0,
+                        max: 0.0,
+                    },
+                )
+                .with_step_size(0.1)
+                .with_value_to_string(formatters::v2s_f32_rounded(1))
+                .with_unit(" dB"),
+                presence_freq: FloatParam::new(
+                    "Presence Freq",
+                    3000.0, // 3kHz default
+                    FloatRange::Skewed {
+                        min: 2000.0,
+                        max: 5000.0,
+                        factor: FloatRange::skew_factor(-0.3),
+                    },
+                )
+                .with_step_size(10.0)
+                .with_value_to_string(formatters::v2s_f32_hz_then_khz(0))
+                .with_unit(" Hz"),
+                presence_gain: FloatParam::new(
+                    "Presence Gain",
+                    1.0, // +1dB default
+                    FloatRange::Linear {
+                        min: 0.0,
+                        max: 6.0,
+                    },
+                )
+                .with_step_size(0.1)
+                .with_value_to_string(formatters::v2s_f32_rounded(1))
+                .with_unit(" dB"),
+                air_gain: FloatParam::new(
                     "Air Gain",
-                    2.0, // +2dB default
+                    3.0, // +3dB default (max for dynamic)
                     FloatRange::Linear {
                         min: 0.0,
                         max: 6.0,
@@ -1089,20 +1148,40 @@ impl Plugin for Poddyclip {
                                 ui.add_space(15.0);
                                 ui.separator();
 
-                                // Air EQ
-                                ui.heading("Air EQ");
+                                // Enhance EQ (Low-Mid Cut + Presence + Dynamic Air)
+                                ui.heading("Enhance EQ");
                                 ui.add_space(5.0);
 
                                 ui.horizontal(|ui| {
                                     ui.label("Enable:");
                                     ui.add(widgets::ParamSlider::for_param(
-                                        &params.air_eq.enable,
+                                        &params.enhance_eq.enable,
                                         setter,
                                     ));
                                 });
-                                ui.label("Gain:");
+                                ui.label("Low-Mid Freq:");
                                 ui.add(widgets::ParamSlider::for_param(
-                                    &params.air_eq.gain,
+                                    &params.enhance_eq.lowmid_freq,
+                                    setter,
+                                ));
+                                ui.label("Low-Mid Cut:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.enhance_eq.lowmid_gain,
+                                    setter,
+                                ));
+                                ui.label("Presence Freq:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.enhance_eq.presence_freq,
+                                    setter,
+                                ));
+                                ui.label("Presence Gain:");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.enhance_eq.presence_gain,
+                                    setter,
+                                ));
+                                ui.label("Air Gain (dynamic):");
+                                ui.add(widgets::ParamSlider::for_param(
+                                    &params.enhance_eq.air_gain,
                                     setter,
                                 ));
 
@@ -1644,13 +1723,17 @@ impl Poddyclip {
                 output_sample = self.channel9.left.process(output_sample);
             }
 
-            // Apply Air EQ AFTER Channel9
-            if self.params.air_eq.enable.value() {
-                self.air_eq.left.set_shelf_gain(self.params.air_eq.gain.value());
-                output_sample = self.air_eq.left.process(output_sample);
+            // Apply Enhance EQ AFTER Channel9
+            if self.params.enhance_eq.enable.value() {
+                self.enhance_eq.left.set_lowmid_freq(self.params.enhance_eq.lowmid_freq.value());
+                self.enhance_eq.left.set_lowmid_gain(self.params.enhance_eq.lowmid_gain.value());
+                self.enhance_eq.left.set_presence_freq(self.params.enhance_eq.presence_freq.value());
+                self.enhance_eq.left.set_presence_gain(self.params.enhance_eq.presence_gain.value());
+                self.enhance_eq.left.set_shelf_gain(self.params.enhance_eq.air_gain.value());
+                output_sample = self.enhance_eq.left.process(output_sample);
             }
 
-            // Apply ButterComp AFTER Air EQ
+            // Apply ButterComp AFTER Enhance EQ
             if self.params.buttercomp.enable.value() {
                 self.buttercomp.left.set_compress(self.params.buttercomp.compress.value());
                 output_sample = self.buttercomp.left.process(output_sample);
@@ -1855,14 +1938,18 @@ impl Poddyclip {
                 right_out = self.channel9.right.process(right_out);
             }
 
-            // Apply Air EQ AFTER Channel9
-            if self.params.air_eq.enable.value() {
-                self.air_eq.set_shelf_gain(self.params.air_eq.gain.value());
-                left_out = self.air_eq.left.process(left_out);
-                right_out = self.air_eq.right.process(right_out);
+            // Apply Enhance EQ AFTER Channel9
+            if self.params.enhance_eq.enable.value() {
+                self.enhance_eq.set_lowmid_freq(self.params.enhance_eq.lowmid_freq.value());
+                self.enhance_eq.set_lowmid_gain(self.params.enhance_eq.lowmid_gain.value());
+                self.enhance_eq.set_presence_freq(self.params.enhance_eq.presence_freq.value());
+                self.enhance_eq.set_presence_gain(self.params.enhance_eq.presence_gain.value());
+                self.enhance_eq.set_shelf_gain(self.params.enhance_eq.air_gain.value());
+                left_out = self.enhance_eq.left.process(left_out);
+                right_out = self.enhance_eq.right.process(right_out);
             }
 
-            // Apply ButterComp AFTER Air EQ
+            // Apply ButterComp AFTER Enhance EQ
             if self.params.buttercomp.enable.value() {
                 self.buttercomp.set_compress(self.params.buttercomp.compress.value());
                 left_out = self.buttercomp.left.process(left_out);

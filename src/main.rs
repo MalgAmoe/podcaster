@@ -1,4 +1,5 @@
-mod aireq;
+mod analysis;
+mod enhanceeq;
 mod deesser;
 mod distortion;
 mod denoiser;
@@ -25,7 +26,7 @@ use denoiser::denoiser::{
     analyze_audio, process_stereo_lr, SpectralSubtractionDenoiser, SAMPLE_RATE,
 };
 
-use aireq::StereoAirEq;
+use enhanceeq::StereoEnhanceEq;
 use deesser::StereoDeEsser;
 use distortion::{StereoChannel9, StereoTapeGlue, StereoTapeHysteresis};
 use peakcomp::StereoVcaPeakComp;
@@ -235,9 +236,17 @@ fn main() -> Result<()> {
         peakcomp.process_mono(&mut denoised_samples[0]);
     }
 
+    // Compute spectral analysis once for FixEq and EnhanceEq
+    let mono_for_analysis = if is_stereo {
+        analysis::mix_to_mono(&denoised_samples[0], &denoised_samples[1])
+    } else {
+        denoised_samples[0].clone()
+    };
+    let spectrum = analysis::SpectralAnalysis::new(&mono_for_analysis, input_sr);
+
     // Apply FixEq (post-peak comp dynamic EQ)
     let mut fixeq = FixEq::new(input_sr as f32);
-    let analysis = fixeq.configure(&denoised_samples, preset).clone();
+    let analysis = fixeq.configure_from_spectrum(&spectrum, preset, is_stereo).clone();
 
     println!(
         "  Mud analysis: {:.0}Hz (energy: {:.1}dB, confidence: {:.0}%)",
@@ -361,14 +370,22 @@ fn main() -> Result<()> {
     //     tape_hyst.left.process_mono(&mut output_samples[0]);
     // }
 
-    // Apply Air EQ (high shelf + LP rolloff)
-    println!("  Applying Air EQ (shelf: 10kHz +2dB, LP: 16kHz)...");
-    let mut aireq = StereoAirEq::new(input_sr as f32);
+    // Apply Enhance EQ (presence + dynamic air shelf + LP rolloff)
+    let mut enhanceeq = StereoEnhanceEq::new(input_sr as f32);
+    enhanceeq.configure_from_spectrum(&spectrum);
+
+    println!(
+        "  EnhanceEQ: lowmid {:.1}dB, presence {:+.1}dB, air {:+.1}dB",
+        enhanceeq.get_lowmid_gain(),
+        enhanceeq.get_presence_gain(),
+        enhanceeq.get_shelf_gain()
+    );
+
     if is_stereo {
         let (left, right) = output_samples.split_at_mut(1);
-        aireq.process_stereo(&mut left[0], &mut right[0]);
+        enhanceeq.process_stereo(&mut left[0], &mut right[0]);
     } else {
-        aireq.process_mono(&mut output_samples[0]);
+        enhanceeq.process_mono(&mut output_samples[0]);
     }
 
     // =========================================================================

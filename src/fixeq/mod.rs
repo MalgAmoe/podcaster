@@ -10,7 +10,7 @@ pub mod analysis;
 
 #[allow(unused_imports)]
 pub use analysis::{
-    analyze_audio, mix_to_mono, BandAnalysis, FixEqAnalysis,
+    analyze_from_spectrum, mix_to_mono, BandAnalysis, FixEqAnalysis,
     DEFAULT_CORRECTION_A_FREQ, DEFAULT_CORRECTION_B_FREQ,
 };
 
@@ -70,19 +70,20 @@ impl FixEq {
         }
     }
 
-    /// Analyze audio and configure all bands based on preset.
-    /// Handles stereo (2 channels) or mono (1 channel) automatically.
-    pub fn configure(&mut self, samples: &[Vec<f32>], preset: usize) -> &FixEqAnalysis {
-        self.is_stereo = samples.len() >= 2;
+    /// Configure from pre-computed spectral analysis
+    pub fn configure_from_spectrum(
+        &mut self,
+        spectrum: &crate::analysis::SpectralAnalysis,
+        preset: usize,
+        is_stereo: bool,
+    ) -> &FixEqAnalysis {
+        self.is_stereo = is_stereo;
+        let analysis = analyze_from_spectrum(spectrum);
+        self.apply_analysis(analysis, preset)
+    }
 
-        // Mix to mono for analysis
-        let mono = if self.is_stereo {
-            mix_to_mono(&samples[0], &samples[1])
-        } else {
-            samples[0].clone()
-        };
-
-        let analysis = analyze_audio(&mono, self.sample_rate as u32);
+    /// Apply analysis results and configure bands
+    fn apply_analysis(&mut self, analysis: FixEqAnalysis, preset: usize) -> &FixEqAnalysis {
 
         // Calculate strengths from preset + analysis
         let preset_factor = preset as f32 / 5.0; // 1=0.2, 5=1.0

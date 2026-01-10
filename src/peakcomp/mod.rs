@@ -71,7 +71,7 @@ impl VcaPeakComp {
     pub fn new_default(sample_rate: f32) -> Self {
         Self::new(
             -12.0, // threshold (will be overridden by analysis)
-            12.0,  // ratio 12:1
+            8.0,  // ratio 12:1
             0.5,   // attack 0.5ms
             100.0, // release 100ms
             4.0,   // knee 4dB
