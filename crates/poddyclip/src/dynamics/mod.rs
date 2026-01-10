@@ -2,7 +2,6 @@
 //!
 //! Contains processors for gain staging, compression/leveling, and limiting.
 
-#[cfg(feature = "cli")]
 pub mod autogain;
 pub mod buttercomp;
 pub mod limiter;

@@ -1,6 +1,5 @@
 //! Common filter implementations shared between CLI and plugin
 //! Uses State Variable Filters (SVF) for numerical stability
-#![cfg_attr(all(feature = "cli", feature = "plugin"), allow(dead_code))]
 
 use std::f32::consts::PI;
 
@@ -102,7 +101,6 @@ impl SvfBiquad {
     }
 
     /// Reset filter state to zero (e.g., on playback stop/seek)
-    #[cfg_attr(feature = "cli", allow(dead_code))]
     pub fn reset(&mut self) {
         self.ic1eq = 0.0;
         self.ic2eq = 0.0;
@@ -128,7 +126,6 @@ pub enum HighPassSlope {
 pub struct HighPassFilter {
     stage1: SvfBiquad,
     stage2: Option<SvfBiquad>,
-    #[cfg_attr(feature = "cli", allow(dead_code))]
     sample_rate: f32,
 }
 
@@ -146,7 +143,6 @@ impl HighPassFilter {
     }
 
     /// Must be called if the host changes sample rate
-    #[cfg_attr(feature = "cli", allow(dead_code))]
     pub fn set_sample_rate(&mut self, new_rate: f32) {
         if (self.sample_rate - new_rate).abs() > 0.1 {
             self.sample_rate = new_rate;
@@ -169,7 +165,6 @@ impl HighPassFilter {
         }
     }
 
-    #[cfg_attr(feature = "cli", allow(dead_code))]
     pub fn reset(&mut self) {
         self.stage1.reset();
         if let Some(stage2) = &mut self.stage2 {
@@ -185,7 +180,6 @@ impl HighPassFilter {
 #[derive(Clone, Debug)]
 pub struct LowPassFilter {
     biquad: SvfBiquad,
-    #[cfg_attr(feature = "cli", allow(dead_code))]
     sample_rate: f32,
 }
 
@@ -197,7 +191,6 @@ impl LowPassFilter {
         }
     }
 
-    #[cfg_attr(feature = "cli", allow(dead_code))]
     pub fn set_sample_rate(&mut self, new_rate: f32) {
         if (self.sample_rate - new_rate).abs() > 0.1 {
             self.sample_rate = new_rate;
@@ -211,7 +204,6 @@ impl LowPassFilter {
         lp
     }
 
-    #[cfg_attr(feature = "cli", allow(dead_code))]
     pub fn reset(&mut self) {
         self.biquad.reset();
     }
@@ -235,7 +227,6 @@ impl FilterChain {
         }
     }
 
-    #[cfg_attr(feature = "cli", allow(dead_code))]
     pub fn set_sample_rate(&mut self, sample_rate: f32) {
         self.hp.set_sample_rate(sample_rate);
         self.lp.set_sample_rate(sample_rate);
@@ -247,7 +238,6 @@ impl FilterChain {
         self.lp.process(after_hp)
     }
 
-    #[cfg_attr(feature = "cli", allow(dead_code))]
     pub fn reset(&mut self) {
         self.hp.reset();
         self.lp.reset();

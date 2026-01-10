@@ -1,6 +1,6 @@
 //! Real-time visualization widgets for the denoiser
 
-use crate::denoiser::{VisualizationData, NUM_BANDS, WINDOW_SIZE};
+use poddyclip::denoiser::{VisualizationData, NUM_BANDS, WINDOW_SIZE};
 use egui_plot::{Corner, Legend, Line, Plot, PlotPoints};
 use nih_plug_egui::egui;
 

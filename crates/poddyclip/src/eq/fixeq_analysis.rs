@@ -1,7 +1,6 @@
 //! Audio analysis for FixEq
 //!
 //! Analyzes denoised audio to find optimal frequencies for dynamic EQ bands.
-#![cfg_attr(all(feature = "cli", feature = "plugin"), allow(dead_code))]
 
 use crate::analysis::SpectralAnalysis;
 

@@ -1,7 +1,6 @@
 //! Peak profile analysis for VCA Peak Compressor
 //!
 //! Analyzes audio to determine peak characteristics and automatic threshold.
-#![cfg_attr(all(feature = "cli", feature = "plugin"), allow(dead_code))]
 
 use crate::analysis::utils::linear_to_db;
 

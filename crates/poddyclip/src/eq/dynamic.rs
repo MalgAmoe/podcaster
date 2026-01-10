@@ -5,7 +5,6 @@
 //! - Envelope follower (attack/release)
 //! - Gain computer (threshold/ratio)
 //! - Bell filter (narrow Q processing)
-#![cfg_attr(all(feature = "cli", feature = "plugin"), allow(dead_code))]
 
 use super::filters::SvfBiquad;
 

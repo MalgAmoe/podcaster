@@ -1,0 +1,16 @@
+[package]
+name = "poddyclip-cli"
+version.workspace = true
+edition.workspace = true
+description = "CLI for podcast audio enhancement"
+
+[[bin]]
+name = "poddyclip"
+path = "src/main.rs"
+
+[dependencies]
+poddyclip = { path = "../poddyclip" }
+anyhow = "1.0"
+symphonia = { version = "0.5.5", features = ["mp3", "wav", "pcm"] }
+hound = "3.5"
+clap = { version = "4.5", features = ["derive"] }

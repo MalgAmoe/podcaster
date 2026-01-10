@@ -1,7 +1,6 @@
 //! Sibilance analysis for De-Esser
 //!
 //! Analyzes audio to find sibilance characteristics for dynamic processing.
-#![cfg_attr(all(feature = "cli", feature = "plugin"), allow(dead_code))]
 
 use rustfft::{num_complex::Complex, FftPlanner};
 use std::f32::consts::PI;

@@ -15,4 +15,4 @@ pub use filters::{FilterChain, HighPassSlope};
 pub use fixeq::FixEq;
 pub use enhanceeq::StereoEnhanceEq;
 #[allow(unused_imports)]
-pub use deesser::DeEsser;
+pub use deesser::{DeEsser, StereoDeEsser};

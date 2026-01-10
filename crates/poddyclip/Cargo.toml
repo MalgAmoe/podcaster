@@ -1,0 +1,13 @@
+[package]
+name = "poddyclip"
+version.workspace = true
+edition.workspace = true
+description = "Audio processing library for podcast enhancement"
+
+[features]
+default = []
+plugin = ["dep:nih_plug"]
+
+[dependencies]
+rustfft = "6.2"
+nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", optional = true }

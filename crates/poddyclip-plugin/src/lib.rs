@@ -1,26 +1,18 @@
-#![cfg(feature = "plugin")]
-
-mod analysis;
-mod saturation;
-mod denoiser;
-mod dynamics;
-mod eq;
-mod traits;
 mod visualizations;
 
 use nih_plug::prelude::*;
 use nih_plug_egui::{create_egui_editor, egui, widgets, EguiState};
 use std::sync::{Arc, Mutex};
 
-use denoiser::{
+use poddyclip::denoiser::{
     DenoiserParams, StreamingDenoiser, VisualizationData, DEFAULT_LAMBDA,
     DEFAULT_SFM_NOISE, DEFAULT_SFM_SPEECH, DEFAULT_SPIKE_THRESHOLD, NUM_BANDS, PRESETS,
 };
 
-use saturation::{Channel9, TapeGlue};
-use dynamics::{StereoVcaPeakComp, ButterComp2, StereoRealtimeLimiter};
-use eq::{DeEsser, FilterChain, FixEq, HighPassSlope, StereoEnhanceEq};
-use traits::Stereo;
+use poddyclip::saturation::{Channel9, TapeGlue};
+use poddyclip::dynamics::{StereoVcaPeakComp, ButterComp2, StereoRealtimeLimiter};
+use poddyclip::eq::{DeEsser, FilterChain, FixEq, HighPassSlope, StereoEnhanceEq};
+use poddyclip::traits::Stereo;
 
 // =============================================================================
 // Parameter Structs

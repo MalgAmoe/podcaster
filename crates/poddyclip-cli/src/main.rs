@@ -1,10 +1,3 @@
-mod analysis;
-mod saturation;
-mod denoiser;
-mod dynamics;
-mod eq;
-mod traits;
-
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Result};
@@ -17,16 +10,16 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
-use denoiser::{analyze_audio, get_preset, RealtimeDenoiser, DEFAULT_PRESET, PRESETS};
-
-use saturation::Channel9;
-use dynamics::{StereoVcaPeakComp, ButterComp2};
-use dynamics::autogain::{analyze_gain, apply_gain, linear_to_db, DEFAULT_TARGET_RMS_DB, DEFAULT_TARGET_PEAK_DB};
-use dynamics::limiter::Limiter;
-use eq::{FilterChain, HighPassSlope, FixEq, StereoEnhanceEq};
-use eq::deesser::StereoDeEsser;
-use traits::Stereo;
-use analysis::lufs::{measure_integrated_lufs, DEFAULT_TARGET_LUFS};
+use poddyclip::denoiser::{analyze_audio, get_preset, RealtimeDenoiser, DEFAULT_PRESET, PRESETS};
+use poddyclip::saturation::Channel9;
+use poddyclip::dynamics::{StereoVcaPeakComp, ButterComp2};
+use poddyclip::dynamics::autogain::{analyze_gain, apply_gain, linear_to_db, DEFAULT_TARGET_RMS_DB, DEFAULT_TARGET_PEAK_DB};
+use poddyclip::dynamics::limiter::Limiter;
+use poddyclip::eq::{FilterChain, HighPassSlope, FixEq, StereoEnhanceEq};
+use poddyclip::eq::deesser::StereoDeEsser;
+use poddyclip::traits::Stereo;
+use poddyclip::analysis::lufs::{measure_integrated_lufs, DEFAULT_TARGET_LUFS};
+use poddyclip::analysis;
 
 #[derive(Parser)]
 #[command(name = "poddyclip")]
@@ -100,9 +93,9 @@ fn main() -> Result<()> {
     // Input gain
     println!("\n[Input Gain]");
     let (rms, peak) = if is_stereo {
-        dynamics::autogain::calculate_rms_and_peak_stereo(&samples[0], &samples[1])
+        poddyclip::dynamics::autogain::calculate_rms_and_peak_stereo(&samples[0], &samples[1])
     } else {
-        dynamics::autogain::calculate_rms_and_peak(&samples[0])
+        poddyclip::dynamics::autogain::calculate_rms_and_peak(&samples[0])
     };
     let gain_db = analyze_gain(&samples, DEFAULT_TARGET_RMS_DB, DEFAULT_TARGET_PEAK_DB);
     println!("  Input: RMS {:.1}dB, Peak {:.1}dB", linear_to_db(rms), linear_to_db(peak));
