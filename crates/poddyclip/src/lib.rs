@@ -5,11 +5,13 @@
 //! - Dynamic processing (compression, limiting, peak control)
 //! - EQ processing (filters, de-esser, enhancement)
 //! - Saturation effects
+//! - Audio repair (declicking) - offline only
 
 pub mod analysis;
 pub mod denoiser;
 pub mod dynamics;
 pub mod eq;
+pub mod repair;
 pub mod saturation;
 pub mod traits;
 
@@ -18,5 +20,6 @@ pub use denoiser::{RealtimeDenoiser, StreamingDenoiser, PRESETS};
 pub use dynamics::{ButterComp2, StereoRealtimeLimiter, StereoVcaPeakComp};
 pub use dynamics::limiter::Limiter;
 pub use eq::{DeEsser, FilterChain, FixEq, HighPassSlope, StereoDeEsser, StereoEnhanceEq};
+pub use repair::Declicker;
 pub use saturation::{Channel9, TapeGlue};
 pub use traits::Stereo;

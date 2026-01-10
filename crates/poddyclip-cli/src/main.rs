@@ -10,16 +10,19 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
-use poddyclip::denoiser::{analyze_audio, get_preset, RealtimeDenoiser, DEFAULT_PRESET, PRESETS};
-use poddyclip::saturation::Channel9;
-use poddyclip::dynamics::{StereoVcaPeakComp, ButterComp2};
-use poddyclip::dynamics::autogain::{analyze_gain, apply_gain, linear_to_db, DEFAULT_TARGET_RMS_DB, DEFAULT_TARGET_PEAK_DB};
-use poddyclip::dynamics::limiter::Limiter;
-use poddyclip::eq::{FilterChain, HighPassSlope, FixEq, StereoEnhanceEq};
-use poddyclip::eq::deesser::StereoDeEsser;
-use poddyclip::traits::Stereo;
-use poddyclip::analysis::lufs::{measure_integrated_lufs, DEFAULT_TARGET_LUFS};
 use poddyclip::analysis;
+use poddyclip::analysis::lufs::{measure_integrated_lufs, DEFAULT_TARGET_LUFS};
+use poddyclip::denoiser::{analyze_audio, get_preset, RealtimeDenoiser, DEFAULT_PRESET, PRESETS};
+use poddyclip::dynamics::autogain::{
+    analyze_gain, apply_gain, linear_to_db, DEFAULT_TARGET_PEAK_DB, DEFAULT_TARGET_RMS_DB,
+};
+use poddyclip::dynamics::limiter::Limiter;
+use poddyclip::dynamics::{ButterComp2, StereoVcaPeakComp};
+use poddyclip::eq::deesser::StereoDeEsser;
+use poddyclip::eq::{FilterChain, FixEq, HighPassSlope, StereoEnhanceEq};
+use poddyclip::repair::Declicker;
+use poddyclip::saturation::Channel9;
+use poddyclip::traits::Stereo;
 
 #[derive(Parser)]
 #[command(name = "poddyclip")]
@@ -49,6 +52,10 @@ struct Args {
     /// Disable filters (skip HP @ 80Hz and LP @ 15.5kHz)
     #[arg(long)]
     no_filters: bool,
+
+    /// Remove clicks and pops (offline processing, runs before other stages)
+    #[arg(long)]
+    declick: bool,
 }
 
 fn main() -> Result<()> {
@@ -63,7 +70,10 @@ fn main() -> Result<()> {
 
     println!("Sample rate: {} Hz", sample_rate);
     println!("Channels: {}", if is_stereo { "stereo" } else { "mono" });
-    println!("Duration: {:.2}s", samples[0].len() as f32 / sample_rate as f32);
+    println!(
+        "Duration: {:.2}s",
+        samples[0].len() as f32 / sample_rate as f32
+    );
 
     // =========================================================================
     // INPUT STAGE
@@ -98,9 +108,34 @@ fn main() -> Result<()> {
         poddyclip::dynamics::autogain::calculate_rms_and_peak(&samples[0])
     };
     let gain_db = analyze_gain(&samples, DEFAULT_TARGET_RMS_DB, DEFAULT_TARGET_PEAK_DB);
-    println!("  Input: RMS {:.1}dB, Peak {:.1}dB", linear_to_db(rms), linear_to_db(peak));
+    println!(
+        "  Input: RMS {:.1}dB, Peak {:.1}dB",
+        linear_to_db(rms),
+        linear_to_db(peak)
+    );
     println!("  Applying: {:+.1}dB", gain_db);
     apply_gain(&mut samples, gain_db);
+
+    // =========================================================================
+    // REPAIR (OFFLINE)
+    // =========================================================================
+    if args.declick {
+        println!("\n[Declick]");
+        let declicker = Declicker::new(sample_rate);
+        println!(
+            "  Tuned for {}Hz: frame={}samples, order={}, threshold={}",
+            sample_rate,
+            declicker.detector.frame_size,
+            declicker.detector.order,
+            declicker.detector.threshold_k
+        );
+        for (i, channel) in samples.iter_mut().enumerate() {
+            let clicks_found = declicker.detector.detect_f32(channel).len();
+            let repaired = declicker.process_f32(channel);
+            println!("  Channel {}: {} clicks repaired", i, clicks_found);
+            *channel = repaired;
+        }
+    }
 
     // =========================================================================
     // DENOISE
@@ -110,25 +145,30 @@ fn main() -> Result<()> {
 
     // Analyze noise floor (on filtered + gain-normalized audio)
     let result = analyze_audio(&samples[0], sample_rate);
-    println!("  SNR: {:.1}dB, Speech: {:.0}%",
+    println!(
+        "  SNR: {:.1}dB, Speech: {:.0}%",
         result.analysis.overall_snr_db,
         result.analysis.speech_density * 100.0
     );
 
     // Apply denoiser
-    println!("  Preset: {} ({})", preset, get_preset(preset).unwrap().name);
+    println!(
+        "  Preset: {} ({})",
+        preset,
+        get_preset(preset).unwrap().name
+    );
     if is_stereo {
-        let mut left_denoiser = RealtimeDenoiser::new_with_preset(sample_rate, preset)
-            .expect("Invalid preset");
-        let mut right_denoiser = RealtimeDenoiser::new_with_preset(sample_rate, preset)
-            .expect("Invalid preset");
+        let mut left_denoiser =
+            RealtimeDenoiser::new_with_preset(sample_rate, preset).expect("Invalid preset");
+        let mut right_denoiser =
+            RealtimeDenoiser::new_with_preset(sample_rate, preset).expect("Invalid preset");
         left_denoiser.init_with_noise_floor(&result.noise_floor);
         right_denoiser.init_with_noise_floor(&result.noise_floor);
         samples[0] = left_denoiser.process(&samples[0]);
         samples[1] = right_denoiser.process(&samples[1]);
     } else {
-        let mut denoiser = RealtimeDenoiser::new_with_preset(sample_rate, preset)
-            .expect("Invalid preset");
+        let mut denoiser =
+            RealtimeDenoiser::new_with_preset(sample_rate, preset).expect("Invalid preset");
         denoiser.init_with_noise_floor(&result.noise_floor);
         samples[0] = denoiser.process(&samples[0]);
     }
@@ -141,7 +181,10 @@ fn main() -> Result<()> {
     // Peak compressor
     let mut peakcomp = StereoVcaPeakComp::new(sample_rate as f32);
     let profile = peakcomp.configure(&samples).clone();
-    println!("  PeakComp: threshold {:.1}dB", profile.histogram_threshold_db);
+    println!(
+        "  PeakComp: threshold {:.1}dB",
+        profile.histogram_threshold_db
+    );
     if is_stereo {
         let (left, right) = samples.split_at_mut(1);
         peakcomp.process_stereo(&mut left[0], &mut right[0]);
@@ -160,7 +203,8 @@ fn main() -> Result<()> {
     // FixEq
     let mut fixeq = FixEq::new(sample_rate as f32);
     fixeq.configure_from_spectrum(&spectrum, preset, is_stereo);
-    println!("  FixEq: demud {:.0}%, corrA {:.0}%, corrB {:.0}%",
+    println!(
+        "  FixEq: demud {:.0}%, corrA {:.0}%, corrB {:.0}%",
         fixeq.get_demud_strength() * 100.0,
         fixeq.get_correction_a_strength() * 100.0,
         fixeq.get_correction_b_strength() * 100.0
@@ -175,7 +219,8 @@ fn main() -> Result<()> {
     // De-esser (analyzes current audio state)
     let mut deesser = StereoDeEsser::new(sample_rate as f32);
     let sibilance = deesser.configure(&samples).clone();
-    println!("  DeEsser: {:.0}Hz, strength {:.0}%",
+    println!(
+        "  DeEsser: {:.0}Hz, strength {:.0}%",
         sibilance.center_freq,
         deesser.get_strength() * 100.0
     );
@@ -211,7 +256,9 @@ fn main() -> Result<()> {
     // Enhance EQ (uses earlier spectrum)
     let mut enhanceeq = StereoEnhanceEq::new(sample_rate as f32);
     enhanceeq.configure_from_spectrum(&spectrum);
-    println!("  EnhanceEQ: presence {:+.1}dB, air {:+.1}dB",
+    println!(
+        "  EnhanceEQ: low-mid: {:+.1}dB, presence {:+.1}dB, air {:+.1}dB",
+        enhanceeq.get_lowmid_gain(),
         enhanceeq.get_presence_gain(),
         enhanceeq.get_shelf_gain()
     );
@@ -230,7 +277,10 @@ fn main() -> Result<()> {
     // LUFS normalization
     let lufs = measure_integrated_lufs(&samples, sample_rate);
     let lufs_gain_db = DEFAULT_TARGET_LUFS - lufs;
-    println!("  LUFS: {:.1} -> target {:.1} ({:+.1}dB)", lufs, DEFAULT_TARGET_LUFS, lufs_gain_db);
+    println!(
+        "  LUFS: {:.1} -> target {:.1} ({:+.1}dB)",
+        lufs, DEFAULT_TARGET_LUFS, lufs_gain_db
+    );
     apply_gain(&mut samples, lufs_gain_db);
 
     // Limiter
@@ -247,7 +297,11 @@ fn main() -> Result<()> {
     // SAVE
     // =========================================================================
     let output_path = args.output.unwrap_or_else(|| {
-        let stem = args.input.file_stem().and_then(|s| s.to_str()).unwrap_or("audio");
+        let stem = args
+            .input
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("audio");
         let name = PRESETS[preset - 1].name.to_lowercase();
         PathBuf::from(format!("{stem}_denoised_{preset}_{name}.wav"))
     });
