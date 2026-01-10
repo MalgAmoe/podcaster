@@ -3,6 +3,9 @@
 //! Primary abstraction uses `process_buffer(&mut [f32])` for better cache locality,
 //! prefetcher optimization, and SIMD potential (285% performance improvement).
 
+// Traits define API contract - not all methods used by all features
+#![allow(dead_code)]
+
 // =============================================================================
 // Core Traits
 // =============================================================================
@@ -123,6 +126,7 @@ impl<P: ProcessorF64 + Clone> Stereo<P> {
 // Factory methods that work with any P
 impl<P: Clone> Stereo<P> {
     /// Create stereo from a single mono processor (clones it)
+    #[allow(dead_code)]
     pub fn from_mono(processor: P) -> Self {
         Self {
             left: processor.clone(),

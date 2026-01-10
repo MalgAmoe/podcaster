@@ -3,6 +3,8 @@
 //! Provides noise floor estimation and audio metrics for batch processing.
 //! These functions are CLI-only (plugin uses real-time adaptation).
 
+#![allow(dead_code)]
+
 use super::common::*;
 use rustfft::{num_complex::Complex, FftPlanner};
 use std::f32::consts::PI;

@@ -1,6 +1,8 @@
 //! Shared audio analysis module
 //!
-//! Computes spectral analysis once for use by multiple processors.
+//! Computes spectral analysis once for use by multiple processors (CLI only).
+
+#![allow(dead_code)]
 
 use rustfft::{num_complex::Complex, FftPlanner};
 use std::f32::consts::PI;

@@ -3,6 +3,8 @@
 //! Core implementation used by both CLI (batch processing) and plugin (real-time).
 //! Supports preset-based configuration for CLI and dynamic parameter updates for plugin.
 
+#![allow(dead_code)]
+
 use super::common::*;
 use rustfft::{num_complex::Complex, FftPlanner};
 use std::collections::VecDeque;
