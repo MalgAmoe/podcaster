@@ -19,7 +19,7 @@ use poddyclip::dynamics::autogain::{
 use poddyclip::dynamics::limiter::Limiter;
 use poddyclip::dynamics::{ButterComp2, StereoFetCompressor, StereoVcaPeakComp};
 use poddyclip::eq::deesser::StereoDeEsser;
-use poddyclip::eq::{FilterChain, FixEq, HighPassSlope, StereoEnhanceEq};
+use poddyclip::eq::{FilterChain, FixEq, HighPassSlope, RadioVoiceProcessor, StereoEnhanceEq};
 use poddyclip::repair::Declicker;
 use poddyclip::saturation::Channel9;
 use poddyclip::traits::{Stereo, StereoProcessor};
@@ -60,6 +60,14 @@ struct Args {
     /// FET-style compression (1176-inspired, fast attack, program-dependent release)
     #[arg(long)]
     fet: bool,
+
+    /// Radio Voice EQ - automatic broadcast-style EQ
+    #[arg(long)]
+    radio: bool,
+
+    /// Radio Voice EQ amount (0.0-1.0, default 1.0)
+    #[arg(long, default_value_t = 1.0)]
+    radio_amount: f32,
 }
 
 fn main() -> Result<()> {
@@ -276,22 +284,70 @@ fn main() -> Result<()> {
     } else {
         samples[0].clone()
     };
-    let enhance_spectrum = analysis::SpectralAnalysis::new(&mono_for_enhance, sample_rate);
 
-    // Enhance EQ (uses fresh spectrum)
-    let mut enhanceeq = StereoEnhanceEq::new(sample_rate as f32);
-    enhanceeq.configure_from_spectrum(&enhance_spectrum);
-    println!(
-        "  EnhanceEQ: low-mid: {:+.1}dB, presence {:+.1}dB, air {:+.1}dB",
-        enhanceeq.get_lowmid_gain(),
-        enhanceeq.get_presence_gain(),
-        enhanceeq.get_shelf_gain()
-    );
-    if is_stereo {
-        let (left, right) = samples.split_at_mut(1);
-        enhanceeq.process_stereo(&mut left[0], &mut right[0]);
-    } else {
-        enhanceeq.process_mono(&mut samples[0]);
+    if !args.radio {
+        let enhance_spectrum = analysis::SpectralAnalysis::new(&mono_for_enhance, sample_rate);
+        // Enhance EQ (uses fresh spectrum)
+        let mut enhanceeq = StereoEnhanceEq::new(sample_rate as f32);
+        enhanceeq.configure_from_spectrum(&enhance_spectrum);
+        println!(
+            "  EnhanceEQ: low-mid: {:+.1}dB, presence {:+.1}dB, air {:+.1}dB",
+            enhanceeq.get_lowmid_gain(),
+            enhanceeq.get_presence_gain(),
+            enhanceeq.get_shelf_gain()
+        );
+        if is_stereo {
+            let (left, right) = samples.split_at_mut(1);
+            enhanceeq.process_stereo(&mut left[0], &mut right[0]);
+        } else {
+            enhanceeq.process_mono(&mut samples[0]);
+        }
+    }
+
+    // =========================================================================
+    // RADIO VOICE EQ (optional)
+    // =========================================================================
+    if args.radio {
+        println!("\n[Radio Voice EQ]");
+        let mut radio = RadioVoiceProcessor::new(sample_rate);
+        radio.set_amount(args.radio_amount);
+
+        // Analyze (uses mono mix)
+        let mono = if is_stereo {
+            analysis::utils::mix_to_mono(&samples[0], &samples[1])
+        } else {
+            samples[0].clone()
+        };
+        radio.analyze(&mono);
+
+        // Process
+        if is_stereo {
+            let (left, right) = samples.split_at_mut(1);
+            radio.process(&mut left[0]);
+            radio.reset();
+            radio.process(&mut right[0]);
+        } else {
+            radio.process(&mut samples[0]);
+        }
+
+        println!("  f0: {:.1} Hz", radio.get_detected_f0());
+        println!("  HPF: {:.0} Hz", radio.get_hpf_freq());
+        println!(
+            "  Low: {:+.1} dB @ {:.0} Hz",
+            radio.get_low_shelf_gain(),
+            radio.get_low_shelf_freq()
+        );
+        println!(
+            "  Mud: {:+.1} dB @ {:.0} Hz",
+            radio.get_mud_gain(),
+            radio.get_mud_freq()
+        );
+        println!(
+            "  Presence: {:+.1} dB @ {:.0} Hz",
+            radio.get_presence_gain(),
+            radio.get_presence_freq()
+        );
+        println!("  Air: {:+.1} dB", radio.get_air_gain());
     }
 
     // =========================================================================

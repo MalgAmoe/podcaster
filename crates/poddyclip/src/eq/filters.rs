@@ -331,3 +331,161 @@ impl HighShelfSvf {
     }
 }
 
+// =============================================================================
+// 1st Order Low Shelf using SVF Topology (6 dB/oct, gentle slope)
+// =============================================================================
+
+/// 1st order low shelf filter using SVF topology
+/// Mirror of HighShelfSvf but boosts/cuts low frequencies.
+#[derive(Clone, Debug)]
+pub struct LowShelfSvf {
+    ic1eq: f32,
+    g: f32,
+    sample_rate: f32,
+    freq: f32,
+    gain_db: f32,
+}
+
+impl LowShelfSvf {
+    pub fn new(freq: f32, gain_db: f32, sample_rate: f32) -> Self {
+        Self {
+            ic1eq: 0.0,
+            g: (PI * freq / sample_rate).tan(),
+            sample_rate,
+            freq,
+            gain_db,
+        }
+    }
+
+    pub fn set_params(&mut self, freq: f32, gain_db: f32) {
+        self.freq = freq;
+        self.gain_db = gain_db;
+        self.g = (PI * self.freq / self.sample_rate).tan();
+    }
+
+    pub fn get_freq(&self) -> f32 {
+        self.freq
+    }
+
+    pub fn get_gain_db(&self) -> f32 {
+        self.gain_db
+    }
+
+    #[inline]
+    pub fn process(&mut self, input: f32) -> f32 {
+        if self.gain_db.abs() < 0.1 {
+            return input;
+        }
+        let v1 = (input - self.ic1eq) * (self.g / (1.0 + self.g));
+        let v2 = v1 + self.ic1eq;
+        self.ic1eq = v2 + v1;
+        let a = 10.0_f32.powf(self.gain_db / 20.0);
+        input + (a - 1.0) * v2
+    }
+
+    pub fn reset(&mut self) {
+        self.ic1eq = 0.0;
+    }
+}
+
+// =============================================================================
+// 2nd Order Peaking EQ (Bell) using SVF - wraps SvfBiquad
+// =============================================================================
+
+/// 2nd order peaking (bell) EQ filter - wraps SvfBiquad and adds gain mixing
+#[derive(Clone, Debug)]
+pub struct PeakingEqSvf {
+    biquad: SvfBiquad,
+    sample_rate: f32,
+    freq: f32,
+    q: f32,
+    gain_db: f32,
+}
+
+impl PeakingEqSvf {
+    pub fn new(freq: f32, q: f32, gain_db: f32, sample_rate: f32) -> Self {
+        Self {
+            biquad: SvfBiquad::new(freq, sample_rate, q),
+            sample_rate,
+            freq,
+            q,
+            gain_db,
+        }
+    }
+
+    pub fn set_params(&mut self, freq: f32, q: f32, gain_db: f32) {
+        self.freq = freq.clamp(20.0, self.sample_rate * 0.45);
+        self.q = q.clamp(0.1, 10.0);
+        self.gain_db = gain_db;
+        self.biquad.update(self.freq, self.sample_rate, self.q);
+    }
+
+    pub fn get_freq(&self) -> f32 {
+        self.freq
+    }
+
+    pub fn get_gain_db(&self) -> f32 {
+        self.gain_db
+    }
+
+    #[inline]
+    pub fn process(&mut self, input: f32) -> f32 {
+        if self.gain_db.abs() < 0.1 {
+            return input;
+        }
+        let (_, bp, _) = self.biquad.process(input);
+        let k = 1.0 / self.q;
+        let gain_linear = 10.0_f32.powf(self.gain_db.abs() / 40.0);
+        if self.gain_db > 0.0 {
+            input + bp * (gain_linear * gain_linear - 1.0) * k
+        } else {
+            input - bp * (1.0 - 1.0 / (gain_linear * gain_linear)) * k
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.biquad.reset();
+    }
+}
+
+// =============================================================================
+// Configurable High Pass Filter - wraps SvfBiquad
+// =============================================================================
+
+/// 12 dB/oct high-pass with configurable frequency - wraps SvfBiquad
+#[derive(Clone, Debug)]
+pub struct SvfHighPass {
+    biquad: SvfBiquad,
+    sample_rate: f32,
+    freq: f32,
+}
+
+impl SvfHighPass {
+    pub fn new(freq: f32, sample_rate: f32) -> Self {
+        Self {
+            biquad: SvfBiquad::new(freq, sample_rate, Q_BUTTERWORTH),
+            sample_rate,
+            freq,
+        }
+    }
+
+    pub fn set_freq(&mut self, freq: f32) {
+        self.freq = freq.clamp(20.0, self.sample_rate * 0.45);
+        self.biquad.update(self.freq, self.sample_rate, Q_BUTTERWORTH);
+    }
+
+    pub fn get_freq(&self) -> f32 {
+        self.freq
+    }
+
+    #[inline]
+    pub fn process(&mut self, input: f32) -> f32 {
+        let (_, _, hp) = self.biquad.process(input);
+        hp
+    }
+
+    pub fn reset(&mut self) {
+        self.biquad.reset();
+    }
+}
+

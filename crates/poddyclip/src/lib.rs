@@ -19,7 +19,7 @@ pub mod traits;
 pub use denoiser::{RealtimeDenoiser, StreamingDenoiser, PRESETS};
 pub use dynamics::{ButterComp2, StereoFetCompressor, StereoRealtimeLimiter, StereoVcaPeakComp};
 pub use dynamics::limiter::Limiter;
-pub use eq::{DeEsser, FilterChain, FixEq, HighPassSlope, StereoDeEsser, StereoEnhanceEq};
+pub use eq::{DeEsser, FilterChain, FixEq, HighPassSlope, RadioVoiceProcessor, StereoDeEsser, StereoEnhanceEq, StereoRadioVoice};
 pub use repair::Declicker;
 pub use saturation::{Channel9, TapeGlue};
 pub use traits::Stereo;
