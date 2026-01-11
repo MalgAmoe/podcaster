@@ -4,6 +4,7 @@
 //! - 24 dB/oct HPF (2 cascaded 12 dB/oct)
 //! - Low shelf for bass boost
 //! - Mud peaking EQ
+//! - Mid peaking EQ (optional, for nasal/honky cuts)
 //! - Presence peaking EQ
 //! - Air high shelf
 
@@ -16,7 +17,7 @@ use super::radio_fitter::RadioFilterParams;
 
 /// Radio Voice EQ filter cascade
 ///
-/// Applies HPF, low shelf boost, mud cut, presence boost, and air shelf
+/// Applies HPF, low shelf boost, mud cut, mid cut, presence boost, and air shelf
 /// for the hyped "smiley curve" radio sound.
 #[derive(Clone, Debug)]
 pub struct RadioEq {
@@ -29,6 +30,9 @@ pub struct RadioEq {
 
     // Mud band peaking EQ
     mud_eq: PeakingEqSvf,
+
+    // Mid band peaking EQ (nasal/honky cut)
+    mid_eq: PeakingEqSvf,
 
     // Presence band peaking EQ
     presence_eq: PeakingEqSvf,
@@ -48,6 +52,7 @@ impl RadioEq {
             hpf_stage2: SvfHighPass::new(80.0, sample_rate),
             low_shelf: LowShelfSvf::new(120.0, 0.0, sample_rate),
             mud_eq: PeakingEqSvf::new(400.0, 1.0, 0.0, sample_rate),
+            mid_eq: PeakingEqSvf::new(1200.0, 1.0, 0.0, sample_rate),
             presence_eq: PeakingEqSvf::new(4000.0, 1.0, 0.0, sample_rate),
             air_shelf: HighShelfSvf::new(8000.0, 0.0, sample_rate),
             params: RadioFilterParams::default(),
@@ -68,6 +73,9 @@ impl RadioEq {
         // Mud EQ
         self.mud_eq.set_params(params.mud_freq, params.mud_q, params.mud_gain);
 
+        // Mid EQ (nasal/honky cut - only active if gain != 0)
+        self.mid_eq.set_params(params.mid_freq, params.mid_q, params.mid_gain);
+
         // Presence EQ
         self.presence_eq.set_params(params.presence_freq, params.presence_q, params.presence_gain);
 
@@ -87,6 +95,9 @@ impl RadioEq {
 
         // Mud cut
         sample = self.mud_eq.process(sample);
+
+        // Mid cut (nasal/honky - bypassed if gain is 0)
+        sample = self.mid_eq.process(sample);
 
         // Presence boost
         sample = self.presence_eq.process(sample);
@@ -110,6 +121,7 @@ impl RadioEq {
         self.hpf_stage2.reset();
         self.low_shelf.reset();
         self.mud_eq.reset();
+        self.mid_eq.reset();
         self.presence_eq.reset();
         self.air_shelf.reset();
     }
@@ -133,6 +145,14 @@ impl RadioEq {
 
     pub fn get_mud_gain(&self) -> f32 {
         self.params.mud_gain
+    }
+
+    pub fn get_mid_freq(&self) -> f32 {
+        self.params.mid_freq
+    }
+
+    pub fn get_mid_gain(&self) -> f32 {
+        self.params.mid_gain
     }
 
     pub fn get_presence_freq(&self) -> f32 {
@@ -171,6 +191,9 @@ mod tests {
             mud_freq: 350.0,
             mud_gain: 0.0,
             mud_q: 1.0,
+            mid_freq: 1200.0,
+            mid_gain: 0.0,
+            mid_q: 1.0,
             presence_freq: 3500.0,
             presence_gain: 0.0,
             presence_q: 1.0,
@@ -216,6 +239,9 @@ mod tests {
             mud_freq: 350.0,
             mud_gain: -6.0,
             mud_q: 1.0,
+            mid_freq: 1200.0,
+            mid_gain: 0.0,
+            mid_q: 1.0,
             presence_freq: 3500.0,
             presence_gain: 0.0,
             presence_q: 1.0,

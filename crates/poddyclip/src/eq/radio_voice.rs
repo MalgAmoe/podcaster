@@ -21,6 +21,7 @@
 use crate::analysis::{CepstralAnalysis, SpectralAnalysis};
 use crate::traits::{AudioProcessor, MonoProcessor, Processor, StereoProcessor};
 
+use super::deesser_analysis::analyze_sibilance;
 use super::radio_eq::RadioEq;
 use super::radio_fitter::RadioFilterParams;
 use super::radio_target::RadioTarget;
@@ -39,6 +40,7 @@ pub struct RadioVoiceProcessor {
 
     // Analysis results (for reporting)
     detected_f0: f32,
+    sibilance_level: f32,
     params: RadioFilterParams,
     configured: bool,
 }
@@ -51,6 +53,7 @@ impl RadioVoiceProcessor {
             amount: 1.0,
             eq: RadioEq::new(sample_rate as f32),
             detected_f0: 120.0, // Default f0
+            sibilance_level: 0.0,
             params: RadioFilterParams::default(),
             configured: false,
         }
@@ -64,7 +67,7 @@ impl RadioVoiceProcessor {
     /// Analyze audio and configure filters
     ///
     /// Call this with a mono mix of the audio before processing.
-    /// The analysis determines f0 and computes the optimal EQ settings.
+    /// The analysis determines f0, sibilance level, and computes the optimal EQ settings.
     pub fn analyze(&mut self, samples: &[f32]) {
         if samples.is_empty() {
             return;
@@ -73,13 +76,19 @@ impl RadioVoiceProcessor {
         // Step 1: Spectral analysis (reuses existing implementation)
         let spectrum = SpectralAnalysis::new(samples, self.sample_rate);
 
-        // Step 2: Cepstral analysis for envelope and f0
+        // Step 2: Cepstral analysis for f0 detection only
+        // Note: We use octave-band averaged spectrum (not cepstral envelope) for EQ matching
+        // because cepstral envelope removes spectral tilt, giving wrong slope measurements.
         let cepstral = CepstralAnalysis::from_spectrum(&spectrum);
 
         // Use detected f0 or default
         self.detected_f0 = cepstral.f0.unwrap_or(120.0);
 
-        // Step 3: Generate target spectrum
+        // Step 3: Sibilance analysis (reuses de-esser analysis)
+        let sibilance = analyze_sibilance(samples, self.sample_rate);
+        self.sibilance_level = sibilance.confidence;
+
+        // Step 4: Generate target spectrum
         let target = RadioTarget::generate(
             self.detected_f0,
             spectrum.n_bins,
@@ -87,21 +96,66 @@ impl RadioVoiceProcessor {
             spectrum.bin_freq,
         );
 
-        // Step 4: Compute error spectrum (target - actual)
-        let error_db = target.compute_error(&cepstral.envelope_db);
+        // Step 5: Get octave-band averaged spectrum (like LTASS measurement)
+        // This preserves the natural spectral slope unlike cepstral envelope
+        let actual_envelope_db = spectrum.octave_band_envelope_db();
 
-        // Step 5: Fit filter parameters from error
-        self.params = RadioFilterParams::fit_from_error(
+        // Step 6: Normalize actual envelope to target's scale using total power
+        // Compare total energy across speech range (0.8*f0 to 8kHz)
+        let min_freq = self.detected_f0 * 0.8;
+        let max_freq = 8000.0;
+
+        let min_bin = ((min_freq / spectrum.bin_freq).round() as usize).min(spectrum.n_bins - 1);
+        let max_bin = ((max_freq / spectrum.bin_freq).round() as usize).min(spectrum.n_bins - 1);
+
+        // Sum power in linear domain (power adds linearly, not in dB)
+        let actual_power: f32 = actual_envelope_db[min_bin..=max_bin]
+            .iter()
+            .map(|&db| 10.0_f32.powf(db / 10.0))
+            .sum();
+
+        let target_power: f32 = target.curve_db[min_bin..=max_bin]
+            .iter()
+            .map(|&db| 10.0_f32.powf(db / 10.0))
+            .sum();
+
+        // Offset in dB to match total power
+        let normalization_offset = if actual_power > 0.0 && target_power > 0.0 {
+            10.0 * (target_power / actual_power).log10()
+        } else {
+            0.0
+        };
+
+        // DEBUG
+        let db_1k = ((1000.0 / spectrum.bin_freq).round() as usize).min(spectrum.n_bins - 1);
+        let db_4k = ((4000.0 / spectrum.bin_freq).round() as usize).min(spectrum.n_bins - 1);
+        eprintln!("DEBUG norm_offset={:.1}, actual@1k={:.1}, actual@4k={:.1}, target@1k={:.1}, target@4k={:.1}",
+            normalization_offset,
+            actual_envelope_db[db_1k], actual_envelope_db[db_4k],
+            target.curve_db[db_1k], target.curve_db[db_4k]);
+
+        // Normalize actual envelope
+        let normalized_envelope: Vec<f32> = actual_envelope_db
+            .iter()
+            .map(|&db| db + normalization_offset)
+            .collect();
+
+        // Step 6: Compute error spectrum (target - normalized actual)
+        let error_db = target.compute_error(&normalized_envelope);
+
+        // Step 7: Fit filter parameters from error (with sibilance awareness)
+        self.params = RadioFilterParams::fit_from_error_with_sibilance(
             &error_db,
             self.detected_f0,
             spectrum.bin_freq,
             spectrum.n_bins,
+            self.sibilance_level,
         );
 
-        // Step 6: Scale by amount
+        // Step 8: Scale by amount
         self.params.scale_by_amount(self.amount);
 
-        // Step 7: Configure EQ filters
+        // Step 9: Configure EQ filters
         self.eq.configure(&self.params);
         self.configured = true;
     }
@@ -139,6 +193,10 @@ impl RadioVoiceProcessor {
         self.detected_f0
     }
 
+    pub fn get_sibilance_level(&self) -> f32 {
+        self.sibilance_level
+    }
+
     pub fn get_hpf_freq(&self) -> f32 {
         self.params.hpf_freq
     }
@@ -157,6 +215,14 @@ impl RadioVoiceProcessor {
 
     pub fn get_mud_gain(&self) -> f32 {
         self.params.mud_gain
+    }
+
+    pub fn get_mid_freq(&self) -> f32 {
+        self.params.mid_freq
+    }
+
+    pub fn get_mid_gain(&self) -> f32 {
+        self.params.mid_gain
     }
 
     pub fn get_presence_freq(&self) -> f32 {
@@ -209,6 +275,7 @@ impl StereoRadioVoice {
         self.left.analyze(mono_samples);
         // Copy configuration to right channel
         self.right.detected_f0 = self.left.detected_f0;
+        self.right.sibilance_level = self.left.sibilance_level;
         self.right.params = self.left.params.clone();
         self.right.eq.configure(&self.right.params);
         self.right.configured = true;
@@ -217,6 +284,10 @@ impl StereoRadioVoice {
     // Getters for reporting (from left channel)
     pub fn get_detected_f0(&self) -> f32 {
         self.left.get_detected_f0()
+    }
+
+    pub fn get_sibilance_level(&self) -> f32 {
+        self.left.get_sibilance_level()
     }
 
     pub fn get_hpf_freq(&self) -> f32 {
@@ -237,6 +308,14 @@ impl StereoRadioVoice {
 
     pub fn get_mud_gain(&self) -> f32 {
         self.left.get_mud_gain()
+    }
+
+    pub fn get_mid_freq(&self) -> f32 {
+        self.left.get_mid_freq()
+    }
+
+    pub fn get_mid_gain(&self) -> f32 {
+        self.left.get_mid_gain()
     }
 
     pub fn get_presence_freq(&self) -> f32 {

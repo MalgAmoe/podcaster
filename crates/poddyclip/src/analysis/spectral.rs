@@ -185,6 +185,49 @@ impl SpectralAnalysis {
         (freq, energy_db, confidence)
     }
 
+    /// Get octave-band averaged spectrum in dB
+    ///
+    /// Uses 1/3-octave bands (like LTASS measurement) to smooth out harmonic
+    /// ripples while preserving the natural spectral slope.
+    ///
+    /// Returns a vector of dB values for each FFT bin, where each value is the
+    /// average energy in the 1/3-octave band centered on that frequency.
+    pub fn octave_band_envelope_db(&self) -> Vec<f32> {
+        let mut result = vec![-60.0f32; self.n_bins];
+
+        for bin in 1..self.n_bins {
+            let center_freq = bin as f32 * self.bin_freq;
+
+            // 1/3-octave band: ratio is 2^(1/3) ≈ 1.26
+            // Half-band edges: center * 2^(-1/6) to center * 2^(1/6)
+            let half_octave = 2.0_f32.powf(1.0 / 6.0); // ≈ 1.122
+            let low_freq = center_freq / half_octave;
+            let high_freq = center_freq * half_octave;
+
+            let low_bin = ((low_freq / self.bin_freq).floor() as usize).max(1);
+            let high_bin = ((high_freq / self.bin_freq).ceil() as usize).min(self.n_bins - 1);
+
+            // Average power in band (linear domain)
+            let mut sum = 0.0f32;
+            let mut count = 0usize;
+
+            for b in low_bin..=high_bin {
+                sum += self.avg_power[b];
+                count += 1;
+            }
+
+            if count > 0 && sum > 0.0 {
+                let avg_power = sum / count as f32;
+                result[bin] = 10.0 * avg_power.max(1e-12).log10();
+            }
+        }
+
+        // Handle DC bin
+        result[0] = -60.0;
+
+        result
+    }
+
     /// Find two peaks with minimum spacing between them
     pub fn find_two_peaks_deviation(
         &self,

@@ -1,10 +1,14 @@
 //! Radio voice target spectrum generation (hyped smiley curve)
 //!
-//! Generates an ideal "hyped radio voice" frequency response curve based on:
+//! Uses voice Long-Term Average Speech Spectrum (LTASS) as baseline:
+//! - Voice has -6 dB/octave slope above 1kHz (NOT -3 dB like pink noise)
+//! - Reference: Byrne et al. "An international comparison of LTASS"
+//!
+//! Smiley modifications on top of LTASS:
 //! - Bass boost (80-200 Hz) for weight and punch
 //! - Mud scoop (300-500 Hz) for clarity
 //! - Presence boost (3-5 kHz) for forward sound
-//! - Air shelf (8+ kHz) for shimmer
+//! - Air shelf (8+ kHz) for shimmer (gentle - voice has little HF content)
 
 /// Target spectrum for "radio voice" EQ
 #[derive(Clone, Debug)]
@@ -20,12 +24,12 @@ pub struct RadioTarget {
 impl RadioTarget {
     /// Generate target spectrum for hyped radio voice EQ (smiley curve)
     ///
-    /// The curve is designed for the classic FM radio DJ sound with:
+    /// Uses voice LTASS baseline (-6 dB/octave) with smiley modifications:
     /// - Rumble rolloff below 60 Hz
-    /// - Bass boost at 80-200 Hz (+5 dB)
-    /// - Mud scoop at 300-500 Hz (-5 dB)
-    /// - Presence bump at 3-5 kHz (+4.5 dB)
-    /// - Air shelf above 8 kHz (+4.5 dB)
+    /// - Bass boost at 80-200 Hz (+3 dB)
+    /// - Mud scoop at 300-500 Hz (-3 dB)
+    /// - Presence bump at 3-5 kHz (+3 dB)
+    /// - Air shelf above 8 kHz (+2 dB, gentle since voice has little HF)
     ///
     /// # Arguments
     /// * `f0` - Detected fundamental frequency (Hz). Use ~120 Hz as default if unknown.
@@ -39,8 +43,11 @@ impl RadioTarget {
         // Clamp f0 to reasonable voice range
         let _f0 = f0.clamp(75.0, 300.0);
 
-        // Reference frequency for pink noise slope
+        // Reference frequency for voice LTASS slope
         const REF_FREQ: f32 = 1000.0;
+
+        // Voice LTASS slope: -6 dB/octave (NOT -3 dB like pink noise)
+        const VOICE_SLOPE_DB_PER_OCTAVE: f32 = -6.0;
 
         // Hyped smiley curve zones
         const RUMBLE_CUTOFF: f32 = 60.0;  // HPF below this
@@ -48,12 +55,12 @@ impl RadioTarget {
         const BASS_LOW: f32 = 60.0;
         const BASS_HIGH: f32 = 200.0;
         const BASS_CENTER: f32 = 120.0;
-        const BASS_BOOST: f32 = 5.0;      // +5 dB shelf boost
+        const BASS_BOOST: f32 = 3.0;      // +3 dB shelf boost
 
         const MUD_LOW: f32 = 300.0;
         const MUD_HIGH: f32 = 600.0;
         const MUD_CENTER: f32 = 400.0;
-        const MUD_DIP: f32 = -5.0;        // -5 dB scoop (was -3)
+        const MUD_DIP: f32 = -3.0;        // -3 dB scoop
 
         const MID_LOW: f32 = 600.0;
         const MID_HIGH: f32 = 3000.0;
@@ -61,10 +68,10 @@ impl RadioTarget {
         const PRESENCE_LOW: f32 = 3000.0;
         const PRESENCE_HIGH: f32 = 5000.0;
         const PRESENCE_CENTER: f32 = 4000.0;
-        const PRESENCE_BUMP: f32 = 4.5;   // +4.5 dB boost (was +2)
+        const PRESENCE_BUMP: f32 = 3.0;   // +3 dB boost
 
         const AIR_LOW: f32 = 8000.0;
-        const AIR_SHELF: f32 = 4.5;       // +4.5 dB shelf (was +2.5)
+        const AIR_SHELF: f32 = 2.0;       // +2 dB shelf (gentle, voice has little HF)
 
         for bin in 0..num_bins {
             let freq = bin as f32 * bin_freq;
@@ -76,14 +83,14 @@ impl RadioTarget {
                 continue;
             }
 
-            // Start with pink noise slope (-3 dB/octave from 1kHz reference)
-            let pink_slope = if freq > 1.0 {
-                -3.0 * (freq / REF_FREQ).log2()
+            // Start with voice LTASS slope (-6 dB/octave from 1kHz reference)
+            let voice_slope = if freq > 1.0 {
+                VOICE_SLOPE_DB_PER_OCTAVE * (freq / REF_FREQ).log2()
             } else {
                 0.0
             };
 
-            let mut target = pink_slope;
+            let mut target = voice_slope;
 
             // Zone 1: Rumble rolloff (high-pass characteristic)
             if freq < RUMBLE_CUTOFF {
@@ -107,9 +114,9 @@ impl RadioTarget {
                 let dip_amount = MUD_DIP * (-octaves_from_center.powi(2) / (2.0 * bell_width.powi(2))).exp();
                 target += dip_amount;
             }
-            // Zone 4: Flat mid (600-3000 Hz) - just pink slope
+            // Zone 4: Flat mid (600-3000 Hz) - just voice slope
             else if freq >= MID_LOW && freq <= MID_HIGH {
-                // Already have pink slope, no modification
+                // Already have voice slope, no modification
             }
             // Zone 5: Presence bump (3-5 kHz)
             else if freq >= PRESENCE_LOW && freq <= PRESENCE_HIGH {
@@ -167,18 +174,18 @@ mod tests {
         // DC should be very low
         assert!(target.curve_db[0] < -50.0);
 
-        // Check that presence is boosted relative to pink slope alone
+        // Check that presence is boosted relative to voice slope alone
         let bin_freq: f32 = 48000.0 / 4096.0;
         let presence_bin = (4000.0 / bin_freq).round() as usize;
 
-        // Pink slope at 4kHz would be: -3 * log2(4000/1000) = -6 dB
-        let pink_at_4k = -3.0 * (4000.0 / 1000.0_f32).log2();
+        // Voice slope at 4kHz would be: -6 * log2(4000/1000) = -12 dB
+        let voice_at_4k = -6.0 * (4000.0 / 1000.0_f32).log2();
 
-        // With +4.5 dB presence boost, should be higher than pink slope alone
+        // With +3 dB presence boost, should be higher than voice slope alone
         assert!(
-            target.curve_db[presence_bin] > pink_at_4k,
-            "Presence should be boosted above pink slope: {} > {}",
-            target.curve_db[presence_bin], pink_at_4k
+            target.curve_db[presence_bin] > voice_at_4k,
+            "Presence should be boosted above voice slope: {} > {}",
+            target.curve_db[presence_bin], voice_at_4k
         );
     }
 
@@ -205,12 +212,12 @@ mod tests {
         // 120 Hz (bass boost center) should have a boost
         let hz120_bin = (120.0 / bin_freq).round() as usize;
 
-        // 120 Hz in bass boost zone should be boosted relative to pink slope alone
-        // (pink slope at 1kHz = 0 dB reference)
+        // 120 Hz in bass boost zone should be boosted relative to voice slope alone
+        // (voice slope at 1kHz = 0 dB reference)
         let bass_val = target.curve_db[hz120_bin];
-        let pink_at_120 = -3.0 * (120.0 / 1000.0_f32).log2();
+        let voice_at_120 = -6.0 * (120.0 / 1000.0_f32).log2();
 
-        // Bass should be boosted above just pink slope
-        assert!(bass_val > pink_at_120, "120Hz should be boosted: {} > {}", bass_val, pink_at_120);
+        // Bass should be boosted above just voice slope
+        assert!(bass_val > voice_at_120, "120Hz should be boosted: {} > {}", bass_val, voice_at_120);
     }
 }

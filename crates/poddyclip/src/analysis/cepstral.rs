@@ -121,19 +121,32 @@ impl CepstralAnalysis {
         let min_q = min_quefrency.max(2).min(fft_size / 2);
         let max_q = max_quefrency.max(min_q + 1).min(fft_size / 2);
 
+        // Collect cepstrum values and find peak in one pass
         let mut peak_q = 0usize;
         let mut peak_val = 0.0f32;
+        let mut sum = 0.0f32;
+        let mut sum_sq = 0.0f32;
+        let count = (max_q - min_q) as f32;
 
         for q in min_q..max_q {
             let val = spectrum[q].re.abs();
+            sum += val;
+            sum_sq += val * val;
             if val > peak_val {
                 peak_val = val;
                 peak_q = q;
             }
         }
 
-        // f0 detected if peak is significant
-        let f0 = if peak_q > 0 && peak_val > 0.1 {
+        // Compute adaptive threshold: mean + 2.5 * std_dev
+        // This adapts to the actual cepstrum energy regardless of normalization
+        let mean = sum / count;
+        let variance = (sum_sq / count) - (mean * mean);
+        let std_dev = variance.max(0.0).sqrt();
+        let threshold = mean + 2.5 * std_dev;
+
+        // f0 detected if peak significantly exceeds noise floor
+        let f0 = if peak_q > 0 && peak_val > threshold {
             Some(effective_sr / peak_q as f32)
         } else {
             None

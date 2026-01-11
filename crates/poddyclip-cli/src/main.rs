@@ -330,7 +330,7 @@ fn main() -> Result<()> {
             radio.process(&mut samples[0]);
         }
 
-        println!("  f0: {:.1} Hz", radio.get_detected_f0());
+        println!("  f0: {:.1} Hz (sibilance: {:.0}%)", radio.get_detected_f0(), radio.get_sibilance_level() * 100.0);
         println!("  HPF: {:.0} Hz", radio.get_hpf_freq());
         println!(
             "  Low: {:+.1} dB @ {:.0} Hz",
@@ -342,6 +342,15 @@ fn main() -> Result<()> {
             radio.get_mud_gain(),
             radio.get_mud_freq()
         );
+        if radio.get_mid_gain().abs() > 0.1 {
+            println!(
+                "  Mid: {:+.1} dB @ {:.0} Hz",
+                radio.get_mid_gain(),
+                radio.get_mid_freq()
+            );
+        } else {
+            println!("  Mid: off");
+        }
         println!(
             "  Presence: {:+.1} dB @ {:.0} Hz",
             radio.get_presence_gain(),
