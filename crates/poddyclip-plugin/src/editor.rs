@@ -44,6 +44,7 @@ enum MeterColor {
     Green,   // Correction A
     Purple,  // Correction B
     Cyan,    // De-Esser
+    Orange,  // FET Comp
     Magenta, // Peak Comp
     Red,     // Limiter
 }
@@ -71,6 +72,11 @@ impl MeterColor {
                 else if ratio > 0.5 { egui::Color32::from_rgb(80, 220, 230) }
                 else { egui::Color32::from_rgb(120, 230, 240) }
             }
+            MeterColor::Orange => {
+                if ratio > 0.8 { egui::Color32::from_rgb(255, 120, 30) }
+                else if ratio > 0.5 { egui::Color32::from_rgb(255, 160, 60) }
+                else { egui::Color32::from_rgb(255, 200, 100) }
+            }
             MeterColor::Magenta => {
                 if ratio > 0.8 { egui::Color32::from_rgb(255, 50, 150) }
                 else if ratio > 0.5 { egui::Color32::from_rgb(255, 100, 180) }
@@ -97,6 +103,7 @@ pub fn create_plugin_editor(
     correction_a_gain: Arc<Mutex<f32>>,
     correction_b_gain: Arc<Mutex<f32>>,
     deesser_gain: Arc<Mutex<f32>>,
+    fetcomp_gain: Arc<Mutex<f32>>,
     peakcomp_gain: Arc<Mutex<f32>>,
     limiter_gain: Arc<Mutex<f32>>,
 ) -> Option<Box<dyn Editor>> {
@@ -121,6 +128,7 @@ pub fn create_plugin_editor(
                         &correction_a_gain,
                         &correction_b_gain,
                         &deesser_gain,
+                        &fetcomp_gain,
                         &peakcomp_gain,
                         &limiter_gain,
                     );
@@ -210,6 +218,17 @@ fn draw_params_column(ui: &mut egui::Ui, params: &PoddyclipParams, setter: &Para
             labeled_slider(ui, "Strength:", &params.deesser.strength, setter);
         });
 
+        // FET Compressor
+        draw_section(ui, "FET Comp (1176-style)", |ui| {
+            param_row(ui, "Enable:", &params.fetcomp.enable, setter);
+            labeled_slider(ui, "Threshold:", &params.fetcomp.threshold, setter);
+            labeled_slider(ui, "Ratio:", &params.fetcomp.ratio, setter);
+            labeled_slider(ui, "Attack:", &params.fetcomp.attack, setter);
+            labeled_slider(ui, "Release:", &params.fetcomp.release, setter);
+            labeled_slider(ui, "Input Drive:", &params.fetcomp.input_drive, setter);
+            labeled_slider(ui, "Output Drive:", &params.fetcomp.output_drive, setter);
+        });
+
         // Peak Compressor
         draw_section(ui, "Peak Comp (VCA)", |ui| {
             param_row(ui, "Enable:", &params.peakcomp.enable, setter);
@@ -286,6 +305,7 @@ fn draw_viz_column(
     correction_a_gain: &Arc<Mutex<f32>>,
     correction_b_gain: &Arc<Mutex<f32>>,
     deesser_gain: &Arc<Mutex<f32>>,
+    fetcomp_gain: &Arc<Mutex<f32>>,
     peakcomp_gain: &Arc<Mutex<f32>>,
     limiter_gain: &Arc<Mutex<f32>>,
 ) {
@@ -329,6 +349,13 @@ fn draw_viz_column(
         ui.add_space(5.0);
         let gain = deesser_gain.lock().map(|g| *g).unwrap_or(0.0);
         draw_gr_meter(ui, gain, 8.0, MeterColor::Cyan);
+
+        ui.add_space(10.0);
+
+        ui.heading("FET Comp Gain Reduction");
+        ui.add_space(5.0);
+        let gain = fetcomp_gain.lock().map(|g| *g).unwrap_or(0.0);
+        draw_gr_meter(ui, gain, 12.0, MeterColor::Orange);
 
         ui.add_space(10.0);
 

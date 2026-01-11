@@ -17,7 +17,7 @@ pub mod traits;
 
 // Re-export commonly used items
 pub use denoiser::{RealtimeDenoiser, StreamingDenoiser, PRESETS};
-pub use dynamics::{ButterComp2, StereoRealtimeLimiter, StereoVcaPeakComp};
+pub use dynamics::{ButterComp2, StereoFetCompressor, StereoRealtimeLimiter, StereoVcaPeakComp};
 pub use dynamics::limiter::Limiter;
 pub use eq::{DeEsser, FilterChain, FixEq, HighPassSlope, StereoDeEsser, StereoEnhanceEq};
 pub use repair::Declicker;

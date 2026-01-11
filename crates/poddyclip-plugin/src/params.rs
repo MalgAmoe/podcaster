@@ -111,6 +111,30 @@ pub struct DeEsserParams {
 }
 
 #[derive(Params)]
+pub struct FetCompParams {
+    #[id = "fetcomp_enable"]
+    pub enable: BoolParam,
+
+    #[id = "fetcomp_threshold"]
+    pub threshold: FloatParam,
+
+    #[id = "fetcomp_ratio"]
+    pub ratio: FloatParam,
+
+    #[id = "fetcomp_attack"]
+    pub attack: FloatParam,
+
+    #[id = "fetcomp_release"]
+    pub release: FloatParam,
+
+    #[id = "fetcomp_input_drive"]
+    pub input_drive: FloatParam,
+
+    #[id = "fetcomp_output_drive"]
+    pub output_drive: FloatParam,
+}
+
+#[derive(Params)]
 pub struct PeakCompParams {
     #[id = "peakcomp_enable"]
     pub enable: BoolParam,
@@ -220,6 +244,9 @@ pub struct PoddyclipParams {
 
     #[nested(group = "De-Esser")]
     pub deesser: DeEsserParams,
+
+    #[nested(group = "FET Comp")]
+    pub fetcomp: FetCompParams,
 
     #[nested(group = "Peak Comp")]
     pub peakcomp: PeakCompParams,
@@ -415,6 +442,55 @@ impl Default for PoddyclipParams {
                 strength: FloatParam::new(
                     "De-Esser Strength",
                     0.5,
+                    FloatRange::Linear { min: 0.0, max: 1.0 },
+                )
+                .with_step_size(0.01)
+                .with_value_to_string(formatters::v2s_f32_percentage(0)),
+            },
+
+            fetcomp: FetCompParams {
+                enable: BoolParam::new("Enable FET Comp", false),
+                threshold: FloatParam::new(
+                    "FET Threshold",
+                    -18.0,
+                    FloatRange::Linear { min: -40.0, max: 0.0 },
+                )
+                .with_step_size(0.5)
+                .with_value_to_string(formatters::v2s_f32_rounded(1))
+                .with_unit(" dB"),
+                ratio: FloatParam::new(
+                    "FET Ratio",
+                    4.0,
+                    FloatRange::Skewed { min: 2.0, max: 20.0, factor: FloatRange::skew_factor(-1.0) },
+                )
+                .with_step_size(0.1)
+                .with_value_to_string(Arc::new(|v| format!("{:.1}:1", v))),
+                attack: FloatParam::new(
+                    "FET Attack",
+                    0.8,
+                    FloatRange::Skewed { min: 0.1, max: 5.0, factor: FloatRange::skew_factor(-1.0) },
+                )
+                .with_step_size(0.1)
+                .with_value_to_string(formatters::v2s_f32_rounded(1))
+                .with_unit(" ms"),
+                release: FloatParam::new(
+                    "FET Release",
+                    50.0,
+                    FloatRange::Skewed { min: 20.0, max: 500.0, factor: FloatRange::skew_factor(-1.0) },
+                )
+                .with_step_size(1.0)
+                .with_value_to_string(formatters::v2s_f32_rounded(0))
+                .with_unit(" ms"),
+                input_drive: FloatParam::new(
+                    "Input Drive",
+                    0.3,
+                    FloatRange::Linear { min: 0.0, max: 1.0 },
+                )
+                .with_step_size(0.01)
+                .with_value_to_string(formatters::v2s_f32_percentage(0)),
+                output_drive: FloatParam::new(
+                    "Output Drive",
+                    0.1,
                     FloatRange::Linear { min: 0.0, max: 1.0 },
                 )
                 .with_step_size(0.01)

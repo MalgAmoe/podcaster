@@ -200,7 +200,7 @@ impl Interpolator {
     pub fn new() -> Self {
         Self {
             order: 50,
-            iterations: 2,
+            iterations: 3,
             margin: 10,
         }
     }

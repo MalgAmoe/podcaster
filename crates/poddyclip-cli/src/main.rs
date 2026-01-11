@@ -17,12 +17,12 @@ use poddyclip::dynamics::autogain::{
     analyze_gain, apply_gain, linear_to_db, DEFAULT_TARGET_PEAK_DB, DEFAULT_TARGET_RMS_DB,
 };
 use poddyclip::dynamics::limiter::Limiter;
-use poddyclip::dynamics::{ButterComp2, StereoVcaPeakComp};
+use poddyclip::dynamics::{ButterComp2, StereoFetCompressor, StereoVcaPeakComp};
 use poddyclip::eq::deesser::StereoDeEsser;
 use poddyclip::eq::{FilterChain, FixEq, HighPassSlope, StereoEnhanceEq};
 use poddyclip::repair::Declicker;
 use poddyclip::saturation::Channel9;
-use poddyclip::traits::Stereo;
+use poddyclip::traits::{Stereo, StereoProcessor};
 
 #[derive(Parser)]
 #[command(name = "poddyclip")]
@@ -56,6 +56,10 @@ struct Args {
     /// Remove clicks and pops (offline processing, runs before other stages)
     #[arg(long)]
     declick: bool,
+
+    /// FET-style compression (1176-inspired, fast attack, program-dependent release)
+    #[arg(long)]
+    fet: bool,
 }
 
 fn main() -> Result<()> {
@@ -178,18 +182,31 @@ fn main() -> Result<()> {
     // =========================================================================
     println!("\n[Processing]");
 
-    // Peak compressor
-    let mut peakcomp = StereoVcaPeakComp::new(sample_rate as f32);
-    let profile = peakcomp.configure(&samples).clone();
-    println!(
-        "  PeakComp: threshold {:.1}dB",
-        profile.histogram_threshold_db
-    );
-    if is_stereo {
-        let (left, right) = samples.split_at_mut(1);
-        peakcomp.process_stereo(&mut left[0], &mut right[0]);
+    // FET Compressor (optional)
+    if args.fet {
+        let mut fetcomp = StereoFetCompressor::new_default(sample_rate as f32);
+        println!("  FetComp: threshold -18dB, ratio 4:1, attack 1ms, release 100ms");
+        if is_stereo {
+            let (left, right) = samples.split_at_mut(1);
+            fetcomp.process_stereo(&mut left[0], &mut right[0]);
+        } else {
+            fetcomp.process_mono(&mut samples[0]);
+        }
+        println!("    Max GR: {:.1}dB", fetcomp.get_gain_reduction_db());
     } else {
-        peakcomp.process_mono(&mut samples[0]);
+        // Peak compressor
+        let mut peakcomp = StereoVcaPeakComp::new(sample_rate as f32);
+        let profile = peakcomp.configure(&samples).clone();
+        println!(
+            "  PeakComp: threshold {:.1}dB",
+            profile.histogram_threshold_db
+        );
+        if is_stereo {
+            let (left, right) = samples.split_at_mut(1);
+            peakcomp.process_stereo(&mut left[0], &mut right[0]);
+        } else {
+            peakcomp.process_mono(&mut samples[0]);
+        }
     }
 
     // Spectral analysis (on denoised audio - used by FixEq and EnhanceEq)
@@ -241,6 +258,21 @@ fn main() -> Result<()> {
     } else {
         channel9.process_mono(&mut samples[0]);
     }
+
+    // // FET Compressor (optional)
+    // if args.fet {
+    //     let mut fetcomp = StereoFetCompressor::new_default(sample_rate as f32);
+    //     println!(
+    //         "  FetComp: threshold -18dB, ratio 4:1, attack 1ms, release 100ms"
+    //     );
+    //     if is_stereo {
+    //         let (left, right) = samples.split_at_mut(1);
+    //         fetcomp.process_stereo(&mut left[0], &mut right[0]);
+    //     } else {
+    //         fetcomp.process_mono(&mut samples[0]);
+    //     }
+    //     println!("    Max GR: {:.1}dB", fetcomp.get_gain_reduction_db());
+    // }
 
     // Compressor
     let mut compressor: Stereo<ButterComp2> = Stereo::new(sample_rate as f32);
