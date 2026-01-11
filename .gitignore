@@ -1,2 +1,3 @@
 /target
-/sounds
+/sounds/*
+/sounds_out/*

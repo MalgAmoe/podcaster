@@ -259,21 +259,6 @@ fn main() -> Result<()> {
         channel9.process_mono(&mut samples[0]);
     }
 
-    // // FET Compressor (optional)
-    // if args.fet {
-    //     let mut fetcomp = StereoFetCompressor::new_default(sample_rate as f32);
-    //     println!(
-    //         "  FetComp: threshold -18dB, ratio 4:1, attack 1ms, release 100ms"
-    //     );
-    //     if is_stereo {
-    //         let (left, right) = samples.split_at_mut(1);
-    //         fetcomp.process_stereo(&mut left[0], &mut right[0]);
-    //     } else {
-    //         fetcomp.process_mono(&mut samples[0]);
-    //     }
-    //     println!("    Max GR: {:.1}dB", fetcomp.get_gain_reduction_db());
-    // }
-
     // Compressor
     let mut compressor: Stereo<ButterComp2> = Stereo::new(sample_rate as f32);
     compressor.set_both(|c| c.set_compress(0.8));
@@ -285,9 +270,17 @@ fn main() -> Result<()> {
         compressor.process_mono(&mut samples[0]);
     }
 
-    // Enhance EQ (uses earlier spectrum)
+    // Fresh spectral analysis for EnhanceEQ (on current audio state)
+    let mono_for_enhance = if is_stereo {
+        analysis::utils::mix_to_mono(&samples[0], &samples[1])
+    } else {
+        samples[0].clone()
+    };
+    let enhance_spectrum = analysis::SpectralAnalysis::new(&mono_for_enhance, sample_rate);
+
+    // Enhance EQ (uses fresh spectrum)
     let mut enhanceeq = StereoEnhanceEq::new(sample_rate as f32);
-    enhanceeq.configure_from_spectrum(&spectrum);
+    enhanceeq.configure_from_spectrum(&enhance_spectrum);
     println!(
         "  EnhanceEQ: low-mid: {:+.1}dB, presence {:+.1}dB, air {:+.1}dB",
         enhanceeq.get_lowmid_gain(),
@@ -335,7 +328,9 @@ fn main() -> Result<()> {
             .and_then(|s| s.to_str())
             .unwrap_or("audio");
         let name = PRESETS[preset - 1].name.to_lowercase();
-        PathBuf::from(format!("{stem}_denoised_{preset}_{name}.wav"))
+        let output_dir = PathBuf::from("sounds_out");
+        std::fs::create_dir_all(&output_dir).ok();
+        output_dir.join(format!("{stem}_denoised_{preset}_{name}.wav"))
     });
 
     println!("\nSaving: {}", output_path.display());
