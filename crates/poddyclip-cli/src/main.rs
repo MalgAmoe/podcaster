@@ -12,7 +12,10 @@ use symphonia::core::probe::Hint;
 
 use poddyclip::analysis;
 use poddyclip::analysis::lufs::{measure_integrated_lufs, DEFAULT_TARGET_LUFS};
-use poddyclip::denoiser::{analyze_audio, get_preset, RealtimeDenoiser, DEFAULT_PRESET, PRESETS};
+use poddyclip::denoiser::{
+    analyze_audio, detect_tonal_peaks, get_gate_preset_name, get_preset, PeakAttenuator,
+    PeakAttenuatorParams, RealtimeDenoiser, SpectralGate, DEFAULT_PRESET, PRESETS,
+};
 use poddyclip::dynamics::autogain::{
     analyze_gain, apply_gain, linear_to_db, DEFAULT_TARGET_PEAK_DB, DEFAULT_TARGET_RMS_DB,
 };
@@ -72,6 +75,18 @@ struct Args {
     /// De-reverb strength 1-5 (0 = disabled)
     #[arg(long, default_value_t = 0, value_parser = clap::value_parser!(u8).range(0..=5))]
     dereverb: u8,
+
+    /// Spectral gate strength 1-5 (0 = off) - handles intermittent noise
+    #[arg(long, default_value_t = 0, value_parser = clap::value_parser!(u8).range(0..=5))]
+    spectral_gate: u8,
+
+    /// Enable tonal peak attenuation (hum, whine removal)
+    #[arg(long)]
+    depeak: bool,
+
+    /// Maximum peak attenuation in dB (with --depeak)
+    #[arg(long, default_value_t = 18.0)]
+    depeak_max_db: f32,
 }
 
 fn main() -> Result<()> {
@@ -235,6 +250,85 @@ fn main() -> Result<()> {
             RealtimeDenoiser::new_with_preset(sample_rate, preset).expect("Invalid preset");
         denoiser.init_with_noise_floor(&result.noise_floor);
         samples[0] = denoiser.process(&samples[0]);
+    }
+
+    // =========================================================================
+    // SPECTRAL GATE (optional, after denoiser)
+    // =========================================================================
+    if args.spectral_gate > 0 {
+        println!("\n[Spectral Gate]");
+        println!(
+            "  Preset: {} ({})",
+            args.spectral_gate,
+            get_gate_preset_name(args.spectral_gate)
+        );
+
+        if is_stereo {
+            let mut left_gate =
+                SpectralGate::new_with_preset(sample_rate, args.spectral_gate).expect("Invalid preset");
+            let mut right_gate =
+                SpectralGate::new_with_preset(sample_rate, args.spectral_gate).expect("Invalid preset");
+            left_gate.init_noise_floor(&result.noise_floor);
+            right_gate.init_noise_floor(&result.noise_floor);
+            samples[0] = left_gate.process(&samples[0]);
+            samples[1] = right_gate.process(&samples[1]);
+            println!("    Max GR: {:.1}dB", left_gate.get_max_gain_reduction_db());
+        } else {
+            let mut gate =
+                SpectralGate::new_with_preset(sample_rate, args.spectral_gate).expect("Invalid preset");
+            gate.init_noise_floor(&result.noise_floor);
+            samples[0] = gate.process(&samples[0]);
+            println!("    Max GR: {:.1}dB", gate.get_max_gain_reduction_db());
+        }
+    }
+
+    // =========================================================================
+    // PEAK ATTENUATION (optional, detect and remove tonal noise)
+    // =========================================================================
+    if args.depeak {
+        println!("\n[Peak Attenuation]");
+
+        // Analyze for tonal peaks using first second of audio
+        let analyze_samples = (sample_rate as usize).min(samples[0].len());
+        let params = PeakAttenuatorParams::default();
+        let peak_profile = detect_tonal_peaks(&samples[0][..analyze_samples], sample_rate, &params);
+
+        if peak_profile.peak_bins.is_empty() {
+            println!("  No tonal peaks detected");
+        } else {
+            let peak_freqs = peak_profile.get_frequencies(sample_rate);
+            println!("  Detected {} tonal peaks:", peak_profile.peak_bins.len());
+            for (i, freq) in peak_freqs.iter().take(5).enumerate() {
+                println!(
+                    "    {}: {:.0}Hz ({:.1}dB prominence)",
+                    i + 1,
+                    freq,
+                    peak_profile.prominences_db[i]
+                );
+            }
+            if peak_freqs.len() > 5 {
+                println!("    ... and {} more", peak_freqs.len() - 5);
+            }
+
+            // Process each channel
+            if is_stereo {
+                let mut left_attenuator = PeakAttenuator::new(sample_rate);
+                let mut right_attenuator = PeakAttenuator::new(sample_rate);
+                left_attenuator.set_max_attenuation_db(args.depeak_max_db);
+                right_attenuator.set_max_attenuation_db(args.depeak_max_db);
+                left_attenuator.init_with_profile(peak_profile.clone());
+                right_attenuator.init_with_profile(peak_profile);
+                samples[0] = left_attenuator.process(&samples[0]);
+                samples[1] = right_attenuator.process(&samples[1]);
+                println!("    Max attenuation: {:.1}dB", left_attenuator.get_max_attenuation_db());
+            } else {
+                let mut attenuator = PeakAttenuator::new(sample_rate);
+                attenuator.set_max_attenuation_db(args.depeak_max_db);
+                attenuator.init_with_profile(peak_profile);
+                samples[0] = attenuator.process(&samples[0]);
+                println!("    Max attenuation: {:.1}dB", attenuator.get_max_attenuation_db());
+            }
+        }
     }
 
     // =========================================================================
