@@ -250,12 +250,20 @@ fn main() -> Result<()> {
         sibilance.stop_freq,
         deesser.get_strength() * 100.0
     );
+    let mut max_gr = 0.0f32;
     if is_stereo {
         let (left, right) = samples.split_at_mut(1);
-        deesser.process_stereo(&mut left[0], &mut right[0]);
+        for (l, r) in left[0].iter_mut().zip(right[0].iter_mut()) {
+            deesser.process_stereo(std::slice::from_mut(l), std::slice::from_mut(r));
+            max_gr = max_gr.min(deesser.get_gain_reduction_db());
+        }
     } else {
-        deesser.process_mono(&mut samples[0]);
+        for s in samples[0].iter_mut() {
+            deesser.process_mono(std::slice::from_mut(s));
+            max_gr = max_gr.min(deesser.get_gain_reduction_db());
+        }
     }
+    println!("    Max GR: {:.1}dB", max_gr);
 
     // Saturation
     let mut channel9: Stereo<Channel9> = Stereo::new(sample_rate as f32);

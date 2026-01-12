@@ -170,11 +170,7 @@ pub fn analyze_sibilance(audio: &[f32], sample_rate: u32) -> SibilanceAnalysis {
     let mut positive_residue_count = 0usize;
     let mut residue_sum = 0.0f32;
 
-    // Track extent of positive residue for bandwidth
-    let mut first_positive_bin: Option<usize> = None;
-    let mut last_positive_bin: Option<usize> = None;
-
-    for (idx, bin) in (sib_min_bin..=sib_max_bin).enumerate() {
+    for bin in sib_min_bin..=sib_max_bin {
         if bin < cepstral.envelope_db.len() {
             let original_db = 10.0 * avg_power[bin].max(1e-12).log10();
             let envelope_db = cepstral.envelope_db[bin];
@@ -183,22 +179,43 @@ pub fn analyze_sibilance(audio: &[f32], sample_rate: u32) -> SibilanceAnalysis {
             if residue > 0.0 {
                 residue_sum += residue;
                 positive_residue_count += 1;
-                if first_positive_bin.is_none() {
-                    first_positive_bin = Some(idx);
-                }
-                last_positive_bin = Some(idx);
             }
         }
     }
 
-    // Bandwidth from residue extent: where is sibilance energy above envelope?
-    let bandwidth_hz = if let (Some(first), Some(last)) = (first_positive_bin, last_positive_bin) {
-        let first_freq = (sib_min_bin + first) as f32 * bin_freq;
-        let last_freq = (sib_min_bin + last) as f32 * bin_freq;
-        (last_freq - first_freq).max(500.0)
-    } else {
-        // Fallback: use portion of sibilance range
-        (SIBILANCE_FREQ_MAX - SIBILANCE_FREQ_MIN) * 0.5
+    // Find bandwidth from spectral power in sibilance band
+    // Use bins where power > 25% of average (not just residue - captures all sibilance)
+    let (band_start_freq, band_stop_freq, bandwidth_hz) = {
+        // Calculate threshold as 25% of average power in sibilance band
+        let threshold = avg_sib_power * 0.25;
+
+        let mut first_above: Option<usize> = None;
+        let mut last_above: Option<usize> = None;
+
+        for bin in sib_min_bin..=sib_max_bin {
+            if avg_power[bin] > threshold {
+                let idx = bin - sib_min_bin;
+                if first_above.is_none() {
+                    first_above = Some(idx);
+                }
+                last_above = Some(idx);
+            }
+        }
+
+        if let (Some(first), Some(last)) = (first_above, last_above) {
+            let start = (sib_min_bin + first) as f32 * bin_freq;
+            let stop = (sib_min_bin + last + 1) as f32 * bin_freq;
+            let bw = (stop - start).max(500.0);
+            (start, stop, bw)
+        } else {
+            // Fallback: use defaults
+            let bw = (SIBILANCE_FREQ_MAX - SIBILANCE_FREQ_MIN) * 0.5;
+            (
+                DEFAULT_SIBILANCE_FREQ - bw / 2.0,
+                DEFAULT_SIBILANCE_FREQ + bw / 2.0,
+                bw,
+            )
+        }
     };
 
     // Spread factor: what fraction of bins have positive residue?
@@ -237,10 +254,10 @@ pub fn analyze_sibilance(audio: &[f32], sample_rate: u32) -> SibilanceAnalysis {
     // Combine: use max of residue and band confidence
     let confidence = residue_confidence.max(band_confidence);
 
-    // Calculate band edges from center and bandwidth
+    // Use the contiguous region boundaries directly
     // Clamp to valid frequency range
-    let start_freq = (center_freq - bandwidth_hz / 2.0).max(SIBILANCE_FREQ_MIN);
-    let stop_freq = (center_freq + bandwidth_hz / 2.0).min(SIBILANCE_FREQ_MAX);
+    let start_freq = band_start_freq.max(SIBILANCE_FREQ_MIN);
+    let stop_freq = band_stop_freq.min(SIBILANCE_FREQ_MAX);
 
     SibilanceAnalysis {
         center_freq,
@@ -302,16 +319,6 @@ fn compute_sibilance_confidence(
     base_confidence * harmonic_factor
 }
 
-/// Calculate adaptive Q based on detected bandwidth
-/// Filter bandwidth is 4x detected bandwidth for wide coverage
-pub fn calculate_deesser_q(bandwidth_hz: f32, center_freq: f32) -> f32 {
-    // Filter bandwidth = detected bandwidth * 4.0
-    let filter_bandwidth = bandwidth_hz * 4.0;
-    // Q = center_freq / bandwidth
-    let q = center_freq / filter_bandwidth;
-    q.clamp(0.7, 2.5)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -332,20 +339,4 @@ mod tests {
         assert_eq!(mono, vec![0.5, 0.5, 0.5]);
     }
 
-    #[test]
-    fn test_deesser_q_calculation() {
-        // Typical sibilance: 6500Hz center, 3000Hz detected bandwidth
-        // Filter bandwidth = 3000 * 4.0 = 12000Hz
-        // Q = 6500 / 12000 ≈ 0.54 → clamped to 0.7
-        let q = calculate_deesser_q(3000.0, 6500.0);
-        assert_eq!(q, 0.7);
-
-        // Very wide bandwidth should clamp to minimum Q
-        let q_wide = calculate_deesser_q(10000.0, 6500.0);
-        assert_eq!(q_wide, 0.7);
-
-        // Narrow bandwidth: 500Hz detected → 2000Hz filter → Q = 6500/2000 = 3.25 → clamped to 2.5
-        let q_narrow = calculate_deesser_q(500.0, 6500.0);
-        assert_eq!(q_narrow, 2.5);
-    }
 }

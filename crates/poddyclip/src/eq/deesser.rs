@@ -11,9 +11,9 @@ use crate::analysis::utils::mix_to_mono;
 
 const D_ATTACK: f32 = 0.2;
 const D_RELEASE: f32 = 130.0;
-const D_THRESHOLD: f32 = -3.0;
-const D_RATIO: f32 = 9.4;
-const D_MAX_CUT: f32 = -18.0;
+const D_THRESHOLD: f32 = -24.0;  // Low threshold - band-extracted signal has lower amplitude
+const D_RATIO: f32 = 4.0;        // Gentler ratio for natural sound
+const D_MAX_CUT: f32 = -18.0;    // Max 18dB reduction
 
 /// Default sibilance band (Hz)
 const DEFAULT_START_FREQ: f32 = DEFAULT_SIBILANCE_FREQ - 1500.0; // 5000 Hz
