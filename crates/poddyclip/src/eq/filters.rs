@@ -489,3 +489,77 @@ impl SvfHighPass {
     }
 }
 
+// =============================================================================
+// Band Extract Filter (Flat-Top Bandpass via Cascaded HP → LP)
+// =============================================================================
+
+/// Extracts a frequency band with flat response using cascaded HP → LP
+/// Used for de-essing where we want to cut a flat frequency range, not a peaked notch
+///
+/// Unlike a resonant bandpass (peaked response), this produces:
+/// - Flat response between start_freq and stop_freq
+/// - Butterworth roll-off at the edges (12 dB/oct)
+#[derive(Clone, Debug)]
+pub struct BandExtractFilter {
+    hp: SvfBiquad,      // High-pass at start_freq
+    lp: SvfBiquad,      // Low-pass at stop_freq
+    start_freq: f32,
+    stop_freq: f32,
+    sample_rate: f32,
+}
+
+impl BandExtractFilter {
+    /// Create a new band extract filter
+    /// start_freq: lower edge of the band (Hz)
+    /// stop_freq: upper edge of the band (Hz)
+    pub fn new(start_freq: f32, stop_freq: f32, sample_rate: f32) -> Self {
+        Self {
+            hp: SvfBiquad::new(start_freq, sample_rate, Q_BUTTERWORTH),
+            lp: SvfBiquad::new(stop_freq, sample_rate, Q_BUTTERWORTH),
+            start_freq,
+            stop_freq,
+            sample_rate,
+        }
+    }
+
+    /// Update band frequencies
+    pub fn set_band(&mut self, start_freq: f32, stop_freq: f32) {
+        if (self.start_freq - start_freq).abs() > 0.1 {
+            self.start_freq = start_freq;
+            self.hp.update(start_freq, self.sample_rate, Q_BUTTERWORTH);
+        }
+        if (self.stop_freq - stop_freq).abs() > 0.1 {
+            self.stop_freq = stop_freq;
+            self.lp.update(stop_freq, self.sample_rate, Q_BUTTERWORTH);
+        }
+    }
+
+    /// Get current start frequency
+    pub fn get_start_freq(&self) -> f32 {
+        self.start_freq
+    }
+
+    /// Get current stop frequency
+    pub fn get_stop_freq(&self) -> f32 {
+        self.stop_freq
+    }
+
+    /// Process one sample, extracting the band
+    /// Returns the signal content between start_freq and stop_freq
+    #[inline]
+    pub fn process(&mut self, input: f32) -> f32 {
+        // HP passes frequencies above start_freq
+        let (_, _, hp_out) = self.hp.process(input);
+        // LP passes frequencies below stop_freq (from HP output)
+        let (lp_out, _, _) = self.lp.process(hp_out);
+        // Result: flat-top bandpass between start and stop
+        lp_out
+    }
+
+    /// Reset filter state
+    pub fn reset(&mut self) {
+        self.hp.reset();
+        self.lp.reset();
+    }
+}
+

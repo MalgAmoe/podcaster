@@ -245,8 +245,9 @@ fn main() -> Result<()> {
     let mut deesser = StereoDeEsser::new(sample_rate as f32);
     let sibilance = deesser.configure(&samples).clone();
     println!(
-        "  DeEsser: {:.0}Hz, strength {:.0}%",
-        sibilance.center_freq,
+        "  DeEsser: {:.0}-{:.0}Hz, strength {:.0}%",
+        sibilance.start_freq,
+        sibilance.stop_freq,
         deesser.get_strength() * 100.0
     );
     if is_stereo {

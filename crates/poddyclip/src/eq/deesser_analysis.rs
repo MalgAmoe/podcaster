@@ -22,8 +22,12 @@ pub const DEFAULT_SIBILANCE_FREQ: f32 = 6500.0;
 pub struct SibilanceAnalysis {
     /// Detected center frequency (Hz)
     pub center_freq: f32,
-    /// Bandwidth at -6dB points (Hz)
+    /// Bandwidth of detected sibilance (Hz)
     pub bandwidth_hz: f32,
+    /// Lower edge of sibilance band (Hz)
+    pub start_freq: f32,
+    /// Upper edge of sibilance band (Hz)
+    pub stop_freq: f32,
     /// Energy level at the detected frequency (dB)
     pub energy_db: f32,
     /// Confidence score (0.0 = uncertain, 1.0 = very confident)
@@ -36,6 +40,8 @@ impl Default for SibilanceAnalysis {
         Self {
             center_freq: DEFAULT_SIBILANCE_FREQ,
             bandwidth_hz: 3000.0,
+            start_freq: DEFAULT_SIBILANCE_FREQ - 1500.0,
+            stop_freq: DEFAULT_SIBILANCE_FREQ + 1500.0,
             energy_db: -60.0,
             confidence: 0.0,
         }
@@ -231,9 +237,16 @@ pub fn analyze_sibilance(audio: &[f32], sample_rate: u32) -> SibilanceAnalysis {
     // Combine: use max of residue and band confidence
     let confidence = residue_confidence.max(band_confidence);
 
+    // Calculate band edges from center and bandwidth
+    // Clamp to valid frequency range
+    let start_freq = (center_freq - bandwidth_hz / 2.0).max(SIBILANCE_FREQ_MIN);
+    let stop_freq = (center_freq + bandwidth_hz / 2.0).min(SIBILANCE_FREQ_MAX);
+
     SibilanceAnalysis {
         center_freq,
         bandwidth_hz,
+        start_freq,
+        stop_freq,
         energy_db,
         confidence,
     }
