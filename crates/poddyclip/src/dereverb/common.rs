@@ -1,7 +1,5 @@
 //! Common constants and presets for de-reverb processing
 
-use std::f32::consts::PI;
-
 // =============================================================================
 // Shared Constants (same as denoiser for compatibility)
 // =============================================================================
@@ -108,13 +106,10 @@ pub fn get_preset_name(level: u8) -> &'static str {
 // =============================================================================
 
 /// Create sqrt-Hann window for overlap-add
+///
+/// Re-exports from stft module for backward compatibility.
 pub fn create_sqrt_hann_window(size: usize) -> Vec<f32> {
-    (0..size)
-        .map(|i| {
-            let hann = 0.5 * (1.0 - (2.0 * PI * i as f32 / (size - 1) as f32).cos());
-            hann.sqrt()
-        })
-        .collect()
+    crate::stft::sqrt_hann_window(size)
 }
 
 // =============================================================================

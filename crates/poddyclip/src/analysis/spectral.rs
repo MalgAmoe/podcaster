@@ -5,7 +5,6 @@
 #![allow(dead_code)]
 
 use rustfft::{num_complex::Complex, FftPlanner};
-use std::f32::consts::PI;
 
 const WINDOW_SIZE: usize = 4096;
 const HOP_SIZE: usize = 2048;
@@ -48,9 +47,7 @@ impl SpectralAnalysis {
         let mut fft_scratch = vec![Complex::new(0.0, 0.0); fft.get_inplace_scratch_len()];
 
         // Hann window
-        let window: Vec<f32> = (0..WINDOW_SIZE)
-            .map(|i| 0.5 * (1.0 - (2.0 * PI * i as f32 / (WINDOW_SIZE - 1) as f32).cos()))
-            .collect();
+        let window = crate::stft::hann_window(WINDOW_SIZE);
 
         // Accumulate power spectrum across frames
         let mut avg_power = vec![0.0f32; n_bins];

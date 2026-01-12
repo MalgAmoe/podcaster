@@ -4,11 +4,8 @@
 //! (fan cycling, HVAC, etc.) with fast-adapting per-bin noise floor.
 
 use std::f32::consts::PI;
-use std::sync::Arc;
 
-use rustfft::{num_complex::Complex, Fft, FftPlanner};
-
-use super::common::{root_hann_window, EPSILON, HOP_SIZE, WINDOW_SIZE};
+use crate::stft::{StftProcessor, EPSILON, RT_HOP_SIZE, RT_N_BINS, RT_WINDOW_SIZE};
 
 /// Parameters for spectral gating
 #[derive(Clone, Debug)]
@@ -140,8 +137,8 @@ const SPIKE_THRESHOLD: f32 = 5.0; // Ignore signals 5x above noise floor
 
 /// Non-stationary spectral gate processor
 pub struct SpectralGate {
-    sample_rate: u32,
-    n_bins: usize,
+    // STFT processor (handles FFT, IFFT, overlap-add)
+    stft: StftProcessor,
 
     // Parameters
     params: SpectralGateParams,
@@ -155,13 +152,6 @@ pub struct SpectralGate {
     // Cached coefficients
     attack_coeff: f32,
     release_coeff: f32,
-
-    // FFT infrastructure
-    fft: Arc<dyn Fft<f32>>,
-    ifft: Arc<dyn Fft<f32>>,
-    fft_scratch: Vec<Complex<f32>>,
-    window: Vec<f32>,
-    overlap_buffer: Vec<f32>,
 }
 
 impl SpectralGate {
@@ -178,28 +168,16 @@ impl SpectralGate {
 
     /// Create with custom params
     pub fn new_with_params(sample_rate: u32, params: SpectralGateParams) -> Self {
-        let n_bins = WINDOW_SIZE / 2 + 1;
-
-        // Setup FFT
-        let mut planner = FftPlanner::new();
-        let fft = planner.plan_fft_forward(WINDOW_SIZE);
-        let ifft = planner.plan_fft_inverse(WINDOW_SIZE);
-        let scratch_len = fft.get_inplace_scratch_len().max(ifft.get_inplace_scratch_len());
-        let fft_scratch = vec![Complex::new(0.0, 0.0); scratch_len];
+        let stft = StftProcessor::new_realtime(sample_rate);
+        let n_bins = stft.n_bins();
 
         let mut gate = Self {
-            sample_rate,
-            n_bins,
+            stft,
             params,
             fast_noise_floor: vec![EPSILON; n_bins],
             smoothed_gain: vec![1.0; n_bins],
             attack_coeff: 0.0,
             release_coeff: 0.0,
-            fft,
-            ifft,
-            fft_scratch,
-            window: root_hann_window(WINDOW_SIZE),
-            overlap_buffer: vec![0.0; WINDOW_SIZE],
         };
         gate.update_coefficients();
         gate
@@ -213,7 +191,7 @@ impl SpectralGate {
 
     /// Update time-domain coefficients from ms values
     fn update_coefficients(&mut self) {
-        let hop_time_s = HOP_SIZE as f32 / self.sample_rate as f32;
+        let hop_time_s = RT_HOP_SIZE as f32 / self.stft.sample_rate() as f32;
 
         let attack_tc = self.params.attack_ms / 1000.0;
         let release_tc = self.params.release_ms / 1000.0;
@@ -224,19 +202,23 @@ impl SpectralGate {
 
     /// Initialize noise floor from analysis pass
     pub fn init_noise_floor(&mut self, noise_floor: &[f32]) {
-        let len = self.n_bins.min(noise_floor.len());
+        let n_bins = self.stft.n_bins();
+        let len = n_bins.min(noise_floor.len());
         self.fast_noise_floor[..len].copy_from_slice(&noise_floor[..len]);
     }
 
     /// Process entire audio buffer (batch mode, for CLI usage)
     pub fn process(&mut self, audio: &[f32]) -> Vec<f32> {
         let original_len = audio.len();
+        let window_size = self.stft.window_size();
+        let hop_size = self.stft.hop_size();
+        let n_bins = self.stft.n_bins();
 
         // Pre-pad for first window overlap
-        let pre_pad = WINDOW_SIZE - HOP_SIZE;
+        let pre_pad = window_size - hop_size;
 
         // Pad to multiple of hop size
-        let pad_len = (HOP_SIZE - audio.len() % HOP_SIZE) % HOP_SIZE;
+        let pad_len = (hop_size - audio.len() % hop_size) % hop_size;
         let mut padded = audio.to_vec();
         padded.resize(audio.len() + pad_len, 0.0);
 
@@ -251,11 +233,32 @@ impl SpectralGate {
 
         // Process frame by frame
         let mut i = 0;
-        while i + WINDOW_SIZE <= input.len() {
-            let frame = &input[i..i + WINDOW_SIZE];
-            let out_frame = self.process_frame(frame);
+        while i + window_size <= input.len() {
+            let frame = &input[i..i + window_size];
+
+            // Forward FFT
+            let mut spectrum = self.stft.forward_fft(frame);
+
+            // Compute power
+            let power = self.stft.compute_power(&spectrum);
+
+            // Compute and apply gate gains
+            let gains = self.compute_gate_gains(&power);
+            for k in 0..n_bins {
+                spectrum[k] *= gains[k];
+            }
+
+            // Ensure symmetry
+            self.stft.ensure_symmetry(&mut spectrum);
+
+            // Inverse FFT
+            let synthesized = self.stft.inverse_fft(&mut spectrum);
+
+            // Overlap-add
+            let out_frame = self.stft.overlap_add(&synthesized);
             output.extend(out_frame);
-            i += HOP_SIZE;
+
+            i += hop_size;
         }
 
         // Remove pre-padding and trim to original length
@@ -267,67 +270,12 @@ impl SpectralGate {
         output
     }
 
-    /// Process single STFT frame
-    fn process_frame(&mut self, frame: &[f32]) -> Vec<f32> {
-        // 1. Apply analysis window
-        let windowed: Vec<f32> = frame
-            .iter()
-            .zip(self.window.iter())
-            .map(|(&s, &w)| s * w)
-            .collect();
+    /// Compute gate gains for current frame
+    fn compute_gate_gains(&mut self, power: &[f32]) -> Vec<f32> {
+        let n_bins = self.stft.n_bins();
 
-        // 2. Forward FFT
-        let mut spectrum: Vec<Complex<f32>> =
-            windowed.iter().map(|&s| Complex::new(s, 0.0)).collect();
-        self.fft
-            .process_with_scratch(&mut spectrum, &mut self.fft_scratch);
-
-        // 3. Compute power spectrum
-        let power: Vec<f32> = spectrum[..self.n_bins]
-            .iter()
-            .map(|c| c.norm_sqr())
-            .collect();
-
-        // 4. Compute gate gains
-        let gains = self.compute_gate_gains_internal(&power);
-
-        // 5. Apply gains (maintain conjugate symmetry)
-        for k in 0..self.n_bins {
-            spectrum[k] *= gains[k];
-        }
-        for k in self.n_bins..WINDOW_SIZE {
-            spectrum[k] = spectrum[WINDOW_SIZE - k].conj();
-        }
-
-        // 6. Inverse FFT
-        self.ifft
-            .process_with_scratch(&mut spectrum, &mut self.fft_scratch);
-
-        // 7. Apply synthesis window & normalize
-        let scale = 1.0 / WINDOW_SIZE as f32;
-        let enhanced: Vec<f32> = spectrum
-            .iter()
-            .zip(self.window.iter())
-            .map(|(c, &w)| c.re * scale * w)
-            .collect();
-
-        // 8. Overlap-add
-        for (i, &e) in enhanced.iter().enumerate() {
-            self.overlap_buffer[i] += e;
-        }
-        let output: Vec<f32> = self.overlap_buffer[..HOP_SIZE].to_vec();
-        self.overlap_buffer.rotate_left(HOP_SIZE);
-        for i in (WINDOW_SIZE - HOP_SIZE)..WINDOW_SIZE {
-            self.overlap_buffer[i] = 0.0;
-        }
-
-        output
-    }
-
-    /// Compute gate gains for current frame (internal)
-    fn compute_gate_gains_internal(&mut self, power: &[f32]) -> Vec<f32> {
         if !self.params.enabled {
-            return vec![1.0; self.n_bins];
+            return vec![1.0; n_bins];
         }
 
         let threshold_db = self.params.threshold_db;
@@ -337,9 +285,9 @@ impl SpectralGate {
         let alpha_down = self.params.alpha_fast_down;
         let alpha_up = self.params.alpha_fast_up;
 
-        let mut gains = vec![1.0; self.n_bins];
+        let mut gains = vec![1.0; n_bins];
 
-        for k in 0..self.n_bins.min(power.len()) {
+        for k in 0..n_bins.min(power.len()) {
             let p = power[k];
 
             // Update fast-adapting noise floor
@@ -396,7 +344,7 @@ impl SpectralGate {
     pub fn reset(&mut self) {
         self.fast_noise_floor.fill(EPSILON);
         self.smoothed_gain.fill(1.0);
-        self.overlap_buffer.fill(0.0);
+        self.stft.reset();
     }
 
     /// Get current max gain reduction for display
@@ -413,7 +361,7 @@ mod tests {
     #[test]
     fn test_create_spectral_gate() {
         let gate = SpectralGate::new(48000);
-        assert_eq!(gate.n_bins, WINDOW_SIZE / 2 + 1);
+        assert_eq!(gate.stft.n_bins(), RT_N_BINS);
     }
 
     #[test]

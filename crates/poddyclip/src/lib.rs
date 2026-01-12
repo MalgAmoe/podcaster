@@ -15,6 +15,7 @@ pub mod dynamics;
 pub mod eq;
 pub mod repair;
 pub mod saturation;
+pub mod stft;
 pub mod traits;
 
 // Re-export commonly used items

@@ -4,11 +4,8 @@
 //! Works in FFT domain - no resonance issues like time-domain notch filters.
 
 use std::f32::consts::PI;
-use std::sync::Arc;
 
-use rustfft::{num_complex::Complex, Fft, FftPlanner};
-
-use super::common::{root_hann_window, EPSILON, HOP_SIZE, WINDOW_SIZE};
+use crate::stft::{StftProcessor, EPSILON, RT_N_BINS, RT_WINDOW_SIZE};
 
 /// Result of peak analysis - detected tonal noise peaks
 #[derive(Clone, Debug, Default)]
@@ -26,7 +23,7 @@ pub struct PeakProfile {
 impl PeakProfile {
     /// Get peak frequencies given sample rate
     pub fn get_frequencies(&self, sample_rate: u32) -> Vec<f32> {
-        let bin_freq = sample_rate as f32 / WINDOW_SIZE as f32;
+        let bin_freq = sample_rate as f32 / RT_WINDOW_SIZE as f32;
         self.peak_bins
             .iter()
             .map(|&bin| bin as f32 * bin_freq)
@@ -77,8 +74,8 @@ impl Default for PeakAttenuatorParams {
 
 /// Spectral peak attenuation processor
 pub struct PeakAttenuator {
-    sample_rate: u32,
-    n_bins: usize,
+    // STFT processor (handles FFT, IFFT, overlap-add)
+    stft: StftProcessor,
 
     // Parameters
     params: PeakAttenuatorParams,
@@ -91,13 +88,6 @@ pub struct PeakAttenuator {
 
     // Smoothed gains for temporal consistency
     smoothed_gain: Vec<f32>,
-
-    // FFT infrastructure
-    fft: Arc<dyn Fft<f32>>,
-    ifft: Arc<dyn Fft<f32>>,
-    fft_scratch: Vec<Complex<f32>>,
-    window: Vec<f32>,
-    overlap_buffer: Vec<f32>,
 }
 
 impl PeakAttenuator {
@@ -108,27 +98,15 @@ impl PeakAttenuator {
 
     /// Create with custom params
     pub fn new_with_params(sample_rate: u32, params: PeakAttenuatorParams) -> Self {
-        let n_bins = WINDOW_SIZE / 2 + 1;
-
-        // Setup FFT
-        let mut planner = FftPlanner::new();
-        let fft = planner.plan_fft_forward(WINDOW_SIZE);
-        let ifft = planner.plan_fft_inverse(WINDOW_SIZE);
-        let scratch_len = fft.get_inplace_scratch_len().max(ifft.get_inplace_scratch_len());
-        let fft_scratch = vec![Complex::new(0.0, 0.0); scratch_len];
+        let stft = StftProcessor::new_realtime(sample_rate);
+        let n_bins = stft.n_bins();
 
         Self {
-            sample_rate,
-            n_bins,
+            stft,
             params,
             peak_profile: None,
             static_attenuation: vec![1.0; n_bins],
             smoothed_gain: vec![1.0; n_bins],
-            fft,
-            ifft,
-            fft_scratch,
-            window: root_hann_window(WINDOW_SIZE),
-            overlap_buffer: vec![0.0; WINDOW_SIZE],
         }
     }
 
@@ -144,11 +122,13 @@ impl PeakAttenuator {
 
     /// Initialize with a peak profile
     pub fn init_with_profile(&mut self, profile: PeakProfile) {
+        let n_bins = self.stft.n_bins();
+
         // Pre-compute static attenuation gains from profile
         self.static_attenuation.fill(1.0);
 
         for (i, &bin) in profile.peak_bins.iter().enumerate() {
-            if bin >= self.n_bins {
+            if bin >= n_bins {
                 continue;
             }
 
@@ -163,7 +143,7 @@ impl PeakAttenuator {
             // Apply smooth transition around peak
             let half_width = (width / 2).max(1);
             let left_edge = bin.saturating_sub(half_width);
-            let right_edge = (bin + half_width + 1).min(self.n_bins);
+            let right_edge = (bin + half_width + 1).min(n_bins);
 
             for b in left_edge..right_edge {
                 // Raised cosine window for smooth transition
@@ -183,12 +163,15 @@ impl PeakAttenuator {
     /// Process entire audio buffer (batch mode, for CLI usage)
     pub fn process(&mut self, audio: &[f32]) -> Vec<f32> {
         let original_len = audio.len();
+        let window_size = self.stft.window_size();
+        let hop_size = self.stft.hop_size();
+        let n_bins = self.stft.n_bins();
 
         // Pre-pad for first window overlap
-        let pre_pad = WINDOW_SIZE - HOP_SIZE;
+        let pre_pad = window_size - hop_size;
 
         // Pad to multiple of hop size
-        let pad_len = (HOP_SIZE - audio.len() % HOP_SIZE) % HOP_SIZE;
+        let pad_len = (hop_size - audio.len() % hop_size) % hop_size;
         let mut padded = audio.to_vec();
         padded.resize(audio.len() + pad_len, 0.0);
 
@@ -203,11 +186,32 @@ impl PeakAttenuator {
 
         // Process frame by frame
         let mut i = 0;
-        while i + WINDOW_SIZE <= input.len() {
-            let frame = &input[i..i + WINDOW_SIZE];
-            let out_frame = self.process_frame(frame);
+        while i + window_size <= input.len() {
+            let frame = &input[i..i + window_size];
+
+            // Forward FFT
+            let mut spectrum = self.stft.forward_fft(frame);
+
+            // Compute power (not used for static attenuation, but kept for API consistency)
+            let power = self.stft.compute_power(&spectrum);
+
+            // Compute and apply attenuation gains
+            let gains = self.compute_attenuation(&power);
+            for k in 0..n_bins {
+                spectrum[k] *= gains[k];
+            }
+
+            // Ensure symmetry
+            self.stft.ensure_symmetry(&mut spectrum);
+
+            // Inverse FFT
+            let synthesized = self.stft.inverse_fft(&mut spectrum);
+
+            // Overlap-add
+            let out_frame = self.stft.overlap_add(&synthesized);
             output.extend(out_frame);
-            i += HOP_SIZE;
+
+            i += hop_size;
         }
 
         // Remove pre-padding and trim to original length
@@ -219,73 +223,18 @@ impl PeakAttenuator {
         output
     }
 
-    /// Process single STFT frame
-    fn process_frame(&mut self, frame: &[f32]) -> Vec<f32> {
-        // 1. Apply analysis window
-        let windowed: Vec<f32> = frame
-            .iter()
-            .zip(self.window.iter())
-            .map(|(&s, &w)| s * w)
-            .collect();
+    /// Compute attenuation gains for current frame
+    fn compute_attenuation(&mut self, _power: &[f32]) -> Vec<f32> {
+        let n_bins = self.stft.n_bins();
 
-        // 2. Forward FFT
-        let mut spectrum: Vec<Complex<f32>> =
-            windowed.iter().map(|&s| Complex::new(s, 0.0)).collect();
-        self.fft
-            .process_with_scratch(&mut spectrum, &mut self.fft_scratch);
-
-        // 3. Compute power spectrum
-        let power: Vec<f32> = spectrum[..self.n_bins]
-            .iter()
-            .map(|c| c.norm_sqr())
-            .collect();
-
-        // 4. Compute attenuation gains
-        let gains = self.compute_attenuation_internal(&power);
-
-        // 5. Apply gains (maintain conjugate symmetry)
-        for k in 0..self.n_bins {
-            spectrum[k] *= gains[k];
-        }
-        for k in self.n_bins..WINDOW_SIZE {
-            spectrum[k] = spectrum[WINDOW_SIZE - k].conj();
-        }
-
-        // 6. Inverse FFT
-        self.ifft
-            .process_with_scratch(&mut spectrum, &mut self.fft_scratch);
-
-        // 7. Apply synthesis window & normalize
-        let scale = 1.0 / WINDOW_SIZE as f32;
-        let enhanced: Vec<f32> = spectrum
-            .iter()
-            .zip(self.window.iter())
-            .map(|(c, &w)| c.re * scale * w)
-            .collect();
-
-        // 8. Overlap-add
-        for (i, &e) in enhanced.iter().enumerate() {
-            self.overlap_buffer[i] += e;
-        }
-        let output: Vec<f32> = self.overlap_buffer[..HOP_SIZE].to_vec();
-        self.overlap_buffer.rotate_left(HOP_SIZE);
-        for i in (WINDOW_SIZE - HOP_SIZE)..WINDOW_SIZE {
-            self.overlap_buffer[i] = 0.0;
-        }
-
-        output
-    }
-
-    /// Compute attenuation gains for current frame (internal)
-    fn compute_attenuation_internal(&mut self, _power: &[f32]) -> Vec<f32> {
         if !self.params.enabled {
-            return vec![1.0; self.n_bins];
+            return vec![1.0; n_bins];
         }
 
         let smoothing = self.params.smoothing;
-        let mut gains = vec![1.0; self.n_bins];
+        let mut gains = vec![1.0; n_bins];
 
-        for k in 0..self.n_bins {
+        for k in 0..n_bins {
             // Use pre-computed static attenuation from profile
             let target_gain = self.static_attenuation[k];
 
@@ -303,7 +252,7 @@ impl PeakAttenuator {
     pub fn get_peak_frequencies(&self) -> Vec<f32> {
         self.peak_profile
             .as_ref()
-            .map(|p| p.get_frequencies(self.sample_rate))
+            .map(|p| p.get_frequencies(self.stft.sample_rate()))
             .unwrap_or_default()
     }
 
@@ -326,7 +275,7 @@ impl PeakAttenuator {
     /// Reset internal state
     pub fn reset(&mut self) {
         self.smoothed_gain.fill(1.0);
-        self.overlap_buffer.fill(0.0);
+        self.stft.reset();
     }
 
     /// Get current max attenuation for display
@@ -368,7 +317,7 @@ pub fn detect_tonal_peaks(
         return PeakProfile::default();
     }
 
-    let n_bins = WINDOW_SIZE / 2 + 1;
+    let n_bins = RT_N_BINS;
     let mut trackers: Vec<PeakTracker> = vec![PeakTracker::default(); n_bins];
     let neighborhood = params.neighborhood_bins;
     let prominence_threshold = params.prominence_threshold_db;
@@ -439,43 +388,38 @@ pub fn detect_tonal_peaks(
     profile
 }
 
-/// Extract power spectra from audio samples
-fn extract_power_spectra(samples: &[f32], _sample_rate: u32) -> Vec<Vec<f32>> {
-    let n_bins = WINDOW_SIZE / 2 + 1;
+/// Extract power spectra from audio samples using StftProcessor
+fn extract_power_spectra(samples: &[f32], sample_rate: u32) -> Vec<Vec<f32>> {
     let mut spectra = Vec::new();
 
-    // Setup FFT
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(WINDOW_SIZE);
-    let mut fft_scratch = vec![Complex::new(0.0, 0.0); fft.get_inplace_scratch_len()];
+    if samples.len() < RT_WINDOW_SIZE {
+        return spectra;
+    }
 
-    // Window
-    let window = root_hann_window(WINDOW_SIZE);
+    // Use StftProcessor for analysis
+    let mut stft = StftProcessor::new_realtime(sample_rate);
+    let window_size = stft.window_size();
+    let hop_size = stft.hop_size();
 
-    let num_frames = samples.len().saturating_sub(WINDOW_SIZE) / HOP_SIZE + 1;
+    let num_frames = samples.len().saturating_sub(window_size) / hop_size + 1;
     if num_frames == 0 {
         return spectra;
     }
 
     for frame_idx in 0..num_frames {
-        let start = frame_idx * HOP_SIZE;
-        let end = (start + WINDOW_SIZE).min(samples.len());
-        if end - start < WINDOW_SIZE {
+        let start = frame_idx * hop_size;
+        let end = (start + window_size).min(samples.len());
+        if end - start < window_size {
             break;
         }
 
-        // Apply window
-        let mut fft_buffer: Vec<Complex<f32>> = samples[start..end]
-            .iter()
-            .zip(window.iter())
-            .map(|(&s, &w)| Complex::new(s * w, 0.0))
-            .collect();
+        let frame = &samples[start..end];
 
         // Forward FFT
-        fft.process_with_scratch(&mut fft_buffer, &mut fft_scratch);
+        let spectrum = stft.forward_fft(frame);
 
         // Compute power spectrum
-        let power: Vec<f32> = fft_buffer[..n_bins].iter().map(|c| c.norm_sqr()).collect();
+        let power = stft.compute_power(&spectrum);
         spectra.push(power);
     }
 
@@ -525,7 +469,7 @@ mod tests {
     #[test]
     fn test_create_attenuator() {
         let attenuator = PeakAttenuator::new(48000);
-        assert_eq!(attenuator.n_bins, WINDOW_SIZE / 2 + 1);
+        assert_eq!(attenuator.stft.n_bins(), RT_N_BINS);
         assert!(!attenuator.has_peaks());
     }
 

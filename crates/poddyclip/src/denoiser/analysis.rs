@@ -6,8 +6,7 @@
 #![allow(dead_code)]
 
 use super::common::*;
-use rustfft::{num_complex::Complex, FftPlanner};
-use std::f32::consts::PI;
+use crate::stft::{StftProcessor, RT_HOP_SIZE, RT_WINDOW_SIZE, EPSILON};
 
 // =============================================================================
 // Analysis: Simple Audio Metrics
@@ -32,7 +31,7 @@ fn find_dominant_noise_freq(noise_floor: &[f32], sample_rate: u32) -> f32 {
         .unwrap_or(0);
 
     // Convert bin to frequency
-    max_bin as f32 * sample_rate as f32 / WINDOW_SIZE as f32
+    max_bin as f32 * sample_rate as f32 / RT_WINDOW_SIZE as f32
 }
 
 // =============================================================================
@@ -47,43 +46,29 @@ pub struct AudioAnalysisResult {
 
 /// Analyze audio with ONE FFT pass (replaces compute_minimum_statistics + analyze_audio_simple)
 pub fn analyze_audio(audio: &[f32], sample_rate: u32) -> AudioAnalysisResult {
-    let n_bins = WINDOW_SIZE / 2 + 1;
-
-    // FFT setup (once!)
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(WINDOW_SIZE);
-    let mut fft_scratch = vec![Complex::new(0.0, 0.0); fft.get_inplace_scratch_len()];
-
-    // Hann window (once!)
-    let window: Vec<f32> = (0..WINDOW_SIZE)
-        .map(|i| 0.5 * (1.0 - (2.0 * PI * i as f32 / (WINDOW_SIZE - 1) as f32).cos()))
-        .collect();
+    let mut stft = StftProcessor::new_realtime(sample_rate);
+    let window_size = stft.window_size();
+    let hop_size = stft.hop_size();
+    let n_bins = stft.n_bins();
 
     // Pad audio
-    let pre_pad = WINDOW_SIZE - HOP_SIZE;
+    let pre_pad = window_size - hop_size;
     let mut input = vec![0.0; pre_pad];
     input.extend_from_slice(audio);
 
     // ONE FFT PASS - collect all power spectra
     let mut all_power_spectra = Vec::new();
     let mut i = 0;
-    while i + WINDOW_SIZE <= input.len() {
-        let frame = &input[i..i + WINDOW_SIZE];
+    while i + window_size <= input.len() {
+        let frame = &input[i..i + window_size];
 
-        let windowed: Vec<f32> = frame
-            .iter()
-            .zip(window.iter())
-            .map(|(&s, &w)| s * w)
-            .collect();
+        // Forward FFT (applies window internally)
+        let spectrum = stft.forward_fft(frame);
 
-        let mut spectrum: Vec<Complex<f32>> =
-            windowed.iter().map(|&s| Complex::new(s, 0.0)).collect();
-
-        fft.process_with_scratch(&mut spectrum, &mut fft_scratch);
-
-        let power: Vec<f32> = spectrum[..n_bins].iter().map(|c| c.norm_sqr()).collect();
+        // Compute power spectrum
+        let power = stft.compute_power(&spectrum);
         all_power_spectra.push(power);
-        i += HOP_SIZE;
+        i += hop_size;
     }
 
     // Now compute everything from the cached power spectra (no more FFTs!)
@@ -128,7 +113,7 @@ fn compute_noise_floor_from_spectra(
     // 1.5 second sliding windows
     let window_duration_seconds = 1.5;
     let frames_per_window =
-        ((sample_rate as f32 * window_duration_seconds) / HOP_SIZE as f32) as usize;
+        ((sample_rate as f32 * window_duration_seconds) / RT_HOP_SIZE as f32) as usize;
 
     let mut noise_floor = vec![f32::INFINITY; n_bins];
 

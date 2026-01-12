@@ -285,8 +285,11 @@ impl Default for DenoiserParams {
 // Window Functions
 // =============================================================================
 
+/// Create sqrt-Hann window for overlap-add synthesis
+///
+/// Re-exports from stft module for backward compatibility.
 pub fn root_hann_window(n: usize) -> Vec<f32> {
-    (0..n).map(|i| (PI * i as f32 / n as f32).sin()).collect()
+    crate::stft::sqrt_hann_window(n)
 }
 
 // =============================================================================

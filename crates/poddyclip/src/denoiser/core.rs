@@ -6,9 +6,8 @@
 #![allow(dead_code)]
 
 use super::common::*;
-use rustfft::{num_complex::Complex, FftPlanner};
+use crate::stft::StftProcessor;
 use std::collections::VecDeque;
-use std::sync::Arc;
 
 // Re-export shared types
 pub use super::common::{DenoiserParams, BANDS, NUM_BANDS};
@@ -54,16 +53,11 @@ impl Default for VisualizationData {
 // =============================================================================
 
 pub struct RealtimeDenoiser {
-    sample_rate: u32,
-    window_size: usize,
-    hop_size: usize,
-    n_bins: usize,
+    // STFT processor (handles FFT, IFFT, overlap-add)
+    pub(crate) stft: StftProcessor,
 
     // Parameters (can be updated)
     params: DenoiserParams,
-
-    // Window
-    window: Vec<f32>,
 
     // State
     noise_pow: Vec<f32>,
@@ -75,14 +69,6 @@ pub struct RealtimeDenoiser {
     // Cached gamma curve (rebuild when params change)
     gamma_curve: Vec<f32>,
     gamma_dirty: bool,
-
-    // Overlap buffer
-    overlap_buffer: Vec<f32>,
-
-    // FFT
-    fft: Arc<dyn rustfft::Fft<f32>>,
-    ifft: Arc<dyn rustfft::Fft<f32>>,
-    fft_scratch: Vec<Complex<f32>>,
 
     // Visualization (optional, only populated when GUI is open)
     visualization_enabled: bool,
@@ -101,24 +87,15 @@ impl RealtimeDenoiser {
 
     /// Create denoiser with custom params
     pub fn new_with_params(sample_rate: u32, params: DenoiserParams) -> Self {
-        let window_size = WINDOW_SIZE;
-        let hop_size = HOP_SIZE;
-        let n_bins = window_size / 2 + 1;
-
-        let mut planner = FftPlanner::new();
-        let fft = planner.plan_fft_forward(window_size);
-        let ifft = planner.plan_fft_inverse(window_size);
-        let fft_scratch = vec![Complex::new(0.0, 0.0); fft.get_inplace_scratch_len()];
+        let stft = StftProcessor::new_realtime(sample_rate);
+        let window_size = stft.window_size();
+        let n_bins = stft.n_bins();
 
         let gamma_curve = compute_gamma_curve(window_size, sample_rate, &params.gamma);
 
         Self {
-            sample_rate,
-            window_size,
-            hop_size,
-            n_bins,
+            stft,
             params,
-            window: root_hann_window(window_size),
             noise_pow: vec![EPSILON; n_bins], // Small non-zero placeholder
             prev_gain: vec![1.0; n_bins],
             prev_sfm_decision: true,
@@ -126,10 +103,6 @@ impl RealtimeDenoiser {
             needs_initialization: true, // Will initialize from first frame
             gamma_curve,
             gamma_dirty: false,
-            overlap_buffer: vec![0.0; window_size],
-            fft,
-            ifft,
-            fft_scratch,
             visualization_enabled: false,
             cached_viz_data: VisualizationData::default(),
         }
@@ -139,7 +112,7 @@ impl RealtimeDenoiser {
     pub fn init_with_noise_floor(&mut self, noise_floor: &[f32]) {
         assert_eq!(
             noise_floor.len(),
-            self.n_bins,
+            self.stft.n_bins(),
             "Noise floor size mismatch"
         );
         self.noise_pow.copy_from_slice(noise_floor);
@@ -149,14 +122,22 @@ impl RealtimeDenoiser {
     /// Process entire audio buffer (batch mode, for CLI usage)
     pub fn process(&mut self, audio: &[f32]) -> Vec<f32> {
         let original_len = audio.len();
+        let window_size = self.stft.window_size();
+        let hop_size = self.stft.hop_size();
+        let n_bins = self.stft.n_bins();
+
+        // Pre-pad for first window overlap
+        let pre_pad = window_size - hop_size;
 
         // Pad to multiple of hop size
-        let pad_len = (self.hop_size - audio.len() % self.hop_size) % self.hop_size;
+        let pad_len = (hop_size - audio.len() % hop_size) % hop_size;
         let mut padded = audio.to_vec();
         padded.resize(audio.len() + pad_len, 0.0);
 
-        // Pre-pad for first window
-        let pre_pad = self.window_size - self.hop_size;
+        // Post-pad to ensure enough frames for output
+        padded.resize(padded.len() + pre_pad, 0.0);
+
+        // Add pre-pad
         let mut input = vec![0.0; pre_pad];
         input.extend(padded);
 
@@ -164,11 +145,79 @@ impl RealtimeDenoiser {
 
         // Process frame by frame
         let mut i = 0;
-        while i + self.window_size <= input.len() {
-            let frame = &input[i..i + self.window_size];
-            let out_frame = self.process_frame(frame);
+        while i + window_size <= input.len() {
+            let frame = &input[i..i + window_size];
+
+            // Forward FFT
+            let mut spectrum = self.stft.forward_fft(frame);
+
+            // Compute power spectrum
+            let power = self.stft.compute_power(&spectrum);
+
+            // Initialize noise estimate from first frame
+            if self.needs_initialization {
+                self.initialize_noise_from_first_frame(&power);
+            }
+
+            // Get adaptive lambda for faster initial convergence
+            let lambda = self.get_adaptive_lambda();
+
+            // Bootstrap noise estimate with first WARMUP_FRAMES (warmup period)
+            if self.frames_processed < WARMUP_FRAMES {
+                // Force update with adaptive lambda during initial frames
+                self.update_noise_estimate_with_lambda(&power, true, lambda);
+                self.frames_processed += 1;
+            } else {
+                // Normal SFM-based VAD for noise estimation
+                let sfm = compute_sfm(&power);
+
+                if sfm > self.params.sfm_noise {
+                    self.update_noise_estimate(&power);
+                    self.prev_sfm_decision = true;
+                } else if sfm < self.params.sfm_speech {
+                    self.prev_sfm_decision = false;
+                } else if self.prev_sfm_decision {
+                    self.update_noise_estimate(&power);
+                }
+            }
+
+            // Compute adaptive alpha
+            let snr = self.compute_snr_per_bin(&power);
+            let alpha = compute_alpha_curve(
+                window_size,
+                self.stft.sample_rate(),
+                &snr,
+                &self.params.delta,
+                self.params.alpha_base,
+                self.params.alpha_min,
+                self.params.alpha_max,
+            );
+
+            // Compute and smooth gain
+            let gain = self.compute_gain(&power, &alpha);
+            let final_gain = self.smooth_gain(&gain);
+
+            // Update visualization data if enabled
+            if self.visualization_enabled {
+                self.update_visualization_data(&power, &snr, &final_gain);
+            }
+
+            // Apply gain to spectrum
+            for k in 0..n_bins {
+                spectrum[k] *= final_gain[k];
+            }
+
+            // Ensure symmetry for real-valued output
+            self.stft.ensure_symmetry(&mut spectrum);
+
+            // Inverse FFT
+            let synthesized = self.stft.inverse_fft(&mut spectrum);
+
+            // Overlap-add
+            let out_frame = self.stft.overlap_add(&synthesized);
             output.extend(out_frame);
-            i += self.hop_size;
+
+            i += hop_size;
         }
 
         // Remove pre-padding and trim to original length
@@ -187,14 +236,15 @@ impl RealtimeDenoiser {
 
     pub fn set_visualization_enabled(&mut self, enabled: bool) {
         self.visualization_enabled = enabled;
-        if enabled && self.cached_viz_data.current_spectrum.len() != self.n_bins {
+        let n_bins = self.stft.n_bins();
+        if enabled && self.cached_viz_data.current_spectrum.len() != n_bins {
             // Initialize with correct size
             self.cached_viz_data = VisualizationData {
-                current_spectrum: vec![0.0; self.n_bins],
-                noise_spectrum: vec![0.0; self.n_bins],
+                current_spectrum: vec![0.0; n_bins],
+                noise_spectrum: vec![0.0; n_bins],
                 band_gain_db: [0.0; NUM_BANDS],
                 band_snr_db: [0.0; NUM_BANDS],
-                sample_rate: self.sample_rate,
+                sample_rate: self.stft.sample_rate(),
             };
         }
     }
@@ -202,7 +252,7 @@ impl RealtimeDenoiser {
     fn rebuild_gamma_curve(&mut self) {
         if self.gamma_dirty {
             self.gamma_curve =
-                compute_gamma_curve(self.window_size, self.sample_rate, &self.params.gamma);
+                compute_gamma_curve(self.stft.window_size(), self.stft.sample_rate(), &self.params.gamma);
             self.gamma_dirty = false;
         }
     }
@@ -219,7 +269,8 @@ impl RealtimeDenoiser {
     }
 
     fn update_noise_estimate(&mut self, power: &[f32]) {
-        for k in 0..self.n_bins {
+        let n_bins = self.stft.n_bins();
+        for k in 0..n_bins {
             // Spike protection
             if power[k] > self.params.spike_threshold * self.noise_pow[k] {
                 continue;
@@ -236,7 +287,8 @@ impl RealtimeDenoiser {
         force_update: bool,
         lambda: f32,
     ) {
-        for k in 0..self.n_bins {
+        let n_bins = self.stft.n_bins();
+        for k in 0..n_bins {
             // Spike protection
             if !force_update && power[k] > self.params.spike_threshold * self.noise_pow[k] {
                 continue;
@@ -252,7 +304,8 @@ impl RealtimeDenoiser {
         sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         let percentile_20 = sorted[sorted.len() / 5];
 
-        for k in 0..self.n_bins {
+        let n_bins = self.stft.n_bins();
+        for k in 0..n_bins {
             // Initialize conservatively: minimum of bin power or 20th percentile * 1.5
             self.noise_pow[k] = power[k].min(percentile_20 * 1.5).max(EPSILON);
         }
@@ -301,26 +354,15 @@ impl RealtimeDenoiser {
     }
 
     pub fn process_frame(&mut self, frame: &[f32]) -> Vec<f32> {
-        assert_eq!(frame.len(), self.window_size);
-
-        // Apply analysis window
-        let windowed: Vec<f32> = frame
-            .iter()
-            .zip(self.window.iter())
-            .map(|(&s, &w)| s * w)
-            .collect();
+        let window_size = self.stft.window_size();
+        let n_bins = self.stft.n_bins();
+        assert_eq!(frame.len(), window_size);
 
         // Forward FFT
-        let mut spectrum: Vec<Complex<f32>> =
-            windowed.iter().map(|&s| Complex::new(s, 0.0)).collect();
-        self.fft
-            .process_with_scratch(&mut spectrum, &mut self.fft_scratch);
+        let mut spectrum = self.stft.forward_fft(frame);
 
         // Compute power spectrum
-        let power: Vec<f32> = spectrum[..self.n_bins]
-            .iter()
-            .map(|c| c.norm_sqr())
-            .collect();
+        let power = self.stft.compute_power(&spectrum);
 
         // Initialize noise estimate from first frame
         if self.needs_initialization {
@@ -352,8 +394,8 @@ impl RealtimeDenoiser {
         // Compute adaptive alpha
         let snr = self.compute_snr_per_bin(&power);
         let alpha = compute_alpha_curve(
-            self.window_size,
-            self.sample_rate,
+            window_size,
+            self.stft.sample_rate(),
             &snr,
             &self.params.delta,
             self.params.alpha_base,
@@ -370,57 +412,36 @@ impl RealtimeDenoiser {
             self.update_visualization_data(&power, &snr, &final_gain);
         }
 
-        // Apply faded gain to spectrum (maintain conjugate symmetry)
-        let mut result = spectrum.clone();
-        for k in 0..self.n_bins {
-            result[k] = spectrum[k] * final_gain[k];
+        // Apply gain to spectrum
+        for k in 0..n_bins {
+            spectrum[k] *= final_gain[k];
         }
-        for k in self.n_bins..self.window_size {
-            let mirror = self.window_size - k;
-            result[k] = result[mirror].conj();
-        }
+
+        // Ensure symmetry for real-valued output
+        self.stft.ensure_symmetry(&mut spectrum);
 
         // Inverse FFT
-        self.ifft
-            .process_with_scratch(&mut result, &mut self.fft_scratch);
-
-        // Normalize and extract real part
-        let scale = 1.0 / self.window_size as f32;
-        let mut enhanced: Vec<f32> = result.iter().map(|c| c.re * scale).collect();
-
-        // Apply synthesis window
-        for (e, &w) in enhanced.iter_mut().zip(self.window.iter()) {
-            *e *= w;
-        }
+        let synthesized = self.stft.inverse_fft(&mut spectrum);
 
         // Overlap-add
-        for (i, &e) in enhanced.iter().enumerate() {
-            self.overlap_buffer[i] += e;
-        }
-
-        // Extract output
-        let output: Vec<f32> = self.overlap_buffer[..self.hop_size].to_vec();
-
-        // Shift buffer
-        self.overlap_buffer.rotate_left(self.hop_size);
-        for i in (self.window_size - self.hop_size)..self.window_size {
-            self.overlap_buffer[i] = 0.0;
-        }
-
-        output
+        self.stft.overlap_add(&synthesized)
     }
 
     fn update_visualization_data(&mut self, power: &[f32], snr: &[f32], gain: &[f32]) {
+        let n_bins = self.stft.n_bins();
+        let window_size = self.stft.window_size();
+        let sample_rate = self.stft.sample_rate();
+
         // Copy current power spectrum (for blue line)
-        self.cached_viz_data.current_spectrum[..self.n_bins].copy_from_slice(power);
+        self.cached_viz_data.current_spectrum[..n_bins].copy_from_slice(power);
 
         // Copy noise floor (for red line)
-        self.cached_viz_data.noise_spectrum[..self.n_bins].copy_from_slice(&self.noise_pow);
+        self.cached_viz_data.noise_spectrum[..n_bins].copy_from_slice(&self.noise_pow);
 
         // Compute per-band averages
         for (band_idx, &(start_hz, end_hz)) in BANDS.iter().enumerate() {
-            let start_bin = hz_to_bin(start_hz, self.window_size, self.sample_rate);
-            let end_bin = hz_to_bin(end_hz, self.window_size, self.sample_rate).min(self.n_bins);
+            let start_bin = hz_to_bin(start_hz, window_size, sample_rate);
+            let end_bin = hz_to_bin(end_hz, window_size, sample_rate).min(n_bins);
 
             if start_bin >= end_bin {
                 continue;
@@ -456,8 +477,8 @@ impl RealtimeDenoiser {
         self.frames_processed = 0;
         self.needs_initialization = true;
 
-        // Reset processing buffers
-        self.overlap_buffer.fill(0.0);
+        // Reset STFT processing buffers
+        self.stft.reset();
 
         // Reset parameter cache - force gamma curve rebuild
         self.gamma_dirty = true;
@@ -469,7 +490,7 @@ impl RealtimeDenoiser {
     pub fn latency_samples(&self) -> u32 {
         // The latency is the window size minus the hop size
         // This is the lookahead needed for the STFT
-        (self.window_size - self.hop_size) as u32
+        (self.stft.window_size() - self.stft.hop_size()) as u32
     }
 }
 
@@ -483,15 +504,15 @@ impl crate::traits::FrameProcessor for RealtimeDenoiser {
     }
 
     fn window_size(&self) -> usize {
-        self.window_size
+        self.stft.window_size()
     }
 
     fn hop_size(&self) -> usize {
-        self.hop_size
+        self.stft.hop_size()
     }
 
     fn latency_samples(&self) -> usize {
-        self.window_size - self.hop_size
+        self.stft.window_size() - self.stft.hop_size()
     }
 }
 
@@ -513,8 +534,8 @@ pub struct StreamingDenoiser {
 impl StreamingDenoiser {
     pub fn new(sample_rate: u32) -> Self {
         let denoiser = RealtimeDenoiser::new(sample_rate);
-        let window_size = denoiser.window_size;
-        let hop_size = denoiser.hop_size;
+        let window_size = denoiser.stft.window_size();
+        let hop_size = denoiser.stft.hop_size();
 
         Self {
             denoiser,

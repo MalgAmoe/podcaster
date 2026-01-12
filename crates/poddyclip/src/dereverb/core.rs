@@ -7,8 +7,7 @@
 
 use super::common::*;
 use crate::analysis::ReverbAnalysis;
-use rustfft::{num_complex::Complex, FftPlanner};
-use std::sync::Arc;
+use crate::stft::{StftProcessor, RT_HOP_SIZE, RT_N_BINS, RT_WINDOW_SIZE};
 
 // =============================================================================
 // De-Reverb Processor
@@ -16,16 +15,11 @@ use std::sync::Arc;
 
 /// Spectral gating de-reverb processor
 pub struct DeReverbProcessor {
-    sample_rate: u32,
-    window_size: usize,
-    hop_size: usize,
-    n_bins: usize,
+    // STFT processor (handles FFT, IFFT, overlap-add)
+    stft: StftProcessor,
 
     // Parameters
     params: DeReverbParams,
-
-    // Window
-    window: Vec<f32>,
 
     // Reverb tracking per bin
     prev_frame_power: Vec<f32>,
@@ -34,14 +28,6 @@ pub struct DeReverbProcessor {
 
     // Gain smoothing
     prev_gain: Vec<f32>,
-
-    // Overlap buffer
-    overlap_buffer: Vec<f32>,
-
-    // FFT
-    fft: Arc<dyn rustfft::Fft<f32>>,
-    ifft: Arc<dyn rustfft::Fft<f32>>,
-    fft_scratch: Vec<Complex<f32>>,
 
     // Statistics for display
     max_gain_reduction_db: f32,
@@ -60,45 +46,33 @@ impl DeReverbProcessor {
 
     /// Create with custom parameters
     pub fn new_with_params(sample_rate: u32, params: DeReverbParams) -> Self {
-        let window_size = WINDOW_SIZE;
-        let hop_size = HOP_SIZE;
-        let n_bins = N_BINS;
-
-        let mut planner = FftPlanner::new();
-        let fft = planner.plan_fft_forward(window_size);
-        let ifft = planner.plan_fft_inverse(window_size);
-        let fft_scratch = vec![Complex::new(0.0, 0.0); fft.get_inplace_scratch_len()];
+        let stft = StftProcessor::new_realtime(sample_rate);
+        let n_bins = stft.n_bins();
 
         // Default decay: assume 300ms RT60 at all frequencies
         let default_rt60_ms = 300.0;
-        let hop_time_ms = (hop_size as f32 / sample_rate as f32) * 1000.0;
+        let hop_time_ms = (RT_HOP_SIZE as f32 / sample_rate as f32) * 1000.0;
         let default_decay = 10.0f32.powf(-3.0 * hop_time_ms / default_rt60_ms);
 
         Self {
-            sample_rate,
-            window_size,
-            hop_size,
-            n_bins,
+            stft,
             params,
-            window: create_sqrt_hann_window(window_size),
             prev_frame_power: vec![0.0; n_bins],
             reverb_estimate: vec![0.0; n_bins],
             decay_per_bin: vec![default_decay; n_bins],
             prev_gain: vec![1.0; n_bins],
-            overlap_buffer: vec![0.0; window_size],
-            fft,
-            ifft,
-            fft_scratch,
             max_gain_reduction_db: 0.0,
         }
     }
 
     /// Initialize with reverb analysis (recommended for best results)
     pub fn init_with_analysis(&mut self, analysis: &ReverbAnalysis) {
-        let bin_freq = self.sample_rate as f32 / self.window_size as f32;
+        let bin_freq = self.stft.sample_rate() as f32 / self.stft.window_size() as f32;
+        let n_bins = self.stft.n_bins();
+        let hop_size = self.stft.hop_size();
 
         // Compute per-bin decay rates from analysis
-        self.decay_per_bin = analysis.compute_decay_per_bin(self.n_bins, self.hop_size, bin_freq);
+        self.decay_per_bin = analysis.compute_decay_per_bin(n_bins, hop_size, bin_freq);
 
         // Apply decay multiplier from params
         for decay in &mut self.decay_per_bin {
@@ -119,94 +93,77 @@ impl DeReverbProcessor {
 
     /// Process entire audio buffer (batch mode)
     pub fn process(&mut self, audio: &[f32]) -> Vec<f32> {
-        if audio.is_empty() {
-            return Vec::new();
-        }
+        let original_len = audio.len();
+        let window_size = self.stft.window_size();
+        let hop_size = self.stft.hop_size();
+        let n_bins = self.stft.n_bins();
 
-        let mut output = vec![0.0; audio.len()];
+        // Pre-pad for first window overlap
+        let pre_pad = window_size - hop_size;
+
+        // Pad to multiple of hop size
+        let pad_len = (hop_size - audio.len() % hop_size) % hop_size;
+        let mut padded = audio.to_vec();
+        padded.resize(audio.len() + pad_len, 0.0);
+
+        // Post-pad to ensure enough frames for output
+        padded.resize(padded.len() + pre_pad, 0.0);
+
+        // Add pre-pad
+        let mut input = vec![0.0; pre_pad];
+        input.extend(padded);
+
+        let mut output = Vec::new();
         self.max_gain_reduction_db = 0.0;
 
-        // Process frame by frame with overlap-add
-        let mut pos = 0;
-        while pos + self.window_size <= audio.len() {
-            let frame = &audio[pos..pos + self.window_size];
-            let processed = self.process_frame(frame);
+        // Process frame by frame
+        let mut i = 0;
+        while i + window_size <= input.len() {
+            let frame = &input[i..i + window_size];
+
+            // Forward FFT
+            let mut spectrum = self.stft.forward_fft(frame);
+
+            // Compute power spectrum
+            let power = self.stft.compute_power(&spectrum);
+
+            // Update reverb estimate
+            self.update_reverb_estimate(&power);
+
+            // Compute de-reverb gain
+            let gain = self.compute_dereverb_gain(&power);
+
+            // Apply gain to spectrum
+            for k in 0..n_bins {
+                spectrum[k] *= gain[k];
+            }
+
+            // Ensure symmetry for real-valued output
+            self.stft.ensure_symmetry(&mut spectrum);
+
+            // Inverse FFT
+            let synthesized = self.stft.inverse_fft(&mut spectrum);
 
             // Overlap-add
-            for (i, &sample) in processed.iter().enumerate() {
-                if pos + i < output.len() {
-                    output[pos + i] += sample;
-                }
-            }
+            let out_frame = self.stft.overlap_add(&synthesized);
+            output.extend(out_frame);
 
-            pos += self.hop_size;
+            i += hop_size;
         }
 
-        // Handle final partial frame if any
-        if pos < audio.len() {
-            let remaining = audio.len() - pos;
-            let mut padded = vec![0.0; self.window_size];
-            padded[..remaining].copy_from_slice(&audio[pos..]);
-
-            let processed = self.process_frame(&padded);
-            for (i, &sample) in processed[..remaining].iter().enumerate() {
-                output[pos + i] += sample;
-            }
+        // Remove pre-padding and trim to original length
+        if output.len() > pre_pad {
+            output = output[pre_pad..].to_vec();
         }
+        output.truncate(original_len);
 
         output
     }
 
-    /// Process a single frame
-    fn process_frame(&mut self, frame: &[f32]) -> Vec<f32> {
-        // Apply analysis window
-        let mut windowed: Vec<Complex<f32>> = frame
-            .iter()
-            .zip(self.window.iter())
-            .map(|(&s, &w)| Complex::new(s * w, 0.0))
-            .collect();
-
-        // Forward FFT
-        self.fft
-            .process_with_scratch(&mut windowed, &mut self.fft_scratch);
-
-        // Compute power spectrum
-        let power: Vec<f32> = windowed[..self.n_bins]
-            .iter()
-            .map(|c| c.norm_sqr())
-            .collect();
-
-        // Update reverb estimate
-        self.update_reverb_estimate(&power);
-
-        // Compute de-reverb gain
-        let gain = self.compute_dereverb_gain(&power);
-
-        // Apply gain to spectrum
-        for (i, g) in gain.iter().enumerate() {
-            windowed[i] = windowed[i] * g;
-            // Mirror for negative frequencies
-            if i > 0 && i < self.n_bins - 1 {
-                windowed[self.window_size - i] = windowed[self.window_size - i] * g;
-            }
-        }
-
-        // Inverse FFT
-        self.ifft
-            .process_with_scratch(&mut windowed, &mut self.fft_scratch);
-
-        // Normalize and apply synthesis window
-        let scale = 1.0 / self.window_size as f32;
-        windowed
-            .iter()
-            .zip(self.window.iter())
-            .map(|(c, &w)| c.re * scale * w)
-            .collect()
-    }
-
     /// Update reverb estimate based on previous frame energy
     fn update_reverb_estimate(&mut self, power: &[f32]) {
-        for k in 0..self.n_bins {
+        let n_bins = self.stft.n_bins();
+        for k in 0..n_bins {
             // Reverb decays exponentially from previous frame
             // reverb[k] = decay[k] * reverb[k] + (1-decay[k]) * prev_power[k]
             let decay = self.decay_per_bin[k];
@@ -226,14 +183,15 @@ impl DeReverbProcessor {
     /// Strategy: Compare current power to reverb estimate. If current << reverb,
     /// we're likely in a reverb tail and should attenuate.
     fn compute_dereverb_gain(&mut self, power: &[f32]) -> Vec<f32> {
+        let n_bins = self.stft.n_bins();
         let floor = db_to_linear(self.params.gate_threshold_db);
         let strength = self.params.strength;
         let smoothing = self.params.smoothing;
 
-        let mut gain = vec![1.0; self.n_bins];
+        let mut gain = vec![1.0; n_bins];
         let mut max_reduction = 0.0f32;
 
-        for k in 0..self.n_bins {
+        for k in 0..n_bins {
             // Reverb tail detection:
             // If reverb_estimate > power, we're likely in a decay tail
             // The ratio indicates how much reverb dominates over direct sound
@@ -271,36 +229,21 @@ impl DeReverbProcessor {
         self.prev_frame_power.fill(0.0);
         self.reverb_estimate.fill(0.0);
         self.prev_gain.fill(1.0);
-        self.overlap_buffer.fill(0.0);
+        self.stft.reset();
         self.max_gain_reduction_db = 0.0;
     }
 }
 
 impl Clone for DeReverbProcessor {
     fn clone(&self) -> Self {
-        // Re-create FFT plans since they're not Clone
-        let mut planner = FftPlanner::new();
-        let fft = planner.plan_fft_forward(self.window_size);
-        let ifft = planner.plan_fft_inverse(self.window_size);
-        let fft_scratch = vec![Complex::new(0.0, 0.0); fft.get_inplace_scratch_len()];
-
-        Self {
-            sample_rate: self.sample_rate,
-            window_size: self.window_size,
-            hop_size: self.hop_size,
-            n_bins: self.n_bins,
-            params: self.params.clone(),
-            window: self.window.clone(),
-            prev_frame_power: self.prev_frame_power.clone(),
-            reverb_estimate: self.reverb_estimate.clone(),
-            decay_per_bin: self.decay_per_bin.clone(),
-            prev_gain: self.prev_gain.clone(),
-            overlap_buffer: self.overlap_buffer.clone(),
-            fft,
-            ifft,
-            fft_scratch,
-            max_gain_reduction_db: self.max_gain_reduction_db,
-        }
+        // Create new processor and copy state
+        let mut new_proc = Self::new_with_params(self.stft.sample_rate(), self.params.clone());
+        new_proc.prev_frame_power.copy_from_slice(&self.prev_frame_power);
+        new_proc.reverb_estimate.copy_from_slice(&self.reverb_estimate);
+        new_proc.decay_per_bin.copy_from_slice(&self.decay_per_bin);
+        new_proc.prev_gain.copy_from_slice(&self.prev_gain);
+        new_proc.max_gain_reduction_db = self.max_gain_reduction_db;
+        new_proc
     }
 }
 
@@ -311,8 +254,8 @@ mod tests {
     #[test]
     fn test_create_processor() {
         let proc = DeReverbProcessor::new(48000);
-        assert_eq!(proc.window_size, WINDOW_SIZE);
-        assert_eq!(proc.n_bins, N_BINS);
+        assert_eq!(proc.stft.window_size(), RT_WINDOW_SIZE);
+        assert_eq!(proc.stft.n_bins(), RT_N_BINS);
     }
 
     #[test]
