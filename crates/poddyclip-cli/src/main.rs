@@ -331,6 +331,10 @@ fn main() -> Result<()> {
         }
 
         println!("  f0: {:.1} Hz (sibilance: {:.0}%)", radio.get_detected_f0(), radio.get_sibilance_level() * 100.0);
+        println!("  CPP: {:.1} dB (harmonicity)", radio.get_cpp());
+        if let Some(delay) = radio.get_echo_delay_ms() {
+            println!("  Echo: {:.0}ms delay ({:.0}% strength)", delay, radio.get_echo_strength() * 100.0);
+        }
         println!("  HPF: {:.0} Hz", radio.get_hpf_freq());
         println!(
             "  Low: {:+.1} dB @ {:.0} Hz",

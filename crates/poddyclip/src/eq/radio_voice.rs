@@ -41,6 +41,9 @@ pub struct RadioVoiceProcessor {
     // Analysis results (for reporting)
     detected_f0: f32,
     sibilance_level: f32,
+    cpp: f32,
+    echo_delay_ms: Option<f32>,
+    echo_strength: f32,
     params: RadioFilterParams,
     configured: bool,
 }
@@ -54,6 +57,9 @@ impl RadioVoiceProcessor {
             eq: RadioEq::new(sample_rate as f32),
             detected_f0: 120.0, // Default f0
             sibilance_level: 0.0,
+            cpp: 0.0,
+            echo_delay_ms: None,
+            echo_strength: 0.0,
             params: RadioFilterParams::default(),
             configured: false,
         }
@@ -76,13 +82,16 @@ impl RadioVoiceProcessor {
         // Step 1: Spectral analysis (reuses existing implementation)
         let spectrum = SpectralAnalysis::new(samples, self.sample_rate);
 
-        // Step 2: Cepstral analysis for f0 detection only
+        // Step 2: Cepstral analysis for f0, CPP, and echo detection
         // Note: We use octave-band averaged spectrum (not cepstral envelope) for EQ matching
         // because cepstral envelope removes spectral tilt, giving wrong slope measurements.
         let cepstral = CepstralAnalysis::from_spectrum(&spectrum);
 
-        // Use detected f0 or default
+        // Store cepstral analysis results
         self.detected_f0 = cepstral.f0.unwrap_or(120.0);
+        self.cpp = cepstral.cpp;
+        self.echo_delay_ms = cepstral.echo_delay_ms;
+        self.echo_strength = cepstral.echo_strength;
 
         // Step 3: Sibilance analysis (reuses de-esser analysis)
         let sibilance = analyze_sibilance(samples, self.sample_rate);
@@ -125,14 +134,6 @@ impl RadioVoiceProcessor {
         } else {
             0.0
         };
-
-        // DEBUG
-        let db_1k = ((1000.0 / spectrum.bin_freq).round() as usize).min(spectrum.n_bins - 1);
-        let db_4k = ((4000.0 / spectrum.bin_freq).round() as usize).min(spectrum.n_bins - 1);
-        eprintln!("DEBUG norm_offset={:.1}, actual@1k={:.1}, actual@4k={:.1}, target@1k={:.1}, target@4k={:.1}",
-            normalization_offset,
-            actual_envelope_db[db_1k], actual_envelope_db[db_4k],
-            target.curve_db[db_1k], target.curve_db[db_4k]);
 
         // Normalize actual envelope
         let normalized_envelope: Vec<f32> = actual_envelope_db
@@ -195,6 +196,23 @@ impl RadioVoiceProcessor {
 
     pub fn get_sibilance_level(&self) -> f32 {
         self.sibilance_level
+    }
+
+    /// Cepstral Peak Prominence (dB) - measure of harmonicity
+    /// Higher = more harmonic/voiced (5-15 dB typical for speech)
+    /// Lower = noise or unvoiced (0-3 dB)
+    pub fn get_cpp(&self) -> f32 {
+        self.cpp
+    }
+
+    /// Detected echo/reverb delay in milliseconds, None if no echo detected
+    pub fn get_echo_delay_ms(&self) -> Option<f32> {
+        self.echo_delay_ms
+    }
+
+    /// Echo strength (0.0 = none, 1.0 = strong echo)
+    pub fn get_echo_strength(&self) -> f32 {
+        self.echo_strength
     }
 
     pub fn get_hpf_freq(&self) -> f32 {
