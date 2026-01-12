@@ -493,6 +493,61 @@ impl SvfHighPass {
 // Band Extract Filter (Flat-Top Bandpass via Cascaded HP → LP)
 // =============================================================================
 
+// =============================================================================
+// Notch Filter (Band-Reject) using SVF
+// =============================================================================
+
+/// Notch (band-reject) filter using SVF topology
+/// Output = LP + HP (rejects the band around center frequency)
+/// Used for hum removal at specific frequencies
+#[derive(Clone, Debug)]
+pub struct NotchFilter {
+    svf: SvfBiquad,
+    freq: f32,
+    sample_rate: f32,
+}
+
+impl NotchFilter {
+    /// Create a new notch filter
+    /// freq: center frequency to reject (Hz)
+    /// q: quality factor (higher = narrower notch, typical 10-50 for hum removal)
+    pub fn new(freq: f32, sample_rate: f32, q: f32) -> Self {
+        Self {
+            svf: SvfBiquad::new(freq, sample_rate, q),
+            freq,
+            sample_rate,
+        }
+    }
+
+    /// Update notch frequency
+    pub fn set_freq(&mut self, freq: f32, q: f32) {
+        self.freq = freq;
+        self.svf.update(freq, self.sample_rate, q);
+    }
+
+    /// Get current center frequency
+    pub fn get_freq(&self) -> f32 {
+        self.freq
+    }
+
+    /// Process one sample through the notch filter
+    #[inline]
+    pub fn process(&mut self, input: f32) -> f32 {
+        let (lp, _bp, hp) = self.svf.process(input);
+        // Notch = LP + HP (rejects the band)
+        lp + hp
+    }
+
+    /// Reset filter state
+    pub fn reset(&mut self) {
+        self.svf.reset();
+    }
+}
+
+// =============================================================================
+// Band Extract Filter (Flat-Top Bandpass via Cascaded HP → LP)
+// =============================================================================
+
 /// Extracts a frequency band with flat response using cascaded HP → LP
 /// Used for de-essing where we want to cut a flat frequency range, not a peaked notch
 ///
