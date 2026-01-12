@@ -147,6 +147,8 @@ impl StereoDeEsser {
             samples[0].clone()
         };
 
+        // Sibilance analysis includes f0 detection and harmonic checking
+        // Confidence is already adjusted if sibilance aligns with harmonics
         let analysis = analyze_sibilance(&mono, self.sample_rate as u32);
 
         // Calculate adaptive Q from detected bandwidth
@@ -161,8 +163,7 @@ impl StereoDeEsser {
             self.right.set_q(q);
         }
 
-        // Scale strength by confidence AND energy (like FixEq)
-        // Energy factor: map energy_db from [-60, -20] to [0, 1]
+        // Scale strength by confidence and energy
         let energy_factor = ((analysis.energy_db + 60.0) / 40.0).clamp(0.0, 1.0);
         let strength = (analysis.confidence * energy_factor).clamp(0.0, 1.0);
         self.left.set_strength(strength);
@@ -175,7 +176,7 @@ impl StereoDeEsser {
     /// Get computed strength (for display)
     pub fn get_strength(&self) -> f32 {
         // Return the strength that was set during configure
-        // We can compute it from the last analysis
+        // Confidence already includes harmonic adjustment from analysis
         if let Some(analysis) = &self.last_analysis {
             let energy_factor = ((analysis.energy_db + 60.0) / 40.0).clamp(0.0, 1.0);
             (analysis.confidence * energy_factor).clamp(0.0, 1.0)

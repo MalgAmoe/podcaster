@@ -1,7 +1,9 @@
 //! Sibilance analysis for De-Esser
 //!
 //! Analyzes audio to find sibilance characteristics for dynamic processing.
+//! Uses cepstral analysis to distinguish true sibilance from harmonic overtones.
 
+use crate::analysis::{CepstralAnalysis, SpectralAnalysis};
 use rustfft::{num_complex::Complex, FftPlanner};
 use std::f32::consts::PI;
 
@@ -42,6 +44,7 @@ impl Default for SibilanceAnalysis {
 
 
 /// Analyze audio for sibilance characteristics
+/// Computes f0 via cepstral analysis to distinguish sibilance from harmonic overtones
 pub fn analyze_sibilance(audio: &[f32], sample_rate: u32) -> SibilanceAnalysis {
     if audio.is_empty() {
         return SibilanceAnalysis::default();
@@ -135,8 +138,21 @@ pub fn analyze_sibilance(audio: &[f32], sample_rate: u32) -> SibilanceAnalysis {
 
     let energy_db = 10.0 * peak_power.max(1e-12).log10();
 
+    // Compute f0 via cepstral analysis for harmonic checking
+    let spectrum = SpectralAnalysis::new(audio, sample_rate);
+    let cepstral = CepstralAnalysis::from_spectrum(&spectrum);
+    let f0 = cepstral.f0;
+
     // Calculate confidence: ratio of peak energy in sibilance range vs outside
-    let confidence = compute_sibilance_confidence(&avg_power, sib_min_bin, sib_max_bin, peak_power);
+    // Also checks if sibilance frequency aligns with harmonics (reduces confidence if so)
+    let confidence = compute_sibilance_confidence(
+        &avg_power,
+        sib_min_bin,
+        sib_max_bin,
+        peak_power,
+        center_freq,
+        f0,
+    );
 
     SibilanceAnalysis {
         center_freq,
@@ -147,7 +163,15 @@ pub fn analyze_sibilance(audio: &[f32], sample_rate: u32) -> SibilanceAnalysis {
 }
 
 /// Compute sibilance confidence by comparing peak energy in range to average outside
-fn compute_sibilance_confidence(power: &[f32], min_bin: usize, max_bin: usize, peak_power: f32) -> f32 {
+/// Also reduces confidence if sibilance frequency aligns with harmonics of f0
+fn compute_sibilance_confidence(
+    power: &[f32],
+    min_bin: usize,
+    max_bin: usize,
+    peak_power: f32,
+    center_freq: f32,
+    f0: Option<f32>,
+) -> f32 {
     // Calculate average energy outside sibilance range
     let mut outside_energy = 0.0f32;
     let mut outside_count = 0usize;
@@ -165,9 +189,28 @@ fn compute_sibilance_confidence(power: &[f32], min_bin: usize, max_bin: usize, p
         peak_power
     };
 
-    // Confidence based on ratio: how much does sibilance stand out?
+    // Base confidence from energy ratio: how much does sibilance stand out?
     let ratio = peak_power / avg_outside.max(1e-12);
-    (ratio.log10() / 1.0).clamp(0.0, 1.0)
+    let base_confidence = (ratio.log10() / 1.0).clamp(0.0, 1.0);
+
+    // If f0 is detected, check if sibilance frequency aligns with harmonics
+    // True sibilance is noise-like and won't align with harmonics
+    // Harmonic overtones will align with multiples of f0
+    let harmonic_factor = if let Some(f0) = f0 {
+        let harmonic_number = (center_freq / f0).round();
+        let nearest_harmonic = harmonic_number * f0;
+        let distance = (center_freq - nearest_harmonic).abs();
+
+        // If within 1/4 of f0, likely a harmonic overtone, not sibilance
+        // distance=0 → factor=0.2 (strong reduction)
+        // distance>=f0/4 → factor=1.0 (no reduction)
+        let tolerance = f0 * 0.25;
+        (distance / tolerance).clamp(0.2, 1.0)
+    } else {
+        1.0 // No f0 detected, don't adjust
+    };
+
+    base_confidence * harmonic_factor
 }
 
 /// Calculate adaptive Q based on detected bandwidth
