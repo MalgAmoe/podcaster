@@ -12,7 +12,7 @@ const HOP_SIZE: usize = 2048;
 
 /// Sibilance frequency range (Hz)
 const SIBILANCE_FREQ_MIN: f32 = 4000.0;
-const SIBILANCE_FREQ_MAX: f32 = 10000.0;
+const SIBILANCE_FREQ_MAX: f32 = 12000.0; // Extended from 10kHz to catch higher sibilance
 
 /// Default sibilance frequency (Hz) - middle of typical range
 pub const DEFAULT_SIBILANCE_FREQ: f32 = 6500.0;
@@ -118,41 +118,118 @@ pub fn analyze_sibilance(audio: &[f32], sample_rate: u32) -> SibilanceAnalysis {
         }
     }
 
-    // Find -6dB bandwidth around peak
-    let threshold = peak_power * 0.25; // -6dB = 0.25 in power
+    // Calculate average power in sibilance band
+    let sib_count = (sib_max_bin - sib_min_bin + 1) as f32;
+    let avg_sib_power: f32 = avg_power[sib_min_bin..=sib_max_bin].iter().sum::<f32>() / sib_count;
 
-    let mut low_bin = peak_bin;
-    while low_bin > sib_min_bin && avg_power[low_bin] > threshold {
-        low_bin -= 1;
-    }
+    // Dual-mode detection:
+    // If peak is >3x average, use peak (sharp sibilance)
+    // Otherwise, use spectral centroid (broadband sibilance)
+    let peak_ratio = peak_power / avg_sib_power.max(1e-12);
+    let is_peaked = peak_ratio > 3.0;
 
-    let mut high_bin = peak_bin;
-    while high_bin < sib_max_bin && avg_power[high_bin] > threshold {
-        high_bin += 1;
-    }
-
-    let low_freq = low_bin as f32 * bin_freq;
-    let high_freq = high_bin as f32 * bin_freq;
-    let center_freq = peak_bin as f32 * bin_freq;
-    let bandwidth_hz = (high_freq - low_freq).max(500.0); // Minimum 500Hz bandwidth
+    let center_freq = if is_peaked {
+        // Sharp sibilance: use peak frequency
+        peak_bin as f32 * bin_freq
+    } else {
+        // Broadband sibilance: use spectral centroid (center of mass)
+        let mut weighted_sum = 0.0f32;
+        let mut power_sum = 0.0f32;
+        for bin in sib_min_bin..=sib_max_bin {
+            let freq = bin as f32 * bin_freq;
+            weighted_sum += freq * avg_power[bin];
+            power_sum += avg_power[bin];
+        }
+        if power_sum > 0.0 {
+            weighted_sum / power_sum
+        } else {
+            DEFAULT_SIBILANCE_FREQ
+        }
+    };
 
     let energy_db = 10.0 * peak_power.max(1e-12).log10();
 
-    // Compute f0 via cepstral analysis for harmonic checking
+    // Compute cepstral analysis for envelope and f0
     let spectrum = SpectralAnalysis::new(audio, sample_rate);
     let cepstral = CepstralAnalysis::from_spectrum(&spectrum);
     let f0 = cepstral.f0;
 
-    // Calculate confidence: ratio of peak energy in sibilance range vs outside
-    // Also checks if sibilance frequency aligns with harmonics (reduces confidence if so)
-    let confidence = compute_sibilance_confidence(
+    // Compute residue: original spectrum - cepstral envelope
+    // Positive residue = energy above smooth envelope
+    // Key insight from research:
+    // - Sibilance: noise-like, residue spread across MANY bins (broadband)
+    // - Harmonics: residue concentrated at FEW bins (peaked at harmonic frequencies)
+    let total_bins = sib_max_bin - sib_min_bin + 1;
+    let mut residue_values = Vec::with_capacity(total_bins);
+    let mut positive_residue_count = 0usize;
+    let mut residue_sum = 0.0f32;
+
+    // Track extent of positive residue for bandwidth
+    let mut first_positive_bin: Option<usize> = None;
+    let mut last_positive_bin: Option<usize> = None;
+
+    for (idx, bin) in (sib_min_bin..=sib_max_bin).enumerate() {
+        if bin < cepstral.envelope_db.len() {
+            let original_db = 10.0 * avg_power[bin].max(1e-12).log10();
+            let envelope_db = cepstral.envelope_db[bin];
+            let residue = original_db - envelope_db;
+            residue_values.push(residue);
+            if residue > 0.0 {
+                residue_sum += residue;
+                positive_residue_count += 1;
+                if first_positive_bin.is_none() {
+                    first_positive_bin = Some(idx);
+                }
+                last_positive_bin = Some(idx);
+            }
+        }
+    }
+
+    // Bandwidth from residue extent: where is sibilance energy above envelope?
+    let bandwidth_hz = if let (Some(first), Some(last)) = (first_positive_bin, last_positive_bin) {
+        let first_freq = (sib_min_bin + first) as f32 * bin_freq;
+        let last_freq = (sib_min_bin + last) as f32 * bin_freq;
+        (last_freq - first_freq).max(500.0)
+    } else {
+        // Fallback: use portion of sibilance range
+        (SIBILANCE_FREQ_MAX - SIBILANCE_FREQ_MIN) * 0.5
+    };
+
+    // Spread factor: what fraction of bins have positive residue?
+    // Sibilance (noise-like) → spread across many bins → high spread factor
+    // Harmonics → concentrated at few bins → low spread factor
+    let spread_factor = if !residue_values.is_empty() {
+        positive_residue_count as f32 / residue_values.len() as f32
+    } else {
+        0.0
+    };
+
+    // Average positive residue in sibilance band (dB above envelope)
+    let avg_residue = if positive_residue_count > 0 {
+        residue_sum / positive_residue_count as f32
+    } else {
+        0.0
+    };
+
+    // Combined residue confidence:
+    // - High avg_residue = energy above envelope (could be sibilance or harmonics)
+    // - High spread_factor = energy spread broadly (sibilance indicator)
+    // Require BOTH: significant residue AND broad spread
+    let residue_magnitude = (avg_residue / 6.0).clamp(0.0, 1.0); // 6dB above = 100%
+    let spread_confidence = (spread_factor / 0.3).clamp(0.0, 1.0); // 30% of bins = 100%
+    let residue_confidence = residue_magnitude * spread_confidence;
+
+    // Also use band energy ratio as secondary check
+    let band_confidence = compute_sibilance_confidence(
         &avg_power,
         sib_min_bin,
         sib_max_bin,
-        peak_power,
         center_freq,
         f0,
     );
+
+    // Combine: use max of residue and band confidence
+    let confidence = residue_confidence.max(band_confidence);
 
     SibilanceAnalysis {
         center_freq,
@@ -162,50 +239,49 @@ pub fn analyze_sibilance(audio: &[f32], sample_rate: u32) -> SibilanceAnalysis {
     }
 }
 
-/// Compute sibilance confidence by comparing peak energy in range to average outside
+/// Compute sibilance confidence using total band energy ratio
 /// Also reduces confidence if sibilance frequency aligns with harmonics of f0
 fn compute_sibilance_confidence(
     power: &[f32],
     min_bin: usize,
     max_bin: usize,
-    peak_power: f32,
     center_freq: f32,
     f0: Option<f32>,
 ) -> f32 {
-    // Calculate average energy outside sibilance range
-    let mut outside_energy = 0.0f32;
-    let mut outside_count = 0usize;
+    // Total energy in sibilance band (not just peak - sibilance is broadband)
+    let sib_energy: f32 = power[min_bin..=max_bin].iter().sum();
 
-    for (bin, &p) in power.iter().enumerate() {
-        if bin < min_bin || bin > max_bin {
-            outside_energy += p;
-            outside_count += 1;
-        }
-    }
+    // Total energy outside sibilance band
+    let outside_energy: f32 = power
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| *i < min_bin || *i > max_bin)
+        .map(|(_, &p)| p)
+        .sum();
 
-    let avg_outside = if outside_count > 0 {
-        outside_energy / outside_count as f32
+    // Ratio: what fraction of total spectrum is in sibilance band?
+    let total = sib_energy + outside_energy;
+    let sib_ratio = if total > 0.0 {
+        sib_energy / total
     } else {
-        peak_power
+        0.0
     };
 
-    // Base confidence from energy ratio: how much does sibilance stand out?
-    let ratio = peak_power / avg_outside.max(1e-12);
-    let base_confidence = (ratio.log10() / 1.0).clamp(0.0, 1.0);
+    // Map: 20% of spectrum in sibilance band = confidence 1.0
+    // This handles broadband sibilance better than peak-only
+    let base_confidence = (sib_ratio / 0.2).clamp(0.0, 1.0);
 
     // If f0 is detected, check if sibilance frequency aligns with harmonics
     // True sibilance is noise-like and won't align with harmonics
-    // Harmonic overtones will align with multiples of f0
     let harmonic_factor = if let Some(f0) = f0 {
         let harmonic_number = (center_freq / f0).round();
         let nearest_harmonic = harmonic_number * f0;
         let distance = (center_freq - nearest_harmonic).abs();
 
         // If within 1/4 of f0, likely a harmonic overtone, not sibilance
-        // distance=0 → factor=0.2 (strong reduction)
-        // distance>=f0/4 → factor=1.0 (no reduction)
+        // Less aggressive: 0.5 minimum instead of 0.2
         let tolerance = f0 * 0.25;
-        (distance / tolerance).clamp(0.2, 1.0)
+        (distance / tolerance).clamp(0.5, 1.0)
     } else {
         1.0 // No f0 detected, don't adjust
     };
