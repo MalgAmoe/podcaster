@@ -20,7 +20,7 @@ use poddyclip::dynamics::autogain::{
     analyze_gain, apply_gain, linear_to_db, DEFAULT_TARGET_PEAK_DB, DEFAULT_TARGET_RMS_DB,
 };
 use poddyclip::dynamics::limiter::Limiter;
-use poddyclip::dynamics::{ButterComp2, StereoFetCompressor, StereoVcaPeakComp};
+use poddyclip::dynamics::{ButterComp2, StereoExpander, StereoFetCompressor, StereoVcaPeakComp};
 use poddyclip::eq::deesser::StereoDeEsser;
 use poddyclip::eq::{FilterChain, FixEq, HighPassSlope, RadioVoiceProcessor, StereoEnhanceEq};
 use poddyclip::repair::Declicker;
@@ -335,6 +335,20 @@ fn main() -> Result<()> {
     // DYNAMICS & EQ
     // =========================================================================
     println!("\n[Processing]");
+
+    // Expander (first - reduces noise in quiet passages)
+    let mut expander = StereoExpander::new(sample_rate as f32);
+    expander.set_threshold(-40.0);
+    expander.set_ratio(2.0);
+    expander.set_range(20.0);
+    println!("  Expander: threshold -40dB, ratio 2:1, range 20dB");
+    if is_stereo {
+        let (left, right) = samples.split_at_mut(1);
+        expander.process_stereo(&mut left[0], &mut right[0]);
+    } else {
+        expander.process_mono(&mut samples[0]);
+    }
+    println!("    Max GR: {:.1}dB", expander.get_max_gain_reduction_db());
 
     // FET Compressor (optional)
     if args.fet {

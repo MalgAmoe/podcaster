@@ -46,6 +46,7 @@ enum MeterColor {
     Cyan,    // De-Esser
     Orange,  // FET Comp
     Magenta, // Peak Comp
+    Blue,    // Expander
     Red,     // Limiter
 }
 
@@ -82,6 +83,11 @@ impl MeterColor {
                 else if ratio > 0.5 { egui::Color32::from_rgb(255, 100, 180) }
                 else { egui::Color32::from_rgb(255, 150, 200) }
             }
+            MeterColor::Blue => {
+                if ratio > 0.8 { egui::Color32::from_rgb(50, 100, 255) }
+                else if ratio > 0.5 { egui::Color32::from_rgb(80, 140, 255) }
+                else { egui::Color32::from_rgb(120, 180, 255) }
+            }
             MeterColor::Red => {
                 if ratio > 0.8 { egui::Color32::from_rgb(255, 50, 50) }
                 else if ratio > 0.5 { egui::Color32::from_rgb(255, 100, 50) }
@@ -105,6 +111,7 @@ pub fn create_plugin_editor(
     deesser_gain: Arc<Mutex<f32>>,
     fetcomp_gain: Arc<Mutex<f32>>,
     peakcomp_gain: Arc<Mutex<f32>>,
+    expander_gain: Arc<Mutex<f32>>,
     limiter_gain: Arc<Mutex<f32>>,
 ) -> Option<Box<dyn Editor>> {
     create_egui_editor(
@@ -130,6 +137,7 @@ pub fn create_plugin_editor(
                         &deesser_gain,
                         &fetcomp_gain,
                         &peakcomp_gain,
+                        &expander_gain,
                         &limiter_gain,
                     );
                 });
@@ -238,6 +246,16 @@ fn draw_params_column(ui: &mut egui::Ui, params: &PoddyclipParams, setter: &Para
             labeled_slider(ui, "Release:", &params.peakcomp.release, setter);
         });
 
+        // Expander
+        draw_section(ui, "Expander (Noise Gate)", |ui| {
+            param_row(ui, "Enable:", &params.expander.enable, setter);
+            labeled_slider(ui, "Threshold:", &params.expander.threshold, setter);
+            labeled_slider(ui, "Ratio:", &params.expander.ratio, setter);
+            labeled_slider(ui, "Attack:", &params.expander.attack, setter);
+            labeled_slider(ui, "Release:", &params.expander.release, setter);
+            labeled_slider(ui, "Range:", &params.expander.range, setter);
+        });
+
         // Neve Transformer
         draw_section(ui, "Neve Transformer", |ui| {
             param_row(ui, "Enable:", &params.channel9.enable, setter);
@@ -307,6 +325,7 @@ fn draw_viz_column(
     deesser_gain: &Arc<Mutex<f32>>,
     fetcomp_gain: &Arc<Mutex<f32>>,
     peakcomp_gain: &Arc<Mutex<f32>>,
+    expander_gain: &Arc<Mutex<f32>>,
     limiter_gain: &Arc<Mutex<f32>>,
 ) {
     ui.vertical(|ui| {
@@ -363,6 +382,13 @@ fn draw_viz_column(
         ui.add_space(5.0);
         let gain = peakcomp_gain.lock().map(|g| *g).unwrap_or(0.0);
         draw_gr_meter(ui, gain, 12.0, MeterColor::Magenta);
+
+        ui.add_space(10.0);
+
+        ui.heading("Expander Gain Reduction");
+        ui.add_space(5.0);
+        let gain = expander_gain.lock().map(|g| *g).unwrap_or(0.0);
+        draw_gr_meter(ui, gain, 20.0, MeterColor::Blue);
 
         ui.add_space(10.0);
 

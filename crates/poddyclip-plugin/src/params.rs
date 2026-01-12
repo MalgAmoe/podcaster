@@ -153,6 +153,27 @@ pub struct PeakCompParams {
 }
 
 #[derive(Params)]
+pub struct ExpanderParams {
+    #[id = "expander_enable"]
+    pub enable: BoolParam,
+
+    #[id = "expander_threshold"]
+    pub threshold: FloatParam,
+
+    #[id = "expander_ratio"]
+    pub ratio: FloatParam,
+
+    #[id = "expander_attack"]
+    pub attack: FloatParam,
+
+    #[id = "expander_release"]
+    pub release: FloatParam,
+
+    #[id = "expander_range"]
+    pub range: FloatParam,
+}
+
+#[derive(Params)]
 pub struct Channel9Params {
     #[id = "channel9_enable"]
     pub enable: BoolParam,
@@ -250,6 +271,9 @@ pub struct PoddyclipParams {
 
     #[nested(group = "Peak Comp")]
     pub peakcomp: PeakCompParams,
+
+    #[nested(group = "Expander")]
+    pub expander: ExpanderParams,
 
     #[nested(group = "Transformer")]
     pub channel9: Channel9Params,
@@ -530,6 +554,49 @@ impl Default for PoddyclipParams {
                 .with_step_size(1.0)
                 .with_value_to_string(formatters::v2s_f32_rounded(0))
                 .with_unit(" ms"),
+            },
+
+            expander: ExpanderParams {
+                enable: BoolParam::new("Enable Expander", false),
+                threshold: FloatParam::new(
+                    "Threshold",
+                    -40.0,
+                    FloatRange::Linear { min: -60.0, max: -20.0 },
+                )
+                .with_step_size(0.5)
+                .with_value_to_string(formatters::v2s_f32_rounded(1))
+                .with_unit(" dB"),
+                ratio: FloatParam::new(
+                    "Ratio",
+                    2.0,
+                    FloatRange::Skewed { min: 1.0, max: 10.0, factor: FloatRange::skew_factor(-0.5) },
+                )
+                .with_step_size(0.1)
+                .with_value_to_string(Arc::new(|v| format!("{:.1}:1", v))),
+                attack: FloatParam::new(
+                    "Attack",
+                    5.0,
+                    FloatRange::Skewed { min: 0.5, max: 50.0, factor: FloatRange::skew_factor(-1.0) },
+                )
+                .with_step_size(0.5)
+                .with_value_to_string(formatters::v2s_f32_rounded(1))
+                .with_unit(" ms"),
+                release: FloatParam::new(
+                    "Release",
+                    50.0,
+                    FloatRange::Skewed { min: 10.0, max: 500.0, factor: FloatRange::skew_factor(-1.0) },
+                )
+                .with_step_size(1.0)
+                .with_value_to_string(formatters::v2s_f32_rounded(0))
+                .with_unit(" ms"),
+                range: FloatParam::new(
+                    "Range",
+                    20.0,
+                    FloatRange::Linear { min: 1.0, max: 60.0 },
+                )
+                .with_step_size(1.0)
+                .with_value_to_string(formatters::v2s_f32_rounded(0))
+                .with_unit(" dB"),
             },
 
             channel9: Channel9Params {

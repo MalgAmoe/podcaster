@@ -8,7 +8,7 @@ use nih_plug::prelude::*;
 use std::sync::{Arc, Mutex};
 
 use poddyclip::denoiser::{StreamingDenoiser, VisualizationData};
-use poddyclip::dynamics::{ButterComp2, StereoFetCompressor, StereoRealtimeLimiter, StereoVcaPeakComp};
+use poddyclip::dynamics::{ButterComp2, StereoExpander, StereoFetCompressor, StereoRealtimeLimiter, StereoVcaPeakComp};
 use poddyclip::eq::{DeEsser, FilterChain, FixEq, HighPassSlope, StereoEnhanceEq};
 use poddyclip::saturation::{Channel9, TapeGlue};
 use poddyclip::traits::Stereo;
@@ -56,6 +56,10 @@ pub struct Poddyclip {
     peakcomp: StereoVcaPeakComp,
     peakcomp_gain_db: Arc<Mutex<f32>>,
 
+    // Expander
+    expander: StereoExpander,
+    expander_gain_db: Arc<Mutex<f32>>,
+
     // Channel9 (Neve transformer)
     channel9: Stereo<Channel9>,
 
@@ -96,6 +100,8 @@ impl Default for Poddyclip {
             fetcomp_gain_db: Arc::new(Mutex::new(0.0)),
             peakcomp: StereoVcaPeakComp::new(48000.0),
             peakcomp_gain_db: Arc::new(Mutex::new(0.0)),
+            expander: StereoExpander::new(48000.0),
+            expander_gain_db: Arc::new(Mutex::new(0.0)),
             channel9: Stereo::<Channel9>::new(48000.0),
             enhance_eq: StereoEnhanceEq::new(48000.0),
             buttercomp: Stereo::<ButterComp2>::new(48000.0),
@@ -148,6 +154,7 @@ impl Plugin for Poddyclip {
             self.deesser_gain_db.clone(),
             self.fetcomp_gain_db.clone(),
             self.peakcomp_gain_db.clone(),
+            self.expander_gain_db.clone(),
             self.limiter_gain_db.clone(),
         )
     }
@@ -166,6 +173,7 @@ impl Plugin for Poddyclip {
         );
 
         self.fetcomp = StereoFetCompressor::new_default(buffer_config.sample_rate);
+        self.expander = StereoExpander::new(buffer_config.sample_rate);
         self.limiter = StereoRealtimeLimiter::new(-1.0, 5.0, 100.0, buffer_config.sample_rate);
 
         true
@@ -174,6 +182,7 @@ impl Plugin for Poddyclip {
     fn reset(&mut self) {
         self.denoiser.reset();
         self.fetcomp.reset();
+        self.expander.reset();
         self.limiter.reset();
     }
 
@@ -244,6 +253,7 @@ impl Poddyclip {
         let viz_enabled = self.params.editor_state.is_open();
         let filter_enabled = self.params.filters.enable.value();
 
+        let expander_enabled = self.params.expander.enable.value();
         let fetcomp_enabled = self.params.fetcomp.enable.value();
         let peakcomp_enabled = self.params.peakcomp.enable.value();
         let deesser_enabled = self.params.deesser.enable.value();
@@ -271,6 +281,12 @@ impl Poddyclip {
 
             // Denoise
             let mut out = self.denoiser.left.process_sample(filtered);
+
+            // Expander (reduces noise in quiet passages)
+            if expander_enabled {
+                let (l, _) = self.expander.process_sample(out, out);
+                out = l;
+            }
 
             // FET Compressor (early, for peak control + saturation)
             if fetcomp_enabled {
@@ -332,6 +348,7 @@ impl Poddyclip {
         let viz_enabled = self.params.editor_state.is_open();
         let filter_enabled = self.params.filters.enable.value();
 
+        let expander_enabled = self.params.expander.enable.value();
         let fetcomp_enabled = self.params.fetcomp.enable.value();
         let peakcomp_enabled = self.params.peakcomp.enable.value();
         let deesser_enabled = self.params.deesser.enable.value();
@@ -362,6 +379,11 @@ impl Poddyclip {
             // Denoise
             let mut left_out = self.denoiser.left.process_sample(filtered_l);
             let mut right_out = self.denoiser.right.process_sample(filtered_r);
+
+            // Expander (reduces noise in quiet passages)
+            if expander_enabled {
+                (left_out, right_out) = self.expander.process_sample(left_out, right_out);
+            }
 
             // FET Compressor (early, for peak control + saturation)
             if fetcomp_enabled {
@@ -444,6 +466,15 @@ impl Poddyclip {
             self.peakcomp.set_ratio(self.params.peakcomp.ratio.value());
             self.peakcomp.set_attack(self.params.peakcomp.attack.value());
             self.peakcomp.set_release(self.params.peakcomp.release.value());
+        }
+
+        // Expander
+        if self.params.expander.enable.value() {
+            self.expander.set_threshold(self.params.expander.threshold.value());
+            self.expander.set_ratio(self.params.expander.ratio.value());
+            self.expander.set_attack(self.params.expander.attack.value());
+            self.expander.set_release(self.params.expander.release.value());
+            self.expander.set_range(self.params.expander.range.value());
         }
 
         // FixEq
@@ -555,6 +586,9 @@ impl Poddyclip {
             }
             if let Ok(mut gain) = self.peakcomp_gain_db.try_lock() {
                 *gain = self.peakcomp.get_gain_reduction_db();
+            }
+            if let Ok(mut gain) = self.expander_gain_db.try_lock() {
+                *gain = -self.expander.get_max_gain_reduction_db();
             }
             if let Ok(mut gain) = self.limiter_gain_db.try_lock() {
                 *gain = limiter_gr_db;
