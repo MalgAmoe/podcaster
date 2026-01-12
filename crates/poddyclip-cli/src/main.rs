@@ -68,6 +68,10 @@ struct Args {
     /// Radio Voice EQ amount (0.0-1.0, default 1.0)
     #[arg(long, default_value_t = 1.0)]
     radio_amount: f32,
+
+    /// De-reverb strength 1-5 (0 = disabled)
+    #[arg(long, default_value_t = 0, value_parser = clap::value_parser!(u8).range(0..=5))]
+    dereverb: u8,
 }
 
 fn main() -> Result<()> {
@@ -147,6 +151,54 @@ fn main() -> Result<()> {
             println!("  Channel {}: {} clicks repaired", i, clicks_found);
             *channel = repaired;
         }
+    }
+
+    // =========================================================================
+    // DE-REVERB (optional, runs BEFORE denoiser)
+    // =========================================================================
+    if args.dereverb > 0 {
+        println!("\n[DeReverb]");
+
+        // Analyze reverb characteristics on original audio
+        let mono_for_reverb = if is_stereo {
+            analysis::utils::mix_to_mono(&samples[0], &samples[1])
+        } else {
+            samples[0].clone()
+        };
+        let spectrum = analysis::SpectralAnalysis::new(&mono_for_reverb, sample_rate);
+        let cepstral = analysis::CepstralAnalysis::from_spectrum(&spectrum);
+        let reverb_analysis = analysis::ReverbAnalysis::from_analyses(&spectrum, &cepstral);
+
+        println!(
+            "  RT60: {:.0}ms, DRR: {:.1}dB ({})",
+            reverb_analysis.rt60_avg_ms,
+            reverb_analysis.drr_db,
+            reverb_analysis.severity()
+        );
+
+        // Process with dereverb
+        let dereverb_preset = args.dereverb;
+        println!(
+            "  Preset: {} ({})",
+            dereverb_preset,
+            poddyclip::dereverb::get_preset_name(dereverb_preset)
+        );
+
+        let mut dereverb = poddyclip::dereverb::DeReverbProcessor::new_with_preset(
+            sample_rate,
+            dereverb_preset,
+        )
+        .expect("Invalid dereverb preset");
+        dereverb.init_with_analysis(&reverb_analysis);
+
+        if is_stereo {
+            let mut left_dereverb = dereverb.clone();
+            samples[0] = dereverb.process(&samples[0]);
+            samples[1] = left_dereverb.process(&samples[1]);
+        } else {
+            samples[0] = dereverb.process(&samples[0]);
+        }
+        println!("    Max GR: {:.1}dB", dereverb.get_max_gain_reduction_db());
     }
 
     // =========================================================================

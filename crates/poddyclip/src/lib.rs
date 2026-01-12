@@ -2,6 +2,7 @@
 //!
 //! This library provides audio processors for:
 //! - Spectral noise reduction (denoiser)
+//! - Spectral de-reverb (dereverb)
 //! - Dynamic processing (compression, limiting, peak control)
 //! - EQ processing (filters, de-esser, enhancement)
 //! - Saturation effects
@@ -9,6 +10,7 @@
 
 pub mod analysis;
 pub mod denoiser;
+pub mod dereverb;
 pub mod dynamics;
 pub mod eq;
 pub mod repair;
@@ -17,6 +19,7 @@ pub mod traits;
 
 // Re-export commonly used items
 pub use denoiser::{RealtimeDenoiser, StreamingDenoiser, PRESETS};
+pub use dereverb::{DeReverbProcessor, DeReverbParams, DEREVERB_PRESETS};
 pub use dynamics::{ButterComp2, StereoFetCompressor, StereoRealtimeLimiter, StereoVcaPeakComp};
 pub use dynamics::limiter::Limiter;
 pub use eq::{DeEsser, FilterChain, FixEq, HighPassSlope, RadioVoiceProcessor, StereoDeEsser, StereoEnhanceEq, StereoRadioVoice};
