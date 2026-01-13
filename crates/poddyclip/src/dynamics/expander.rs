@@ -5,6 +5,70 @@
 
 use crate::analysis::utils::{db_to_linear, linear_to_db};
 
+/// Expander preset parameters
+#[derive(Clone, Copy, Debug)]
+pub struct ExpanderPreset {
+    pub threshold_db: f32,
+    pub ratio: f32,
+    pub attack_ms: f32,
+    pub release_ms: f32,
+    pub range_db: f32,
+}
+
+/// Preset names (1-5)
+pub const EXPANDER_PRESET_NAMES: [&str; 5] = ["Gentle", "Light", "Moderate", "Strong", "Aggressive"];
+
+/// Expander presets (1-5 scale)
+pub const EXPANDER_PRESETS: [ExpanderPreset; 5] = [
+    // 1: Gentle - barely noticeable, preserve dynamics
+    ExpanderPreset {
+        threshold_db: -55.0,
+        ratio: 1.5,
+        attack_ms: 10.0,
+        release_ms: 100.0,
+        range_db: 6.0,
+    },
+    // 2: Light - subtle noise reduction
+    ExpanderPreset {
+        threshold_db: -48.0,
+        ratio: 1.8,
+        attack_ms: 8.0,
+        release_ms: 80.0,
+        range_db: 12.0,
+    },
+    // 3: Moderate - balanced (default)
+    ExpanderPreset {
+        threshold_db: -40.0,
+        ratio: 2.0,
+        attack_ms: 5.0,
+        release_ms: 50.0,
+        range_db: 20.0,
+    },
+    // 4: Strong - noticeable noise reduction
+    ExpanderPreset {
+        threshold_db: -35.0,
+        ratio: 3.0,
+        attack_ms: 3.0,
+        release_ms: 40.0,
+        range_db: 30.0,
+    },
+    // 5: Aggressive - near-gate behavior
+    ExpanderPreset {
+        threshold_db: -30.0,
+        ratio: 4.0,
+        attack_ms: 1.0,
+        release_ms: 30.0,
+        range_db: 40.0,
+    },
+];
+
+/// Get preset name by level (1-5), returns "Unknown" for invalid levels
+pub fn get_expander_preset_name(level: u8) -> &'static str {
+    EXPANDER_PRESET_NAMES
+        .get((level as usize).saturating_sub(1))
+        .unwrap_or(&"Unknown")
+}
+
 /// Mono expander with envelope follower
 #[derive(Clone, Debug)]
 pub struct Expander {
@@ -224,6 +288,18 @@ impl StereoExpander {
         };
         exp.update_coefficients();
         exp
+    }
+
+    /// Create a new stereo expander with preset (1-5)
+    pub fn new_with_preset(sample_rate: f32, preset: u8) -> Option<Self> {
+        let p = EXPANDER_PRESETS.get((preset as usize).saturating_sub(1))?;
+        let mut exp = Self::new(sample_rate);
+        exp.set_threshold(p.threshold_db);
+        exp.set_ratio(p.ratio);
+        exp.set_attack(p.attack_ms);
+        exp.set_release(p.release_ms);
+        exp.set_range(p.range_db);
+        Some(exp)
     }
 
     fn update_coefficients(&mut self) {

@@ -11,6 +11,37 @@
 
 #![allow(dead_code)]
 
+// =============================================================================
+// ButterComp Presets
+// =============================================================================
+
+/// Preset names (1-5)
+pub const BUTTERCOMP_PRESET_NAMES: [&str; 5] =
+    ["Gentle", "Light", "Moderate", "Strong", "Aggressive"];
+
+/// ButterComp presets - compression amount (0-1 scale)
+pub const BUTTERCOMP_PRESETS: [f32; 5] = [
+    0.3, // 1: Gentle
+    0.5, // 2: Light
+    0.7, // 3: Moderate (default was 0.8)
+    0.85, // 4: Strong
+    1.0, // 5: Aggressive
+];
+
+/// Get preset name by level (1-5), returns "Unknown" for invalid levels
+pub fn get_buttercomp_preset_name(level: u8) -> &'static str {
+    BUTTERCOMP_PRESET_NAMES
+        .get((level as usize).saturating_sub(1))
+        .unwrap_or(&"Unknown")
+}
+
+/// Get ButterComp compress amount by level (1-5)
+pub fn get_buttercomp_preset(level: u8) -> Option<f32> {
+    BUTTERCOMP_PRESETS
+        .get((level as usize).saturating_sub(1))
+        .copied()
+}
+
 /// Flush denormals to zero to prevent CPU spikes
 #[inline]
 fn flush_denormal(x: f64) -> f64 {

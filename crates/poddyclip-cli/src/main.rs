@@ -20,11 +20,18 @@ use poddyclip::dynamics::autogain::{
     analyze_gain, apply_gain, linear_to_db, DEFAULT_TARGET_PEAK_DB, DEFAULT_TARGET_RMS_DB,
 };
 use poddyclip::dynamics::limiter::Limiter;
-use poddyclip::dynamics::{ButterComp2, StereoExpander, StereoFetCompressor, StereoVcaPeakComp};
+use poddyclip::dynamics::{
+    get_buttercomp_preset, get_buttercomp_preset_name, get_expander_preset_name,
+    get_fetcomp_preset_name, get_peakcomp_preset_name, ButterComp2, StereoExpander,
+    StereoFetCompressor, StereoVcaPeakComp,
+};
 use poddyclip::eq::deesser::StereoDeEsser;
-use poddyclip::eq::{FilterChain, FixEq, HighPassSlope, RadioVoiceProcessor, StereoEnhanceEq};
+use poddyclip::eq::{
+    get_eq_preset, get_eq_preset_name, FilterChain, FixEq, HighPassSlope, RadioVoiceProcessor,
+    StereoEnhanceEq,
+};
 use poddyclip::repair::Declicker;
-use poddyclip::saturation::Channel9;
+use poddyclip::saturation::{get_saturation_preset, get_saturation_preset_name, Channel9, TapeGlue};
 use poddyclip::traits::{Stereo, StereoProcessor};
 
 #[derive(Parser)]
@@ -87,6 +94,72 @@ struct Args {
     /// Maximum peak attenuation in dB (with --depeak)
     #[arg(long, default_value_t = 18.0)]
     depeak_max_db: f32,
+
+    // =========================================================================
+    // DISABLE FLAGS - skip individual processors
+    // =========================================================================
+    /// Skip expander (noise gate)
+    #[arg(long)]
+    disable_expander: bool,
+
+    /// Skip compressor (peakcomp or fetcomp)
+    #[arg(long)]
+    disable_comp: bool,
+
+    /// Skip FixEQ
+    #[arg(long)]
+    disable_fixeq: bool,
+
+    /// Skip de-esser
+    #[arg(long)]
+    disable_deesser: bool,
+
+    /// Skip Channel9 saturation
+    #[arg(long)]
+    disable_saturation: bool,
+
+    /// Skip ButterComp
+    #[arg(long)]
+    disable_buttercomp: bool,
+
+    /// Skip EnhanceEQ
+    #[arg(long)]
+    disable_enhanceeq: bool,
+
+    /// Skip TapeGlue
+    #[arg(long)]
+    disable_tape: bool,
+
+    /// Skip limiter (not recommended)
+    #[arg(long)]
+    disable_limiter: bool,
+
+    // =========================================================================
+    // PROCESSOR PRESETS - fine-tune individual processors (1-5 scale)
+    // =========================================================================
+    /// Expander preset 1-5 (1=Gentle, 3=Moderate, 5=Aggressive)
+    #[arg(long, default_value_t = 3, value_parser = clap::value_parser!(u8).range(1..=5))]
+    expander_preset: u8,
+
+    /// FET compressor preset 1-5 (used with --fet)
+    #[arg(long, default_value_t = 3, value_parser = clap::value_parser!(u8).range(1..=5))]
+    fetcomp_preset: u8,
+
+    /// Peak compressor preset 1-5 (default compressor)
+    #[arg(long, default_value_t = 3, value_parser = clap::value_parser!(u8).range(1..=5))]
+    peakcomp_preset: u8,
+
+    /// Saturation preset 1-5 (Channel9 + TapeGlue)
+    #[arg(long, default_value_t = 3, value_parser = clap::value_parser!(u8).range(1..=5))]
+    saturation_preset: u8,
+
+    /// EQ preset 1-5 (EnhanceEQ gains)
+    #[arg(long, default_value_t = 3, value_parser = clap::value_parser!(u8).range(1..=5))]
+    eq_preset: u8,
+
+    /// ButterComp preset 1-5
+    #[arg(long, default_value_t = 3, value_parser = clap::value_parser!(u8).range(1..=5))]
+    buttercomp_preset: u8,
 }
 
 fn main() -> Result<()> {
@@ -337,43 +410,60 @@ fn main() -> Result<()> {
     println!("\n[Processing]");
 
     // Expander (first - reduces noise in quiet passages)
-    let mut expander = StereoExpander::new(sample_rate as f32);
-    expander.set_threshold(-40.0);
-    expander.set_ratio(2.0);
-    expander.set_range(20.0);
-    println!("  Expander: threshold -40dB, ratio 2:1, range 20dB");
-    if is_stereo {
-        let (left, right) = samples.split_at_mut(1);
-        expander.process_stereo(&mut left[0], &mut right[0]);
-    } else {
-        expander.process_mono(&mut samples[0]);
-    }
-    println!("    Max GR: {:.1}dB", expander.get_max_gain_reduction_db());
-
-    // FET Compressor (optional)
-    if args.fet {
-        let mut fetcomp = StereoFetCompressor::new_default(sample_rate as f32);
-        println!("  FetComp: threshold -18dB, ratio 4:1, attack 1ms, release 100ms");
-        if is_stereo {
-            let (left, right) = samples.split_at_mut(1);
-            fetcomp.process_stereo(&mut left[0], &mut right[0]);
-        } else {
-            fetcomp.process_mono(&mut samples[0]);
-        }
-        println!("    Max GR: {:.1}dB", fetcomp.get_gain_reduction_db());
-    } else {
-        // Peak compressor
-        let mut peakcomp = StereoVcaPeakComp::new(sample_rate as f32);
-        let profile = peakcomp.configure(&samples).clone();
+    if !args.disable_expander {
+        let mut expander = StereoExpander::new_with_preset(sample_rate as f32, args.expander_preset)
+            .expect("Invalid expander preset");
         println!(
-            "  PeakComp: threshold {:.1}dB",
-            profile.histogram_threshold_db
+            "  Expander: preset {} ({})",
+            args.expander_preset,
+            get_expander_preset_name(args.expander_preset)
         );
         if is_stereo {
             let (left, right) = samples.split_at_mut(1);
-            peakcomp.process_stereo(&mut left[0], &mut right[0]);
+            expander.process_stereo(&mut left[0], &mut right[0]);
         } else {
-            peakcomp.process_mono(&mut samples[0]);
+            expander.process_mono(&mut samples[0]);
+        }
+        println!("    Max GR: {:.1}dB", expander.get_max_gain_reduction_db());
+    }
+
+    // Compressor (FET or Peak)
+    if !args.disable_comp {
+        if args.fet {
+            let mut fetcomp =
+                StereoFetCompressor::new_with_preset(sample_rate as f32, args.fetcomp_preset)
+                    .expect("Invalid fetcomp preset");
+            println!(
+                "  FetComp: preset {} ({})",
+                args.fetcomp_preset,
+                get_fetcomp_preset_name(args.fetcomp_preset)
+            );
+            if is_stereo {
+                let (left, right) = samples.split_at_mut(1);
+                fetcomp.process_stereo(&mut left[0], &mut right[0]);
+            } else {
+                fetcomp.process_mono(&mut samples[0]);
+            }
+            println!("    Max GR: {:.1}dB", fetcomp.get_gain_reduction_db());
+        } else {
+            // Peak compressor with preset
+            let mut peakcomp =
+                StereoVcaPeakComp::new_with_preset(sample_rate as f32, args.peakcomp_preset)
+                    .expect("Invalid peakcomp preset");
+            // Still run analysis to set auto threshold if needed
+            let profile = peakcomp.configure(&samples).clone();
+            println!(
+                "  PeakComp: preset {} ({}), threshold {:.1}dB",
+                args.peakcomp_preset,
+                get_peakcomp_preset_name(args.peakcomp_preset),
+                profile.histogram_threshold_db
+            );
+            if is_stereo {
+                let (left, right) = samples.split_at_mut(1);
+                peakcomp.process_stereo(&mut left[0], &mut right[0]);
+            } else {
+                peakcomp.process_mono(&mut samples[0]);
+            }
         }
     }
 
@@ -386,65 +476,87 @@ fn main() -> Result<()> {
     let spectrum = analysis::SpectralAnalysis::new(&mono, sample_rate);
 
     // FixEq
-    let mut fixeq = FixEq::new(sample_rate as f32);
-    fixeq.configure_from_spectrum(&spectrum, preset, is_stereo);
-    println!(
-        "  FixEq: demud {:.0}%, corrA {:.0}%, corrB {:.0}%",
-        fixeq.get_demud_strength() * 100.0,
-        fixeq.get_correction_a_strength() * 100.0,
-        fixeq.get_correction_b_strength() * 100.0
-    );
-    if is_stereo {
-        let (left, right) = samples.split_at_mut(1);
-        fixeq.process_stereo(&mut left[0], &mut right[0]);
-    } else {
-        fixeq.process_mono(&mut samples[0]);
-    }
-
-    // De-esser (analyzes current audio state)
-    let mut deesser = StereoDeEsser::new(sample_rate as f32);
-    let sibilance = deesser.configure(&samples).clone();
-    println!(
-        "  DeEsser: {:.0}-{:.0}Hz, strength {:.0}%",
-        sibilance.start_freq,
-        sibilance.stop_freq,
-        deesser.get_strength() * 100.0
-    );
-    let mut max_gr = 0.0f32;
-    if is_stereo {
-        let (left, right) = samples.split_at_mut(1);
-        for (l, r) in left[0].iter_mut().zip(right[0].iter_mut()) {
-            deesser.process_stereo(std::slice::from_mut(l), std::slice::from_mut(r));
-            max_gr = max_gr.min(deesser.get_gain_reduction_db());
-        }
-    } else {
-        for s in samples[0].iter_mut() {
-            deesser.process_mono(std::slice::from_mut(s));
-            max_gr = max_gr.min(deesser.get_gain_reduction_db());
+    if !args.disable_fixeq {
+        let mut fixeq = FixEq::new(sample_rate as f32);
+        fixeq.configure_from_spectrum(&spectrum, preset, is_stereo);
+        println!(
+            "  FixEq: demud {:.0}%, corrA {:.0}%, corrB {:.0}%",
+            fixeq.get_demud_strength() * 100.0,
+            fixeq.get_correction_a_strength() * 100.0,
+            fixeq.get_correction_b_strength() * 100.0
+        );
+        if is_stereo {
+            let (left, right) = samples.split_at_mut(1);
+            fixeq.process_stereo(&mut left[0], &mut right[0]);
+        } else {
+            fixeq.process_mono(&mut samples[0]);
         }
     }
-    println!("    Max GR: {:.1}dB", max_gr);
 
-    // Saturation
-    let mut channel9: Stereo<Channel9> = Stereo::new(sample_rate as f32);
-    channel9.set_both(|c| c.set_drive(0.2));
-    println!("  Saturation: drive 40%");
-    if is_stereo {
-        let (left, right) = samples.split_at_mut(1);
-        channel9.process_stereo(&mut left[0], &mut right[0]);
-    } else {
-        channel9.process_mono(&mut samples[0]);
+    // De-esser
+    if !args.disable_deesser {
+        let mut deesser = StereoDeEsser::new(sample_rate as f32);
+        let sibilance = deesser.configure(&samples).clone();
+        println!(
+            "  DeEsser: {:.0}-{:.0}Hz, strength {:.0}%",
+            sibilance.start_freq,
+            sibilance.stop_freq,
+            deesser.get_strength() * 100.0
+        );
+        let mut max_gr = 0.0f32;
+        if is_stereo {
+            let (left, right) = samples.split_at_mut(1);
+            for (l, r) in left[0].iter_mut().zip(right[0].iter_mut()) {
+                deesser.process_stereo(std::slice::from_mut(l), std::slice::from_mut(r));
+                max_gr = max_gr.min(deesser.get_gain_reduction_db());
+            }
+        } else {
+            for s in samples[0].iter_mut() {
+                deesser.process_mono(std::slice::from_mut(s));
+                max_gr = max_gr.min(deesser.get_gain_reduction_db());
+            }
+        }
+        println!("    Max GR: {:.1}dB", max_gr);
     }
 
-    // Compressor
-    let mut compressor: Stereo<ButterComp2> = Stereo::new(sample_rate as f32);
-    compressor.set_both(|c| c.set_compress(0.8));
-    println!("  Compressor: 80%");
-    if is_stereo {
-        let (left, right) = samples.split_at_mut(1);
-        compressor.process_stereo(&mut left[0], &mut right[0]);
-    } else {
-        compressor.process_mono(&mut samples[0]);
+    // Saturation (Channel9)
+    if !args.disable_saturation {
+        let sat_preset =
+            get_saturation_preset(args.saturation_preset).expect("Invalid saturation preset");
+        let mut channel9: Stereo<Channel9> = Stereo::new(sample_rate as f32);
+        channel9.set_both(|c| c.set_drive(sat_preset.channel9_drive));
+        println!(
+            "  Channel9: preset {} ({}), drive {:.0}%",
+            args.saturation_preset,
+            get_saturation_preset_name(args.saturation_preset),
+            sat_preset.channel9_drive * 100.0
+        );
+        if is_stereo {
+            let (left, right) = samples.split_at_mut(1);
+            channel9.process_stereo(&mut left[0], &mut right[0]);
+        } else {
+            channel9.process_mono(&mut samples[0]);
+        }
+    }
+
+    // ButterComp
+    if !args.disable_buttercomp {
+        let buttercomp_amount =
+            get_buttercomp_preset(args.buttercomp_preset).expect("Invalid buttercomp preset");
+        let mut compressor: Stereo<ButterComp2> = Stereo::new(sample_rate as f32);
+        compressor.set_both(|c| c.set_compress(buttercomp_amount));
+        println!(
+            "  ButterComp: preset {} ({}), {:.0}%",
+            args.buttercomp_preset,
+            get_buttercomp_preset_name(args.buttercomp_preset),
+            buttercomp_amount * 100.0
+        );
+        if is_stereo {
+            let (left, right) = samples.split_at_mut(1);
+            compressor.process_stereo(&mut left[0], &mut right[0]);
+        } else {
+            compressor.process_mono(&mut samples[0]);
+        }
     }
 
     // Fresh spectral analysis for EnhanceEQ (on current audio state)
@@ -454,13 +566,28 @@ fn main() -> Result<()> {
         samples[0].clone()
     };
 
-    if !args.radio {
+    // EnhanceEQ (or RadioVoice)
+    if !args.radio && !args.disable_enhanceeq {
+        let eq_preset = get_eq_preset(args.eq_preset).expect("Invalid EQ preset");
         let enhance_spectrum = analysis::SpectralAnalysis::new(&mono_for_enhance, sample_rate);
-        // Enhance EQ (uses fresh spectrum)
         let mut enhanceeq = StereoEnhanceEq::new(sample_rate as f32);
         enhanceeq.configure_from_spectrum(&enhance_spectrum);
+
+        // Scale gains by preset
+        let base_lowmid = enhanceeq.get_lowmid_gain();
+        let base_presence = enhanceeq.get_presence_gain();
+        let base_air = enhanceeq.get_shelf_gain();
+
+        // Apply preset scaling (preset 3 = 1.0x, others scale proportionally)
+        let scale = eq_preset.lowmid_cut_db / -3.0; // Normalize to preset 3
+        enhanceeq.set_lowmid_gain(base_lowmid * scale);
+        enhanceeq.set_presence_gain(base_presence * scale);
+        enhanceeq.set_shelf_gain(base_air * scale);
+
         println!(
-            "  EnhanceEQ: low-mid: {:+.1}dB, presence {:+.1}dB, air {:+.1}dB",
+            "  EnhanceEQ: preset {} ({}), low-mid: {:+.1}dB, presence {:+.1}dB, air {:+.1}dB",
+            args.eq_preset,
+            get_eq_preset_name(args.eq_preset),
             enhanceeq.get_lowmid_gain(),
             enhanceeq.get_presence_gain(),
             enhanceeq.get_shelf_gain()
@@ -470,6 +597,32 @@ fn main() -> Result<()> {
             enhanceeq.process_stereo(&mut left[0], &mut right[0]);
         } else {
             enhanceeq.process_mono(&mut samples[0]);
+        }
+    }
+
+    // TapeGlue
+    if !args.disable_tape {
+        let sat_preset =
+            get_saturation_preset(args.saturation_preset).expect("Invalid saturation preset");
+        let mut tape_left = TapeGlue::new(sample_rate as f64);
+        let mut tape_right = TapeGlue::new(sample_rate as f64);
+        tape_left.set_warmth(sat_preset.tape_warmth);
+        tape_right.set_warmth(sat_preset.tape_warmth);
+        println!(
+            "  TapeGlue: warmth {:.0}%",
+            sat_preset.tape_warmth * 100.0
+        );
+        if is_stereo {
+            for sample in samples[0].iter_mut() {
+                *sample = tape_left.process(*sample);
+            }
+            for sample in samples[1].iter_mut() {
+                *sample = tape_right.process(*sample);
+            }
+        } else {
+            for sample in samples[0].iter_mut() {
+                *sample = tape_left.process(*sample);
+            }
         }
     }
 
@@ -547,14 +700,18 @@ fn main() -> Result<()> {
     apply_gain(&mut samples, lufs_gain_db);
 
     // Limiter
-    let mut limiter = Limiter::new(-1.0, 5.0, 100.0, sample_rate as f32);
-    let stats = if is_stereo {
-        let (left, right) = samples.split_at_mut(1);
-        limiter.process_stereo(&mut left[0], &mut right[0])
+    if !args.disable_limiter {
+        let mut limiter = Limiter::new(-1.0, 5.0, 100.0, sample_rate as f32);
+        let stats = if is_stereo {
+            let (left, right) = samples.split_at_mut(1);
+            limiter.process_stereo(&mut left[0], &mut right[0])
+        } else {
+            limiter.process_mono(&mut samples[0])
+        };
+        println!("  Limiter: -1dBTP, max GR {:.1}dB", stats.max_reduction_db);
     } else {
-        limiter.process_mono(&mut samples[0])
-    };
-    println!("  Limiter: -1dBTP, max GR {:.1}dB", stats.max_reduction_db);
+        println!("  Limiter: DISABLED (not recommended)");
+    }
 
     // =========================================================================
     // SAVE

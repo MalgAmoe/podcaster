@@ -35,6 +35,80 @@ const DB_DERIVATIVE_CONST: f32 = 8.685889;
 const NR_CONVERGENCE: f32 = 1e-5;
 
 // =============================================================================
+// FetComp Presets (1176-style: fast, colorful, saturates)
+// =============================================================================
+
+/// FetComp preset parameters
+#[derive(Clone, Copy, Debug)]
+pub struct FetCompPreset {
+    pub threshold_db: f32,
+    pub ratio: f32,
+    pub attack_ms: f32,
+    pub release_ms: f32,
+    pub input_drive: f32,
+    pub output_drive: f32,
+}
+
+/// Preset names (1-5)
+pub const FETCOMP_PRESET_NAMES: [&str; 5] = ["Gentle", "Light", "Moderate", "Strong", "Aggressive"];
+
+/// FetComp presets (1-5 scale) - 1176-style character
+pub const FETCOMP_PRESETS: [FetCompPreset; 5] = [
+    // 1: Gentle - light leveling, minimal color
+    FetCompPreset {
+        threshold_db: -10.0,
+        ratio: 2.0,
+        attack_ms: 3.0,
+        release_ms: 150.0,
+        input_drive: 0.0,
+        output_drive: 0.0,
+    },
+    // 2: Light - subtle warmth
+    FetCompPreset {
+        threshold_db: -12.0,
+        ratio: 3.0,
+        attack_ms: 1.5,
+        release_ms: 120.0,
+        input_drive: 0.1,
+        output_drive: 0.0,
+    },
+    // 3: Moderate (default)
+    FetCompPreset {
+        threshold_db: -14.0,
+        ratio: 4.0,
+        attack_ms: 0.8,
+        release_ms: 100.0,
+        input_drive: 0.15,
+        output_drive: 0.1,
+    },
+    // 4: Strong - punchy, colored
+    FetCompPreset {
+        threshold_db: -16.0,
+        ratio: 6.0,
+        attack_ms: 0.5,
+        release_ms: 80.0,
+        input_drive: 0.25,
+        output_drive: 0.15,
+    },
+    // 5: Aggressive - heavy squash, saturated
+    FetCompPreset {
+        threshold_db: -18.0,
+        ratio: 8.0,
+        attack_ms: 0.2,
+        release_ms: 60.0,
+        input_drive: 0.4,
+        output_drive: 0.25,
+    },
+];
+
+/// Get preset name by level (1-5), returns "Unknown" for invalid levels
+pub fn get_fetcomp_preset_name(level: u8) -> &'static str {
+    FETCOMP_PRESET_NAMES
+        .get((level as usize).saturating_sub(1))
+        .unwrap_or(&"Unknown")
+}
+
+// =============================================================================
 // FET Compressor (Mono) - Feedback Topology with Oversampling
 // =============================================================================
 
@@ -486,14 +560,28 @@ impl StereoFetCompressor {
     /// Create with default parameters optimized for voice
     pub fn new_default(sample_rate: f32) -> Self {
         Self::new(
-            -12.0, // threshold
-            4.0,   // ratio
-            0.5,   // attack
+            -12.0,  // threshold
+            4.0,    // ratio
+            0.5,    // attack
             126.0,  // release
             0.14,   // input drive
             0.26,   // output drive
             sample_rate,
         )
+    }
+
+    /// Create with preset (1-5)
+    pub fn new_with_preset(sample_rate: f32, preset: u8) -> Option<Self> {
+        let p = FETCOMP_PRESETS.get((preset as usize).saturating_sub(1))?;
+        Some(Self::new(
+            p.threshold_db,
+            p.ratio,
+            p.attack_ms,
+            p.release_ms,
+            p.input_drive,
+            p.output_drive,
+            sample_rate,
+        ))
     }
 
     fn update_coefficients(&mut self) {
