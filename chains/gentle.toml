@@ -1,0 +1,13 @@
+name = "Gentle"
+description = "Minimal processing, preserve dynamics"
+
+denoiser = 2
+expander = 1
+compressor = { type = "peak", preset = 1 }
+fixeq = true
+deesser = true
+saturation = 1
+buttercomp = 1
+enhanceeq = 1
+tape = 1
+output = -18           # More dynamic range

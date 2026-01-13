@@ -1,0 +1,13 @@
+name = "Broadcast"
+description = "Radio-ready, polished sound"
+
+denoiser = 4
+expander = 4           # Strong noise gating
+compressor = { type = "fet", preset = 4 }
+fixeq = true
+deesser = true
+saturation = 4         # Noticeable warmth
+buttercomp = 4
+enhanceeq = 5          # Aggressive presence/air
+tape = 4
+output = -14           # Louder broadcast level

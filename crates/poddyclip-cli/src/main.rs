@@ -1,6 +1,9 @@
+mod chain;
+
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Result};
+use chain::{ChainPreset, CompressorType, OutputSetting, ProcessorSetting};
 use clap::Parser;
 use hound::{SampleFormat, WavSpec, WavWriter};
 use symphonia::core::audio::SampleBuffer;
@@ -11,7 +14,7 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
 use poddyclip::analysis;
-use poddyclip::analysis::lufs::{measure_integrated_lufs, DEFAULT_TARGET_LUFS};
+use poddyclip::analysis::lufs::measure_integrated_lufs;
 use poddyclip::denoiser::{
     analyze_audio, detect_tonal_peaks, get_gate_preset_name, get_preset, PeakAttenuator,
     PeakAttenuatorParams, RealtimeDenoiser, SpectralGate, DEFAULT_PRESET, PRESETS,
@@ -45,7 +48,7 @@ use poddyclip::traits::{Stereo, StereoProcessor};
   5 = Aggressive - Maximum removal, may affect speech quality"#)]
 struct Args {
     /// Input audio file (WAV, MP3, etc.)
-    input: PathBuf,
+    input: Option<PathBuf>,
 
     /// Output WAV file
     #[arg(short, long)]
@@ -160,16 +163,150 @@ struct Args {
     /// ButterComp preset 1-5
     #[arg(long, default_value_t = 3, value_parser = clap::value_parser!(u8).range(1..=5))]
     buttercomp_preset: u8,
+
+    // =========================================================================
+    // CHAIN PRESETS
+    // =========================================================================
+    /// Use a chain preset from chains/ directory
+    #[arg(long, value_name = "NAME")]
+    chain: Option<String>,
+
+    /// List available chain presets
+    #[arg(long)]
+    list_chains: bool,
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
 
     // =========================================================================
+    // LIST CHAINS (early exit)
+    // =========================================================================
+    if args.list_chains {
+        let chains = chain::list_chains();
+        if chains.is_empty() {
+            println!("No chain presets found in chains/ directory");
+        } else {
+            println!("Available chain presets:");
+            for (name, desc) in chains {
+                if desc.is_empty() {
+                    println!("  {}", name);
+                } else {
+                    println!("  {} - {}", name, desc);
+                }
+            }
+        }
+        return Ok(());
+    }
+
+    // =========================================================================
+    // VALIDATE INPUT
+    // =========================================================================
+    let input = match args.input {
+        Some(ref path) => path.clone(),
+        None => {
+            bail!("Input file is required. Usage: poddyclip <INPUT> [OPTIONS]");
+        }
+    };
+
+    // =========================================================================
+    // LOAD CHAIN PRESET (if specified)
+    // =========================================================================
+    let chain_preset: Option<ChainPreset> = if let Some(ref name) = args.chain {
+        match chain::load_chain(name) {
+            Ok(preset) => {
+                println!("Using chain: {} ({})", preset.name, preset.description.as_deref().unwrap_or(""));
+                Some(preset)
+            }
+            Err(e) => {
+                bail!("{}", e);
+            }
+        }
+    } else {
+        None
+    };
+
+    // =========================================================================
+    // RESOLVE SETTINGS (CLI overrides chain, chain overrides defaults)
+    // =========================================================================
+    // Helper to check if CLI arg was explicitly set (not default)
+    // Since clap doesn't track this directly, we use a convention:
+    // - For presets: CLI wins if != 3 (default), otherwise use chain
+    // - For bools: CLI wins (disable flags)
+
+    // Denoiser preset
+    let denoiser_preset = chain_preset.as_ref().map(|c| c.denoiser).unwrap_or(args.preset);
+    let denoiser_preset = if args.preset != DEFAULT_PRESET { args.preset } else { denoiser_preset };
+
+    // Expander
+    let (expander_enabled, expander_preset) = resolve_processor_setting(
+        !args.disable_expander,
+        args.expander_preset,
+        chain_preset.as_ref().map(|c| &c.expander),
+    );
+
+    // Compressor
+    let (comp_enabled, use_fet, comp_preset) = resolve_compressor_setting(
+        !args.disable_comp,
+        args.fet,
+        args.peakcomp_preset,
+        args.fetcomp_preset,
+        chain_preset.as_ref().map(|c| &c.compressor),
+    );
+
+    // FixEQ
+    let fixeq_enabled = if args.disable_fixeq {
+        false
+    } else {
+        chain_preset.as_ref().map(|c| c.fixeq).unwrap_or(true)
+    };
+
+    // DeEsser
+    let deesser_enabled = if args.disable_deesser {
+        false
+    } else {
+        chain_preset.as_ref().map(|c| c.deesser).unwrap_or(true)
+    };
+
+    // Saturation (Channel9)
+    let (saturation_enabled, saturation_preset) = resolve_processor_setting(
+        !args.disable_saturation,
+        args.saturation_preset,
+        chain_preset.as_ref().map(|c| &c.saturation),
+    );
+
+    // ButterComp
+    let (buttercomp_enabled, buttercomp_preset) = resolve_processor_setting(
+        !args.disable_buttercomp,
+        args.buttercomp_preset,
+        chain_preset.as_ref().map(|c| &c.buttercomp),
+    );
+
+    // EnhanceEQ
+    let (enhanceeq_enabled, eq_preset) = resolve_processor_setting(
+        !args.disable_enhanceeq,
+        args.eq_preset,
+        chain_preset.as_ref().map(|c| &c.enhanceeq),
+    );
+
+    // TapeGlue
+    let (tape_enabled, tape_preset) = resolve_processor_setting(
+        !args.disable_tape,
+        args.saturation_preset, // TapeGlue uses saturation preset
+        chain_preset.as_ref().map(|c| &c.tape),
+    );
+
+    // Output (LUFS + limiter paired)
+    let (output_enabled, lufs_target) = resolve_output_setting(
+        !args.disable_limiter,
+        chain_preset.as_ref().map(|c| &c.output),
+    );
+
+    // =========================================================================
     // LOAD
     // =========================================================================
-    println!("Loading: {}", args.input.display());
-    let (mut samples, sample_rate) = load_audio(&args.input)?;
+    println!("Loading: {}", input.display());
+    let (mut samples, sample_rate) = load_audio(&input)?;
     let is_stereo = samples.len() >= 2;
 
     println!("Sample rate: {} Hz", sample_rate);
@@ -293,7 +430,7 @@ fn main() -> Result<()> {
     // DENOISE
     // =========================================================================
     println!("\n[Denoise]");
-    let preset: usize = args.preset.into();
+    let preset: usize = denoiser_preset.into();
 
     // Analyze noise floor (on filtered + gain-normalized audio)
     let result = analyze_audio(&samples[0], sample_rate);
@@ -410,13 +547,13 @@ fn main() -> Result<()> {
     println!("\n[Processing]");
 
     // Expander (first - reduces noise in quiet passages)
-    if !args.disable_expander {
-        let mut expander = StereoExpander::new_with_preset(sample_rate as f32, args.expander_preset)
+    if expander_enabled {
+        let mut expander = StereoExpander::new_with_preset(sample_rate as f32, expander_preset)
             .expect("Invalid expander preset");
         println!(
             "  Expander: preset {} ({})",
-            args.expander_preset,
-            get_expander_preset_name(args.expander_preset)
+            expander_preset,
+            get_expander_preset_name(expander_preset)
         );
         if is_stereo {
             let (left, right) = samples.split_at_mut(1);
@@ -428,15 +565,15 @@ fn main() -> Result<()> {
     }
 
     // Compressor (FET or Peak)
-    if !args.disable_comp {
-        if args.fet {
+    if comp_enabled {
+        if use_fet {
             let mut fetcomp =
-                StereoFetCompressor::new_with_preset(sample_rate as f32, args.fetcomp_preset)
+                StereoFetCompressor::new_with_preset(sample_rate as f32, comp_preset)
                     .expect("Invalid fetcomp preset");
             println!(
                 "  FetComp: preset {} ({})",
-                args.fetcomp_preset,
-                get_fetcomp_preset_name(args.fetcomp_preset)
+                comp_preset,
+                get_fetcomp_preset_name(comp_preset)
             );
             if is_stereo {
                 let (left, right) = samples.split_at_mut(1);
@@ -448,14 +585,14 @@ fn main() -> Result<()> {
         } else {
             // Peak compressor with preset
             let mut peakcomp =
-                StereoVcaPeakComp::new_with_preset(sample_rate as f32, args.peakcomp_preset)
+                StereoVcaPeakComp::new_with_preset(sample_rate as f32, comp_preset)
                     .expect("Invalid peakcomp preset");
             // Still run analysis to set auto threshold if needed
             let profile = peakcomp.configure(&samples).clone();
             println!(
                 "  PeakComp: preset {} ({}), threshold {:.1}dB",
-                args.peakcomp_preset,
-                get_peakcomp_preset_name(args.peakcomp_preset),
+                comp_preset,
+                get_peakcomp_preset_name(comp_preset),
                 profile.histogram_threshold_db
             );
             if is_stereo {
@@ -476,7 +613,7 @@ fn main() -> Result<()> {
     let spectrum = analysis::SpectralAnalysis::new(&mono, sample_rate);
 
     // FixEq
-    if !args.disable_fixeq {
+    if fixeq_enabled {
         let mut fixeq = FixEq::new(sample_rate as f32);
         fixeq.configure_from_spectrum(&spectrum, preset, is_stereo);
         println!(
@@ -494,7 +631,7 @@ fn main() -> Result<()> {
     }
 
     // De-esser
-    if !args.disable_deesser {
+    if deesser_enabled {
         let mut deesser = StereoDeEsser::new(sample_rate as f32);
         let sibilance = deesser.configure(&samples).clone();
         println!(
@@ -520,15 +657,15 @@ fn main() -> Result<()> {
     }
 
     // Saturation (Channel9)
-    if !args.disable_saturation {
+    if saturation_enabled {
         let sat_preset =
-            get_saturation_preset(args.saturation_preset).expect("Invalid saturation preset");
+            get_saturation_preset(saturation_preset).expect("Invalid saturation preset");
         let mut channel9: Stereo<Channel9> = Stereo::new(sample_rate as f32);
         channel9.set_both(|c| c.set_drive(sat_preset.channel9_drive));
         println!(
             "  Channel9: preset {} ({}), drive {:.0}%",
-            args.saturation_preset,
-            get_saturation_preset_name(args.saturation_preset),
+            saturation_preset,
+            get_saturation_preset_name(saturation_preset),
             sat_preset.channel9_drive * 100.0
         );
         if is_stereo {
@@ -540,15 +677,15 @@ fn main() -> Result<()> {
     }
 
     // ButterComp
-    if !args.disable_buttercomp {
+    if buttercomp_enabled {
         let buttercomp_amount =
-            get_buttercomp_preset(args.buttercomp_preset).expect("Invalid buttercomp preset");
+            get_buttercomp_preset(buttercomp_preset).expect("Invalid buttercomp preset");
         let mut compressor: Stereo<ButterComp2> = Stereo::new(sample_rate as f32);
         compressor.set_both(|c| c.set_compress(buttercomp_amount));
         println!(
             "  ButterComp: preset {} ({}), {:.0}%",
-            args.buttercomp_preset,
-            get_buttercomp_preset_name(args.buttercomp_preset),
+            buttercomp_preset,
+            get_buttercomp_preset_name(buttercomp_preset),
             buttercomp_amount * 100.0
         );
         if is_stereo {
@@ -567,43 +704,43 @@ fn main() -> Result<()> {
     };
 
     // EnhanceEQ (or RadioVoice)
-    if !args.radio && !args.disable_enhanceeq {
-        let eq_preset = get_eq_preset(args.eq_preset).expect("Invalid EQ preset");
+    if !args.radio && enhanceeq_enabled {
+        let eq_preset_data = get_eq_preset(eq_preset).expect("Invalid EQ preset");
         let enhance_spectrum = analysis::SpectralAnalysis::new(&mono_for_enhance, sample_rate);
-        let mut enhanceeq = StereoEnhanceEq::new(sample_rate as f32);
-        enhanceeq.configure_from_spectrum(&enhance_spectrum);
+        let mut enhanceeq_proc = StereoEnhanceEq::new(sample_rate as f32);
+        enhanceeq_proc.configure_from_spectrum(&enhance_spectrum);
 
         // Scale gains by preset
-        let base_lowmid = enhanceeq.get_lowmid_gain();
-        let base_presence = enhanceeq.get_presence_gain();
-        let base_air = enhanceeq.get_shelf_gain();
+        let base_lowmid = enhanceeq_proc.get_lowmid_gain();
+        let base_presence = enhanceeq_proc.get_presence_gain();
+        let base_air = enhanceeq_proc.get_shelf_gain();
 
         // Apply preset scaling (preset 3 = 1.0x, others scale proportionally)
-        let scale = eq_preset.lowmid_cut_db / -3.0; // Normalize to preset 3
-        enhanceeq.set_lowmid_gain(base_lowmid * scale);
-        enhanceeq.set_presence_gain(base_presence * scale);
-        enhanceeq.set_shelf_gain(base_air * scale);
+        let scale = eq_preset_data.lowmid_cut_db / -3.0; // Normalize to preset 3
+        enhanceeq_proc.set_lowmid_gain(base_lowmid * scale);
+        enhanceeq_proc.set_presence_gain(base_presence * scale);
+        enhanceeq_proc.set_shelf_gain(base_air * scale);
 
         println!(
             "  EnhanceEQ: preset {} ({}), low-mid: {:+.1}dB, presence {:+.1}dB, air {:+.1}dB",
-            args.eq_preset,
-            get_eq_preset_name(args.eq_preset),
-            enhanceeq.get_lowmid_gain(),
-            enhanceeq.get_presence_gain(),
-            enhanceeq.get_shelf_gain()
+            eq_preset,
+            get_eq_preset_name(eq_preset),
+            enhanceeq_proc.get_lowmid_gain(),
+            enhanceeq_proc.get_presence_gain(),
+            enhanceeq_proc.get_shelf_gain()
         );
         if is_stereo {
             let (left, right) = samples.split_at_mut(1);
-            enhanceeq.process_stereo(&mut left[0], &mut right[0]);
+            enhanceeq_proc.process_stereo(&mut left[0], &mut right[0]);
         } else {
-            enhanceeq.process_mono(&mut samples[0]);
+            enhanceeq_proc.process_mono(&mut samples[0]);
         }
     }
 
     // TapeGlue
-    if !args.disable_tape {
+    if tape_enabled {
         let sat_preset =
-            get_saturation_preset(args.saturation_preset).expect("Invalid saturation preset");
+            get_saturation_preset(tape_preset).expect("Invalid saturation preset");
         let mut tape_left = TapeGlue::new(sample_rate as f64);
         let mut tape_right = TapeGlue::new(sample_rate as f64);
         tape_left.set_warmth(sat_preset.tape_warmth);
@@ -690,17 +827,17 @@ fn main() -> Result<()> {
     // =========================================================================
     println!("\n[Output]");
 
-    // LUFS normalization
-    let lufs = measure_integrated_lufs(&samples, sample_rate);
-    let lufs_gain_db = DEFAULT_TARGET_LUFS - lufs;
-    println!(
-        "  LUFS: {:.1} -> target {:.1} ({:+.1}dB)",
-        lufs, DEFAULT_TARGET_LUFS, lufs_gain_db
-    );
-    apply_gain(&mut samples, lufs_gain_db);
+    // LUFS normalization + Limiter (paired together)
+    if output_enabled {
+        let lufs = measure_integrated_lufs(&samples, sample_rate);
+        let lufs_gain_db = lufs_target - lufs;
+        println!(
+            "  LUFS: {:.1} -> target {:.1} ({:+.1}dB)",
+            lufs, lufs_target, lufs_gain_db
+        );
+        apply_gain(&mut samples, lufs_gain_db);
 
-    // Limiter
-    if !args.disable_limiter {
+        // Limiter
         let mut limiter = Limiter::new(-1.0, 5.0, 100.0, sample_rate as f32);
         let stats = if is_stereo {
             let (left, right) = samples.split_at_mut(1);
@@ -710,15 +847,14 @@ fn main() -> Result<()> {
         };
         println!("  Limiter: -1dBTP, max GR {:.1}dB", stats.max_reduction_db);
     } else {
-        println!("  Limiter: DISABLED (not recommended)");
+        println!("  Output: DISABLED (no LUFS normalization or limiting)");
     }
 
     // =========================================================================
     // SAVE
     // =========================================================================
     let output_path = args.output.unwrap_or_else(|| {
-        let stem = args
-            .input
+        let stem = input
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("audio");
@@ -732,6 +868,109 @@ fn main() -> Result<()> {
     save_wav(&output_path, &samples, sample_rate)?;
     println!("Done.");
     Ok(())
+}
+
+/// Resolve processor setting from CLI args and chain preset
+/// Returns (enabled, preset)
+fn resolve_processor_setting(
+    cli_enabled: bool,
+    cli_preset: u8,
+    chain_setting: Option<&ProcessorSetting>,
+) -> (bool, u8) {
+    // CLI disable flag always wins
+    if !cli_enabled {
+        return (false, cli_preset);
+    }
+
+    // Check chain preset
+    match chain_setting {
+        Some(ProcessorSetting::Disabled) => (false, 3),
+        Some(ProcessorSetting::Preset(p)) => {
+            // CLI preset wins if explicitly set (not default)
+            if cli_preset != 3 {
+                (true, cli_preset)
+            } else {
+                (true, *p)
+            }
+        }
+        Some(ProcessorSetting::Default) | None => {
+            // Use CLI preset (or default 3)
+            (true, cli_preset)
+        }
+    }
+}
+
+/// Resolve compressor setting from CLI args and chain preset
+/// Returns (enabled, use_fet, preset)
+fn resolve_compressor_setting(
+    cli_enabled: bool,
+    cli_use_fet: bool,
+    cli_peak_preset: u8,
+    cli_fet_preset: u8,
+    chain_setting: Option<&chain::CompressorSetting>,
+) -> (bool, bool, u8) {
+    // CLI disable flag always wins
+    if !cli_enabled {
+        return (false, false, 3);
+    }
+
+    match chain_setting {
+        Some(chain::CompressorSetting { enabled: false, .. }) => (false, false, 3),
+        Some(chain::CompressorSetting {
+            comp_type,
+            preset,
+            enabled: true,
+        }) => {
+            // CLI --fet flag overrides chain type
+            let use_fet = if cli_use_fet {
+                true
+            } else {
+                *comp_type == CompressorType::Fet
+            };
+
+            // CLI preset overrides chain if explicitly set
+            let final_preset = if use_fet {
+                if cli_fet_preset != 3 {
+                    cli_fet_preset
+                } else {
+                    *preset
+                }
+            } else if cli_peak_preset != 3 {
+                cli_peak_preset
+            } else {
+                *preset
+            };
+
+            (true, use_fet, final_preset)
+        }
+        None => {
+            // No chain, use CLI settings
+            let preset = if cli_use_fet {
+                cli_fet_preset
+            } else {
+                cli_peak_preset
+            };
+            (true, cli_use_fet, preset)
+        }
+    }
+}
+
+/// Resolve output setting from CLI args and chain preset
+/// Returns (enabled, lufs_target)
+fn resolve_output_setting(
+    cli_enabled: bool,
+    chain_setting: Option<&OutputSetting>,
+) -> (bool, f32) {
+    // CLI disable flag always wins
+    if !cli_enabled {
+        return (false, -16.0);
+    }
+
+    match chain_setting {
+        Some(OutputSetting::Disabled) => (false, -16.0),
+        Some(OutputSetting::LufsTarget(t)) => (true, *t as f32),
+        Some(OutputSetting::Default) | None => (true, -16.0),
+    }
 }
 
 fn load_audio(input_path: &Path) -> Result<(Vec<Vec<f32>>, u32)> {
