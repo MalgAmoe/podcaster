@@ -25,10 +25,12 @@ defmodule PoddyclipBackendWeb.Router do
     end
   end
 
-  # Other scopes may use custom stacks.
-  # scope "/api", PoddyclipBackendWeb do
-  #   pipe_through :api
-  # end
+  # Internal API for Rust service webhooks
+  scope "/api/internal", PoddyclipBackendWeb do
+    pipe_through :api
+
+    post "/jobs/:job_id/status", WebhookController, :job_status
+  end
 
   # Enable LiveDashboard and Swoosh mailbox in development
   if Application.compile_env(:poddyclip_backend, :dev_routes) do

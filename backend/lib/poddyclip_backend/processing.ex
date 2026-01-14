@@ -1,56 +1,19 @@
 defmodule PoddyclipBackend.Processing do
   @moduledoc """
   Context for audio processing jobs.
-  Handles job submission, persistence, and status tracking via Oban.
+  Handles job submission, persistence, and status tracking via webhooks.
   """
 
-  alias PoddyclipBackend.Processing.{Job, Client, PollWorker}
+  alias PoddyclipBackend.Processing.{Job, Client}
   alias PoddyclipBackend.Repo
   import Ecto.Query
-
-  @doc """
-  Submit an audio file for processing.
-
-  Creates a job record in the database and enqueues an Oban worker
-  to poll for status updates.
-
-  ## Options
-    * `:chain` - Name of the processing chain preset to use
-    * `:output_format` - "wav" or "mp3" (default: "mp3")
-    * `:mp3_bitrate` - Bitrate for MP3 output (default: 192)
-  """
-  def submit_job(audio_binary, filename, user_id, opts \\ []) do
-    case Client.process_audio(audio_binary, filename, opts) do
-      {:ok, %{"job_id" => rust_job_id}} ->
-        job =
-          %Job{}
-          |> Job.changeset(%{
-            rust_job_id: rust_job_id,
-            filename: filename,
-            status: :processing,
-            user_id: user_id
-          })
-          |> Repo.insert!()
-
-        # Enqueue polling worker
-        %{job_id: job.id}
-        |> PollWorker.new()
-        |> Oban.insert!()
-
-        {:ok, job}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
 
   @doc """
   Submit a job for processing using an S3 input key.
 
   The audio file should already be uploaded to S3. This function:
   1. Creates a job record in the database
-  2. Notifies the Rust API to start processing
-  3. Enqueues an Oban worker to poll for status
+  2. Notifies the Rust API to start processing (includes webhook URL)
 
   ## Options
     * `:chain` - Name of the processing chain preset to use
@@ -77,11 +40,6 @@ defmodule PoddyclipBackend.Processing do
           job
           |> Job.changeset(%{rust_job_id: rust_job_id, status: :processing})
           |> Repo.update!()
-
-        # Enqueue polling worker
-        %{job_id: updated_job.id}
-        |> PollWorker.new()
-        |> Oban.insert!()
 
         {:ok, updated_job}
 
@@ -139,6 +97,43 @@ defmodule PoddyclipBackend.Processing do
   """
   def unsubscribe(job_id) do
     Phoenix.PubSub.unsubscribe(PoddyclipBackend.PubSub, "job:#{job_id}")
+  end
+
+  @doc """
+  Update job status from webhook.
+  Called by the Rust API when job status changes.
+  """
+  def update_job_status(job_id, params) do
+    case get_job(job_id) do
+      nil ->
+        {:error, :not_found}
+
+      job ->
+        changes = %{
+          status: parse_status(params["status"]),
+          progress: params["progress"] || %{},
+          error: params["error"],
+          download_url: params["download_url"]
+        }
+
+        updated_job =
+          job
+          |> Job.changeset(changes)
+          |> Repo.update!()
+
+        broadcast_update(updated_job)
+        {:ok, updated_job}
+    end
+  end
+
+  defp parse_status("queued"), do: :queued
+  defp parse_status("processing"), do: :processing
+  defp parse_status("completed"), do: :completed
+  defp parse_status("failed"), do: :failed
+  defp parse_status(_), do: :processing
+
+  defp broadcast_update(job) do
+    Phoenix.PubSub.broadcast(PoddyclipBackend.PubSub, "job:#{job.id}", {:job_updated, job})
   end
 
   @doc """
