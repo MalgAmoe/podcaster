@@ -16,6 +16,8 @@ pub struct Job {
     pub result: Option<Arc<Vec<u8>>>,
     #[serde(skip)]
     pub result_content_type: Option<String>,
+    /// S3 object key for the result (if stored in S3)
+    pub result_s3_key: Option<String>,
     pub error: Option<String>,
     pub input_filename: String,
     pub input_size_bytes: usize,
@@ -71,6 +73,7 @@ impl Job {
             config,
             result: None,
             result_content_type: None,
+            result_s3_key: None,
             error: None,
             input_filename,
             input_size_bytes,

@@ -90,6 +90,7 @@ pub async fn process_audio_upload(
     let state_clone = state.clone();
     let chains_dir = state.config.chains_dir.clone();
     let job_timeout = state.config.job_timeout_seconds;
+    let filename_for_upload = filename.clone();
 
     task::spawn(async move {
         // Update status to processing
@@ -143,10 +144,36 @@ pub async fn process_audio_upload(
 
         match result {
             Ok(Ok(Ok((output_bytes, content_type)))) => {
+                // Upload to S3 if storage is configured
+                let s3_key = if let Some(ref storage) = state_clone.storage {
+                    let extension = if content_type == "audio/mpeg" { ".mp3" } else { ".wav" };
+                    let output_filename = format!("{}_processed{}",
+                        std::path::Path::new(&filename_for_upload).file_stem().unwrap_or_default().to_string_lossy(),
+                        extension
+                    );
+
+                    match storage.upload_result(job_id, &output_bytes, &content_type, &output_filename).await {
+                        Ok(key) => {
+                            info!("Job {} result uploaded to S3: {}", job_id, key);
+                            Some(key)
+                        }
+                        Err(e) => {
+                            error!("Job {} failed to upload to S3: {}. Keeping in memory.", job_id, e);
+                            None
+                        }
+                    }
+                } else {
+                    None
+                };
+
                 state_clone.update_job(&job_id, |j| {
                     j.status = JobStatus::Completed;
-                    j.result = Some(Arc::new(output_bytes));
+                    // Only keep in memory if S3 upload failed
+                    if s3_key.is_none() {
+                        j.result = Some(Arc::new(output_bytes));
+                    }
                     j.result_content_type = Some(content_type);
+                    j.result_s3_key = s3_key;
                     j.progress.update("completed", 17);
                     j.updated_at = now();
                 });

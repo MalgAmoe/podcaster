@@ -41,3 +41,6 @@ bytes = "1"
 
 # Configuration
 dotenvy = "0.15"
+
+# S3 Storage
+rust-s3 = { version = "0.35", default-features = false, features = ["tokio-rustls-tls"] }

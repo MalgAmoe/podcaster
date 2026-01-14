@@ -15,7 +15,8 @@ defmodule PoddyclipBackend.Processing.Job do
           created_at: DateTime.t(),
           updated_at: DateTime.t(),
           user_id: String.t() | nil,
-          result_path: String.t() | nil
+          result_path: String.t() | nil,
+          download_url: String.t() | nil
         }
 
   defstruct [
@@ -28,7 +29,8 @@ defmodule PoddyclipBackend.Processing.Job do
     :created_at,
     :updated_at,
     :user_id,
-    :result_path
+    :result_path,
+    :download_url
   ]
 
   def new(filename, opts \\ []) do
@@ -44,7 +46,8 @@ defmodule PoddyclipBackend.Processing.Job do
       created_at: now,
       updated_at: now,
       user_id: Keyword.get(opts, :user_id),
-      result_path: nil
+      result_path: nil,
+      download_url: nil
     }
   end
 
@@ -64,6 +67,7 @@ defmodule PoddyclipBackend.Processing.Job do
       status: status,
       progress: progress,
       error: rust_status["error"],
+      download_url: rust_status["download_url"],
       updated_at: DateTime.utc_now()
     }
   end

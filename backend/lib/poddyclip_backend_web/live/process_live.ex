@@ -73,23 +73,29 @@ defmodule PoddyclipBackendWeb.ProcessLive do
   def handle_event("download", _params, socket) do
     job = socket.assigns.job
 
-    if job && job.status == :completed && job.rust_job_id do
-      case Client.get_job_result(job.rust_job_id) do
-        {:ok, binary, content_type} ->
-          extension = if String.contains?(content_type, "mpeg"), do: ".mp3", else: ".wav"
-          base_name = Path.rootname(job.filename)
-          download_name = "#{base_name}_processed#{extension}"
+    if job && job.status == :completed do
+      # If we have a presigned URL from S3, redirect to it
+      if job.download_url do
+        {:noreply, redirect(socket, external: job.download_url)}
+      else
+        # Fallback: fetch from Rust API (legacy in-memory storage)
+        case Client.get_job_result(job.rust_job_id) do
+          {:ok, binary, content_type} ->
+            extension = if String.contains?(content_type, "mpeg"), do: ".mp3", else: ".wav"
+            base_name = Path.rootname(job.filename)
+            download_name = "#{base_name}_processed#{extension}"
 
-          {:noreply,
-           socket
-           |> push_event("download", %{
-             data: Base.encode64(binary),
-             filename: download_name,
-             content_type: content_type
-           })}
+            {:noreply,
+             socket
+             |> push_event("download", %{
+               data: Base.encode64(binary),
+               filename: download_name,
+               content_type: content_type
+             })}
 
-        {:error, reason} ->
-          {:noreply, assign(socket, :error, "Failed to download: #{inspect(reason)}")}
+          {:error, reason} ->
+            {:noreply, assign(socket, :error, "Failed to download: #{inspect(reason)}")}
+        end
       end
     else
       {:noreply, socket}
