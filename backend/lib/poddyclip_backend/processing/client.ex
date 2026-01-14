@@ -16,6 +16,17 @@ defmodule PoddyclipBackend.Processing.Client do
     "#{base}/api/internal/jobs"
   end
 
+  defp api_key do
+    Application.get_env(:poddyclip_backend, :api_key)
+  end
+
+  defp auth_headers do
+    case api_key() do
+      nil -> []
+      key -> [{"x-api-key", key}]
+    end
+  end
+
   @doc """
   Check if the poddyclip-api service is healthy.
   """
@@ -72,6 +83,7 @@ defmodule PoddyclipBackend.Processing.Client do
 
     case Req.post("#{base_url()}/jobs",
            json: config,
+           headers: auth_headers(),
            receive_timeout: 30_000
          ) do
       {:ok, %{status: 200, body: body}} ->
@@ -92,7 +104,7 @@ defmodule PoddyclipBackend.Processing.Client do
   Delete a job.
   """
   def delete_job(job_id) do
-    case Req.delete("#{base_url()}/jobs/#{job_id}") do
+    case Req.delete("#{base_url()}/jobs/#{job_id}", headers: auth_headers()) do
       {:ok, %{status: 200, body: body}} ->
         {:ok, body}
 

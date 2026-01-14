@@ -43,8 +43,11 @@ defmodule PoddyclipBackendWeb.WebhookController do
     cond do
       # Secret matches
       expected && provided && Plug.Crypto.secure_compare(expected, provided) -> :ok
-      # No secret configured - allow in dev
-      is_nil(expected) -> :ok
+      # No secret configured - allow (dev mode, log warning)
+      is_nil(expected) ->
+        require Logger
+        Logger.warning("Webhook secret not configured - allowing unauthenticated request")
+        :ok
       # Secret configured but not provided or doesn't match
       true -> :unauthorized
     end

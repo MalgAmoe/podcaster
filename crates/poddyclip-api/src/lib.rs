@@ -1,4 +1,5 @@
 pub mod audio;
+pub mod auth;
 pub mod error;
 pub mod handlers;
 pub mod models;
@@ -7,6 +8,7 @@ pub mod state;
 pub mod storage;
 pub mod webhook;
 
+pub use auth::require_api_key;
 pub use error::ApiError;
 pub use state::{AppConfig, AppState};
 pub use storage::{Storage, StorageConfig};

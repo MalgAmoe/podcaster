@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use axum::{
+    middleware,
     routing::{delete, get, post},
     Router,
 };
@@ -16,6 +17,7 @@ use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use poddyclip_api::handlers::{create_s3_job, delete_job, health, list_presets};
+use poddyclip_api::require_api_key;
 use poddyclip_api::state::{AppConfig, AppState};
 use poddyclip_api::storage::{Storage, StorageConfig};
 
@@ -72,18 +74,33 @@ async fn main() {
 
     let state = AppState::new(config, storage);
 
+    // Log API key status
+    if state.config.api_key.is_some() {
+        info!("  API key: configured (protected mode)");
+    } else {
+        tracing::warn!("  API key: NOT configured (dev mode - all requests allowed)");
+    }
+
     // Start cleanup task
     let cleanup_state = state.clone();
     tokio::spawn(async move {
         cleanup_task(cleanup_state).await;
     });
 
-    // Build router
-    let app = Router::new()
-        .route("/health", get(health))
-        .route("/presets", get(list_presets))
+    // Protected routes (require API key)
+    let protected_routes = Router::new()
         .route("/jobs", post(create_s3_job))
         .route("/jobs/{id}", delete(delete_job))
+        .route_layer(middleware::from_fn_with_state(state.clone(), require_api_key));
+
+    // Public routes
+    let public_routes = Router::new()
+        .route("/health", get(health))
+        .route("/presets", get(list_presets));
+
+    // Build router
+    let app = public_routes
+        .merge(protected_routes)
         .layer(RequestBodyLimitLayer::new(max_body_size))
         .layer(
             CorsLayer::new()
