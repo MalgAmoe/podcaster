@@ -95,7 +95,7 @@ defmodule PoddyclipBackendWeb.ProcessLive do
              |> assign(:error, nil)}
 
           {:error, reason} ->
-            {:noreply, assign(socket, :error, "Failed: #{inspect(reason)}")}
+            {:noreply, assign(socket, :error, friendly_error(reason))}
         end
 
       [] ->
@@ -137,20 +137,33 @@ defmodule PoddyclipBackendWeb.ProcessLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="max-w-2xl mx-auto p-6">
-      <h1 class="text-3xl font-bold mb-6">Poddyclip Audio Processor</h1>
+    <div class="min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center p-4">
+      <!-- Steps indicator -->
+      <ul class="steps steps-horizontal mb-8">
+        <li class={step_class(:upload, @job)}>Upload</li>
+        <li class={step_class(:process, @job)}>Process</li>
+        <li class={step_class(:download, @job)}>Download</li>
+      </ul>
 
-      <%= if @error do %>
-        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          <%= @error %>
+      <!-- Main card -->
+      <div class="card card-bordered bg-base-100 w-full max-w-lg shadow-lg">
+        <div class="card-body">
+          <%= if @error do %>
+            <div role="alert" class="alert alert-error mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span><%= @error %></span>
+            </div>
+          <% end %>
+
+          <%= if @job do %>
+            <.job_status job={@job} />
+          <% else %>
+            <.upload_form uploads={@uploads} presets={@presets} selected_preset={@selected_preset} />
+          <% end %>
         </div>
-      <% end %>
-
-      <%= if @job do %>
-        <.job_status job={@job} />
-      <% else %>
-        <.upload_form uploads={@uploads} presets={@presets} selected_preset={@selected_preset} />
-      <% end %>
+      </div>
     </div>
     """
   end
@@ -158,70 +171,81 @@ defmodule PoddyclipBackendWeb.ProcessLive do
   defp upload_form(assigns) do
     ~H"""
     <form phx-submit="process" phx-change="validate" class="space-y-6">
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-2">
-          Select Audio File
-        </label>
-        <div
-          class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors"
+      <!-- Hidden file input - always rendered -->
+      <.live_file_input upload={@uploads.audio} class="hidden" />
+
+      <!-- Upload zone -->
+      <%= if @uploads.audio.entries == [] do %>
+        <label
+          for={@uploads.audio.ref}
+          class="border-2 border-dashed border-base-300 rounded-2xl p-12 text-center
+                 hover:border-primary hover:bg-primary/5 transition-all duration-200
+                 cursor-pointer group block"
           phx-drop-target={@uploads.audio.ref}
         >
-          <.live_file_input upload={@uploads.audio} class="hidden" />
-          <label for={@uploads.audio.ref} class="cursor-pointer">
-            <div class="text-gray-500">
-              <svg
-                class="mx-auto h-12 w-12 text-gray-400"
-                stroke="currentColor"
-                fill="none"
-                viewBox="0 0 48 48"
-              >
-                <path
-                  d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
+          <div class="flex flex-col items-center gap-4">
+            <!-- Upload icon in circle -->
+            <div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center
+                        group-hover:bg-primary/20 transition-colors">
+              <svg class="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
-              <p class="mt-1">Click or drag to select audio file</p>
-              <p class="text-xs text-gray-400 mt-1">WAV, MP3, FLAC up to 100MB</p>
             </div>
-          </label>
-        </div>
-
-        <%= for entry <- @uploads.audio.entries do %>
-          <div class="mt-4 space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="text-sm font-medium"><%= entry.client_name %></span>
-              <button type="button" phx-click="cancel-upload" phx-value-ref={entry.ref} class="text-red-500 text-sm">
-                Cancel
-              </button>
+            <div>
+              <p class="font-medium text-base-content">Drop your audio file here</p>
+              <p class="text-sm text-base-content/60 mt-1">or click to browse</p>
             </div>
-            <div class="w-full bg-gray-200 rounded-full h-2">
-              <div
-                class="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                style={"width: #{entry.progress}%"}
-              />
-            </div>
-            <p class="text-xs text-gray-500"><%= entry.progress %>%</p>
-
-            <%= for err <- upload_errors(@uploads.audio, entry) do %>
-              <p class="text-red-500 text-sm"><%= error_to_string(err) %></p>
-            <% end %>
+            <p class="text-xs text-base-content/40">WAV, MP3, FLAC • Max 100MB</p>
           </div>
-        <% end %>
-      </div>
-
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-2">
-          Select Processing Preset
         </label>
-        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+      <% else %>
+        <!-- File selected state -->
+        <%= for entry <- @uploads.audio.entries do %>
+          <div class="flex items-center gap-4 p-4 bg-base-200 rounded-xl">
+            <div class="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+              </svg>
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="font-medium truncate"><%= entry.client_name %></p>
+              <%= if entry.done? do %>
+                <p class="text-sm text-success">Ready to process</p>
+              <% else %>
+                <div class="flex items-center gap-2 mt-1">
+                  <progress class="progress progress-primary flex-1 h-2" value={entry.progress} max="100"></progress>
+                  <span class="text-xs text-base-content/60 w-8"><%= entry.progress %>%</span>
+                </div>
+              <% end %>
+            </div>
+            <button type="button" phx-click="cancel-upload" phx-value-ref={entry.ref}
+                    class="btn btn-ghost btn-sm btn-circle">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <%= for err <- upload_errors(@uploads.audio, entry) do %>
+            <p class="text-error text-sm"><%= error_to_string(err) %></p>
+          <% end %>
+        <% end %>
+      <% end %>
+
+      <!-- Preset selection -->
+      <div class="form-control">
+        <label class="label">
+          <span class="label-text font-medium">Processing Style</span>
+        </label>
+        <div class="flex flex-wrap gap-2">
           <%= for preset <- @presets do %>
             <button
               type="button"
               phx-click="select_preset"
               phx-value-preset={preset}
-              class={preset_button_class(preset, @selected_preset)}
+              class={"btn btn-sm " <> if preset == @selected_preset, do: "btn-primary", else: "btn-outline"}
             >
               <%= String.capitalize(preset) %>
             </button>
@@ -229,12 +253,14 @@ defmodule PoddyclipBackendWeb.ProcessLive do
         </div>
       </div>
 
+      <!-- Submit button -->
       <button
         type="submit"
         disabled={@uploads.audio.entries == [] or not Enum.all?(@uploads.audio.entries, & &1.done?)}
-        class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+        class="btn btn-primary w-full btn-lg"
       >
         <%= if Enum.any?(@uploads.audio.entries, & not &1.done?) do %>
+          <span class="loading loading-spinner loading-sm"></span>
           Uploading...
         <% else %>
           Process Audio
@@ -249,84 +275,169 @@ defmodule PoddyclipBackendWeb.ProcessLive do
   defp error_to_string(:too_many_files), do: "Too many files"
   defp error_to_string(err), do: "Error: #{inspect(err)}"
 
-  defp preset_button_class(preset, selected_preset) do
-    base = "px-4 py-2 rounded border text-sm font-medium transition-colors "
-
-    if preset == selected_preset do
-      base <> "bg-blue-600 text-white border-blue-600"
-    else
-      base <> "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-    end
-  end
-
   defp job_status(assigns) do
     ~H"""
-    <div class="space-y-6">
-      <div class="bg-gray-50 rounded-lg p-6">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg font-medium"><%= @job.filename %></h2>
-          <span class={"px-2 py-1 rounded text-sm font-medium " <> status_color(@job.status)}>
-            <%= status_text(@job.status) %>
-          </span>
-        </div>
-
-        <%= if @job.status in [:queued, :processing] do %>
-          <div class="mb-4">
-            <div class="flex justify-between text-sm text-gray-600 mb-1">
-              <span><%= @job.progress["stage"] || "Waiting..." %></span>
-              <span><%= @job.progress["percent_complete"] || 0 %>%</span>
-            </div>
-            <div class="w-full bg-gray-200 rounded-full h-2">
-              <div
-                class="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                style={"width: #{@job.progress["percent_complete"] || 0}%"}
-              />
-            </div>
+    <%= cond do %>
+      <% @job.status in [:queued, :processing] -> %>
+        <!-- Processing state with radial progress -->
+        <div class="flex flex-col items-center py-8">
+          <div class="radial-progress text-primary text-2xl font-bold"
+               style={"--value:#{@job.progress["percent_complete"] || 0}; --size: 10rem; --thickness: 0.5rem;"}
+               role="progressbar">
+            <%= @job.progress["percent_complete"] || 0 %>%
           </div>
-        <% end %>
 
-        <%= if @job.status == :failed && @job.error do %>
-          <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-            <%= @job.error %>
-          </div>
-        <% end %>
+          <p class="mt-6 text-lg font-medium"><%= @job.progress["stage"] || "Starting..." %></p>
+          <p class="text-base-content/60 text-sm mt-1 truncate max-w-full"><%= @job.filename %></p>
 
-        <div class="flex gap-3 mt-4">
-          <%= if @job.status == :completed do %>
-            <button
-              phx-click="download"
-              class="flex-1 bg-green-600 text-white py-2 px-4 rounded font-medium hover:bg-green-700 transition-colors"
-            >
-              Download Result
-            </button>
-          <% end %>
-
-          <button
-            phx-click="reset"
-            class={"py-2 px-4 rounded font-medium transition-colors " <>
-              if @job.status == :completed do
-                "flex-1 bg-gray-200 text-gray-700 hover:bg-gray-300"
-              else
-                "flex-1 bg-red-100 text-red-700 hover:bg-red-200"
-              end}
-          >
-            <%= if @job.status == :completed, do: "Process Another", else: "Cancel" %>
+          <button phx-click="reset" class="btn btn-ghost btn-sm mt-6 text-error">
+            Cancel
           </button>
         </div>
-      </div>
-    </div>
+
+      <% @job.status == :completed -> %>
+        <!-- Completed state -->
+        <div class="flex flex-col items-center py-8">
+          <div class="w-20 h-20 rounded-full bg-success/10 flex items-center justify-center mb-6">
+            <svg class="w-10 h-10 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+
+          <h3 class="text-xl font-bold">Processing Complete!</h3>
+          <p class="text-base-content/60 mt-2 truncate max-w-full"><%= @job.filename %></p>
+
+          <div class="flex gap-3 mt-8">
+            <button phx-click="download" class="btn btn-success btn-lg gap-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Download
+            </button>
+            <button phx-click="reset" class="btn btn-ghost">
+              Process Another
+            </button>
+          </div>
+        </div>
+
+      <% @job.status == :failed -> %>
+        <!-- Failed state -->
+        <div class="flex flex-col items-center py-8">
+          <div class="w-20 h-20 rounded-full bg-error/10 flex items-center justify-center mb-6">
+            <svg class="w-10 h-10 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </div>
+
+          <h3 class="text-xl font-bold text-error">Processing Failed</h3>
+          <p class="text-base-content/60 mt-2 text-center px-4"><%= friendly_job_error(@job.error) %></p>
+
+          <button phx-click="reset" class="btn btn-primary mt-8">
+            Try Again
+          </button>
+        </div>
+
+      <% true -> %>
+        <!-- Unknown state -->
+        <div class="text-center py-8">
+          <p>Unknown status</p>
+          <button phx-click="reset" class="btn btn-ghost mt-4">Reset</button>
+        </div>
+    <% end %>
     """
   end
 
-  defp status_color(:queued), do: "bg-yellow-100 text-yellow-800"
-  defp status_color(:processing), do: "bg-blue-100 text-blue-800"
-  defp status_color(:completed), do: "bg-green-100 text-green-800"
-  defp status_color(:failed), do: "bg-red-100 text-red-800"
-  defp status_color(_), do: "bg-gray-100 text-gray-800"
+  # Step indicator helpers
+  defp step_class(step, job) do
+    current = current_step(job)
+    cond do
+      step_order(step) < step_order(current) -> "step step-primary"
+      step_order(step) == step_order(current) -> "step step-primary"
+      true -> "step"
+    end
+  end
 
-  defp status_text(:queued), do: "Queued"
-  defp status_text(:processing), do: "Processing"
-  defp status_text(:completed), do: "Completed"
-  defp status_text(:failed), do: "Failed"
-  defp status_text(_), do: "Unknown"
+  defp current_step(nil), do: :upload
+  defp current_step(%{status: :completed}), do: :download
+  defp current_step(%{status: :failed}), do: :process
+  defp current_step(_job), do: :process
+
+  defp step_order(:upload), do: 1
+  defp step_order(:process), do: 2
+  defp step_order(:download), do: 3
+
+  # User-friendly error messages
+  defp friendly_error({:http_error, _status, %{"error" => %{"type" => type, "message" => message}}}) do
+    case type do
+      "file_too_large" -> "File is too large. #{message}"
+      "unsupported_format" -> "This audio format isn't supported. Try WAV or MP3."
+      "server_busy" -> "Server is busy. Please try again in a moment."
+      "chain_not_found" -> "Selected preset is not available."
+      "processing_error" -> "Failed to process audio. #{simplify_processing_error(message)}"
+      "internal_error" -> "Something went wrong. Please try again."
+      _ -> message
+    end
+  end
+
+  defp friendly_error({:http_error, status, _body}) when status >= 500 do
+    "Server error. Please try again later."
+  end
+
+  defp friendly_error({:http_error, _status, _body}) do
+    "Request failed. Please try again."
+  end
+
+  defp friendly_error(:timeout) do
+    "Request timed out. Please try again."
+  end
+
+  defp friendly_error(:econnrefused) do
+    "Cannot connect to processing server. Is it running?"
+  end
+
+  defp friendly_error(reason) when is_binary(reason) do
+    reason
+  end
+
+  defp friendly_error(_reason) do
+    "An unexpected error occurred. Please try again."
+  end
+
+  # Simplify technical processing errors
+  defp simplify_processing_error(message) do
+    cond do
+      String.contains?(message, "probe") or String.contains?(message, "codec") ->
+        "The audio format could not be read."
+      String.contains?(message, "decode") ->
+        "Failed to decode the audio file."
+      String.contains?(message, "timeout") ->
+        "Processing took too long."
+      String.contains?(message, "S3") or String.contains?(message, "storage") ->
+        "Storage error occurred."
+      true ->
+        "Please try a different file."
+    end
+  end
+
+  # Simplify job error messages from Rust
+  defp friendly_job_error(nil), do: "Unknown error"
+  defp friendly_job_error(error) when is_binary(error) do
+    cond do
+      String.contains?(error, "probe") or String.contains?(error, "Unsupported") ->
+        "Audio format not supported. Try converting to WAV or MP3."
+      String.contains?(error, "No audio track") ->
+        "No audio found in file."
+      String.contains?(error, "decode") or String.contains?(error, "Decoding") ->
+        "Could not read the audio file. It may be corrupted."
+      String.contains?(error, "timeout") or String.contains?(error, "timed out") ->
+        "Processing took too long. Try a shorter file."
+      String.contains?(error, "S3") or String.contains?(error, "download") ->
+        "Could not access the file. Please re-upload."
+      String.contains?(error, "encode") or String.contains?(error, "MP3") ->
+        "Failed to create output file."
+      true ->
+        error
+    end
+  end
 end
