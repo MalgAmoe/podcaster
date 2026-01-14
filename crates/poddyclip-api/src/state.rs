@@ -4,11 +4,13 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::models::{Job, JobStatus};
+use crate::storage::Storage;
 
 #[derive(Clone)]
 pub struct AppState {
     pub jobs: Arc<DashMap<Uuid, Job>>,
     pub config: Arc<AppConfig>,
+    pub storage: Option<Arc<Storage>>,
 }
 
 pub struct AppConfig {
@@ -64,10 +66,11 @@ impl AppConfig {
 }
 
 impl AppState {
-    pub fn new(config: AppConfig) -> Self {
+    pub fn new(config: AppConfig, storage: Option<Storage>) -> Self {
         Self {
             jobs: Arc::new(DashMap::new()),
             config: Arc::new(config),
+            storage: storage.map(Arc::new),
         }
     }
 

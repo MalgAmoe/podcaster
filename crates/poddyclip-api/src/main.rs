@@ -17,6 +17,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use poddyclip_api::handlers::{delete_job, get_job_result, get_job_status, health, list_presets, process_audio_upload};
 use poddyclip_api::state::{AppConfig, AppState};
+use poddyclip_api::storage::{Storage, StorageConfig};
 
 #[tokio::main]
 async fn main() {
@@ -46,7 +47,30 @@ async fn main() {
     info!("  Result retention: {}s", config.result_retention_seconds);
     info!("  Chains directory: {}", config.chains_dir.display());
 
-    let state = AppState::new(config);
+    // Initialize S3 storage if configured
+    let storage = match StorageConfig::from_env() {
+        Some(storage_config) => {
+            info!("S3 storage configured:");
+            info!("  Endpoint: {}", storage_config.endpoint);
+            info!("  Bucket: {}", storage_config.bucket_name);
+            match Storage::new(storage_config) {
+                Ok(s) => {
+                    info!("  Status: connected");
+                    Some(s)
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to initialize S3 storage: {}. Falling back to in-memory.", e);
+                    None
+                }
+            }
+        }
+        None => {
+            info!("S3 storage not configured, using in-memory storage");
+            None
+        }
+    };
+
+    let state = AppState::new(config, storage);
 
     // Start cleanup task
     let cleanup_state = state.clone();
@@ -130,11 +154,18 @@ async fn cleanup_task(state: AppState) {
             );
 
             if is_terminal && (now - job.updated_at) > retention_seconds {
-                to_remove.push(*entry.key());
+                to_remove.push((*entry.key(), job.result_s3_key.clone()));
             }
         }
 
-        for id in to_remove {
+        for (id, s3_key) in to_remove {
+            // Delete from S3 if present
+            if let (Some(key), Some(ref storage)) = (s3_key, &state.storage) {
+                if let Err(e) = storage.delete(&key).await {
+                    tracing::warn!("Failed to delete S3 object {} during cleanup: {}", key, e);
+                }
+            }
+
             state.jobs.remove(&id);
             info!("Cleaned up expired job {}", id);
         }

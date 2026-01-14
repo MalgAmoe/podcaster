@@ -26,6 +26,21 @@ pub async fn get_job_status(
 ) -> Result<Json<JobStatusResponse>, ApiError> {
     let job = state.get_job(&job_id).ok_or(ApiError::JobNotFound(job_id))?;
 
+    // Generate presigned URL if result is in S3
+    let download_url = if let (Some(ref s3_key), Some(ref storage)) = (&job.result_s3_key, &state.storage) {
+        match storage.presign_get(s3_key).await {
+            Ok(url) => Some(url),
+            Err(e) => {
+                tracing::warn!("Failed to generate presigned URL: {}", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    let result_ready = job.result.is_some() || job.result_s3_key.is_some();
+
     Ok(Json(JobStatusResponse {
         id: job.id,
         status: format!("{:?}", job.status).to_lowercase(),
@@ -35,11 +50,12 @@ pub async fn get_job_status(
         error: job.error,
         input_filename: job.input_filename,
         input_size_bytes: job.input_size_bytes,
-        result_ready: job.result.is_some(),
+        result_ready,
+        download_url,
     }))
 }
 
-/// GET /jobs/{id}/result - Stream processed audio result
+/// GET /jobs/{id}/result - Get processed audio result (redirect to S3 or stream)
 pub async fn get_job_result(
     State(state): State<AppState>,
     Path(job_id): Path<Uuid>,
@@ -48,6 +64,20 @@ pub async fn get_job_result(
 
     match job.status {
         JobStatus::Completed => {
+            // If result is in S3, redirect to presigned URL
+            if let (Some(ref s3_key), Some(ref storage)) = (&job.result_s3_key, &state.storage) {
+                let presigned_url = storage.presign_get(s3_key).await
+                    .map_err(|e| ApiError::Internal(format!("Failed to generate download URL: {}", e)))?;
+
+                return Ok(Response::builder()
+                    .status(StatusCode::TEMPORARY_REDIRECT)
+                    .header(header::LOCATION, presigned_url)
+                    .body(Body::empty())
+                    .unwrap()
+                    .into_response());
+            }
+
+            // Fallback: serve from memory
             let result = job.result.ok_or(ApiError::Internal("Result missing".to_string()))?;
             let content_type = job
                 .result_content_type
@@ -95,6 +125,13 @@ pub async fn delete_job(
 ) -> Result<Json<DeleteResponse>, ApiError> {
     // Check if job exists
     let job = state.get_job(&job_id).ok_or(ApiError::JobNotFound(job_id))?;
+
+    // Delete from S3 if present
+    if let (Some(ref s3_key), Some(ref storage)) = (&job.result_s3_key, &state.storage) {
+        if let Err(e) = storage.delete(s3_key).await {
+            tracing::warn!("Failed to delete S3 object {}: {}", s3_key, e);
+        }
+    }
 
     // Remove job from state
     state.jobs.remove(&job_id);

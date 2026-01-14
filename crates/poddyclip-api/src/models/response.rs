@@ -21,6 +21,9 @@ pub struct JobStatusResponse {
     pub input_filename: String,
     pub input_size_bytes: usize,
     pub result_ready: bool,
+    /// Presigned download URL (if result is stored in S3)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub download_url: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
