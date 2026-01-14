@@ -33,8 +33,8 @@ defmodule PoddyclipBackend.Processing do
       })
       |> Repo.insert!()
 
-    # Notify Rust API to start processing
-    case Client.start_processing(job.id, input_s3_key, opts) do
+    # Notify Rust API to start processing (include filename for output naming)
+    case Client.start_processing(job.id, input_s3_key, [{:filename, filename} | opts]) do
       {:ok, %{"job_id" => rust_job_id}} ->
         updated_job =
           job

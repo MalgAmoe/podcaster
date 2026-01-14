@@ -22,13 +22,11 @@ defmodule PoddyclipBackend.Storage do
   Generate a presigned URL for uploading an input file.
 
   Returns `{:ok, %{upload_url: url, key: key}}` on success.
-  The key will be in the format: `inputs/{user_id}/{timestamp}_{filename}`
+  Uses a fixed key per user - each upload overwrites the previous.
   """
-  def presign_upload(user_id, filename) do
+  def presign_upload(user_id, _filename) do
     if enabled?() do
-      sanitized_filename = sanitize_filename(filename)
-      key = "inputs/#{user_id}/#{:erlang.unique_integer([:positive])}_#{sanitized_filename}"
-
+      key = input_key(user_id)
       config = ExAws.Config.new(:s3)
 
       case ExAws.S3.presigned_url(config, :put, bucket(), key,
@@ -61,12 +59,14 @@ defmodule PoddyclipBackend.Storage do
   @doc """
   Upload a file to S3.
 
+  Uses a fixed key per user - each upload overwrites the previous.
+  Original filename is stored in the Job record, not in S3.
+
   Returns `{:ok, key}` on success.
   """
-  def upload(user_id, filename, content) do
+  def upload(user_id, _filename, content) do
     if enabled?() do
-      sanitized_filename = sanitize_filename(filename)
-      key = "inputs/#{user_id}/#{:erlang.unique_integer([:positive])}_#{sanitized_filename}"
+      key = input_key(user_id)
 
       case ExAws.S3.put_object(bucket(), key, content)
            |> ExAws.request() do
@@ -76,6 +76,13 @@ defmodule PoddyclipBackend.Storage do
     else
       {:error, :s3_not_configured}
     end
+  end
+
+  @doc """
+  Get the fixed S3 key for a user's input file.
+  """
+  def input_key(user_id) do
+    "inputs/#{user_id}/input"
   end
 
   @doc """
@@ -104,10 +111,4 @@ defmodule PoddyclipBackend.Storage do
     end
   end
 
-  # Sanitize filename to be safe for S3 keys
-  defp sanitize_filename(filename) do
-    filename
-    |> String.replace(~r/[^\w\.\-]/, "_")
-    |> String.slice(0, 200)
-  end
 end

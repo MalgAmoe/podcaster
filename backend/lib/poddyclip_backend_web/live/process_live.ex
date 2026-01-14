@@ -23,21 +23,32 @@ defmodule PoddyclipBackendWeb.ProcessLive do
      |> assign(:selected_preset, "podcast")
      |> assign(:job, nil)
      |> assign(:error, nil)
-     |> assign(:pending_file, nil)
+     |> assign(:uploaded_file, nil)
      |> allow_upload(:audio,
        accept: ~w(audio/*),
        max_file_size: 100_000_000,
-       progress: &handle_progress/3,
+       external: &presign_upload/2,
        auto_upload: true
      )}
   end
 
-  # Track upload progress
-  defp handle_progress(:audio, entry, socket) do
-    if entry.done? do
-      {:noreply, socket}
-    else
-      {:noreply, socket}
+  # Generate presigned URL for direct S3 upload
+  defp presign_upload(entry, socket) do
+    user_id = socket.assigns.current_scope.user.id
+    key = Storage.input_key(user_id)
+
+    case Storage.presign_upload(user_id, entry.client_name) do
+      {:ok, %{upload_url: url}} ->
+        meta = %{
+          uploader: "S3",
+          key: key,
+          url: url,
+          filename: entry.client_name
+        }
+        {:ok, meta, socket}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -59,26 +70,19 @@ defmodule PoddyclipBackendWeb.ProcessLive do
     {:noreply, cancel_upload(socket, :audio, ref)}
   end
 
-  # Process - upload to S3 then start job
+  # Process - file already uploaded to S3, just start the job
   @impl true
   def handle_event("process", _params, socket) do
     user_id = socket.assigns.current_scope.user.id
 
-    # Consume uploaded file and upload to S3
-    # Note: consume_uploaded_entries requires {:ok, _} return, so we wrap errors
-    uploaded_files =
-      consume_uploaded_entries(socket, :audio, fn %{path: path}, entry ->
-        filename = entry.client_name
-        content = File.read!(path)
-
-        case Storage.upload(user_id, filename, content) do
-          {:ok, key} -> {:ok, {:ok, filename, key}}
-          {:error, reason} -> {:ok, {:error, reason}}
-        end
+    # Get the uploaded file info from completed entries
+    completed_entries =
+      consume_uploaded_entries(socket, :audio, fn meta, entry ->
+        {:ok, %{key: meta.key, filename: entry.client_name}}
       end)
 
-    case uploaded_files do
-      [{:ok, filename, input_key}] ->
+    case completed_entries do
+      [%{key: input_key, filename: filename}] ->
         opts = [chain: socket.assigns.selected_preset]
 
         case Processing.submit_job_from_s3(input_key, filename, user_id, opts) do
@@ -93,9 +97,6 @@ defmodule PoddyclipBackendWeb.ProcessLive do
           {:error, reason} ->
             {:noreply, assign(socket, :error, "Failed: #{inspect(reason)}")}
         end
-
-      [{:error, reason}] ->
-        {:noreply, assign(socket, :error, "S3 upload failed: #{inspect(reason)}")}
 
       [] ->
         {:noreply, assign(socket, :error, "Please select a file first")}

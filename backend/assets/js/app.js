@@ -27,10 +27,44 @@ import topbar from "../vendor/topbar"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 
+// S3 direct upload handler for LiveView external uploads
+const Uploaders = {
+  S3(entries, onViewError) {
+    entries.forEach(entry => {
+      const { url } = entry.meta
+      const xhr = new XMLHttpRequest()
+
+      // Track upload progress
+      xhr.upload.addEventListener("progress", (event) => {
+        if (event.lengthComputable) {
+          const percent = Math.round((event.loaded / event.total) * 100)
+          entry.progress(percent)
+        }
+      })
+
+      xhr.addEventListener("load", () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          entry.progress(100)
+        } else {
+          entry.error("Upload failed")
+        }
+      })
+
+      xhr.addEventListener("error", () => {
+        entry.error("Upload failed")
+      })
+
+      xhr.open("PUT", url, true)
+      xhr.send(entry.file)
+    })
+  }
+}
+
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
   hooks: colocatedHooks,
+  uploaders: Uploaders,
 })
 
 // Show progress bar on live navigation and form submits
