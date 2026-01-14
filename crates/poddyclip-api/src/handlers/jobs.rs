@@ -58,6 +58,8 @@ pub async fn delete_job(
 pub struct CreateS3JobRequest {
     pub phoenix_job_id: Option<i64>,
     pub input_s3_key: String,
+    /// Original filename (for output naming)
+    pub filename: Option<String>,
     pub chain: Option<String>,
     #[serde(default)]
     pub output_format: Option<String>,
@@ -91,13 +93,14 @@ pub async fn create_s3_job(
         .await
         .map_err(|e| ApiError::InvalidRequest(format!("Failed to download from S3: {}", e)))?;
 
-    // Extract filename from S3 key
-    let filename = req
-        .input_s3_key
-        .split('/')
-        .last()
-        .unwrap_or("audio.wav")
-        .to_string();
+    // Use provided filename or extract from S3 key as fallback
+    let filename = req.filename.clone().unwrap_or_else(|| {
+        req.input_s3_key
+            .split('/')
+            .last()
+            .unwrap_or("audio.wav")
+            .to_string()
+    });
 
     // Check file size
     let size_mb = audio_bytes.len() / (1024 * 1024);

@@ -66,6 +66,7 @@ defmodule PoddyclipBackend.Processing.Client do
   and the Rust API will download it from there.
 
   ## Options
+    * `:filename` - Original filename (for output naming)
     * `:chain` - Name of the processing chain preset to use
     * `:output_format` - "wav" or "mp3" (default: "mp3")
     * `:mp3_bitrate` - Bitrate for MP3 output (default: 192)
@@ -74,6 +75,7 @@ defmodule PoddyclipBackend.Processing.Client do
     config = %{
       phoenix_job_id: phoenix_job_id,
       input_s3_key: input_s3_key,
+      filename: Keyword.get(opts, :filename),
       chain: Keyword.get(opts, :chain),
       output_format: Keyword.get(opts, :output_format, "mp3"),
       mp3_bitrate: Keyword.get(opts, :mp3_bitrate, 192),
