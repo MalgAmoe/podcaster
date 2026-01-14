@@ -22,6 +22,7 @@ pub struct AppConfig {
     pub result_retention_seconds: u64,
     pub chains_dir: PathBuf,
     pub port: u16,
+    pub api_key: Option<String>,
 }
 
 impl Default for AppConfig {
@@ -33,6 +34,7 @@ impl Default for AppConfig {
             result_retention_seconds: 3600,
             chains_dir: PathBuf::from("chains"),
             port: 3000,
+            api_key: None,
         }
     }
 }
@@ -63,6 +65,7 @@ impl AppConfig {
                 .ok()
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(3000),
+            api_key: std::env::var("API_KEY").ok().filter(|s| !s.is_empty()),
         }
     }
 }

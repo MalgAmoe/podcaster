@@ -230,10 +230,14 @@ defmodule PoddyclipBackendWeb.ProcessLive do
 
       <button
         type="submit"
-        disabled={@uploads.audio.entries == []}
+        disabled={@uploads.audio.entries == [] or not Enum.all?(@uploads.audio.entries, & &1.done?)}
         class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
       >
-        Process Audio
+        <%= if Enum.any?(@uploads.audio.entries, & not &1.done?) do %>
+          Uploading...
+        <% else %>
+          Process Audio
+        <% end %>
       </button>
     </form>
     """

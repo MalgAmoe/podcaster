@@ -67,6 +67,16 @@ else
   config :poddyclip_backend, :s3, enabled: false
 end
 
+# API key for authenticating with the Rust poddyclip-api service
+if api_key = System.get_env("API_KEY") do
+  config :poddyclip_backend, :api_key, api_key
+end
+
+# Webhook secret for authenticating incoming webhooks from Rust API
+if webhook_secret = System.get_env("WEBHOOK_SECRET") do
+  config :poddyclip_backend, :webhook_secret, webhook_secret
+end
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||
