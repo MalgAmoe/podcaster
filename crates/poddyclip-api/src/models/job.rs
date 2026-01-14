@@ -1,0 +1,79 @@
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use uuid::Uuid;
+
+use super::ProcessConfig;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Job {
+    pub id: Uuid,
+    pub status: JobStatus,
+    pub progress: JobProgress,
+    pub created_at: u64,
+    pub updated_at: u64,
+    pub config: ProcessConfig,
+    #[serde(skip)]
+    pub result: Option<Arc<Vec<u8>>>,
+    #[serde(skip)]
+    pub result_content_type: Option<String>,
+    pub error: Option<String>,
+    pub input_filename: String,
+    pub input_size_bytes: usize,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum JobStatus {
+    Queued,
+    Processing,
+    Completed,
+    Failed,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct JobProgress {
+    pub stage: String,
+    pub stage_index: u8,
+    pub total_stages: u8,
+    pub percent_complete: u8,
+}
+
+impl JobProgress {
+    pub fn new() -> Self {
+        Self {
+            stage: "queued".to_string(),
+            stage_index: 0,
+            total_stages: 17,
+            percent_complete: 0,
+        }
+    }
+
+    pub fn update(&mut self, stage: &str, index: u8) {
+        self.stage = stage.to_string();
+        self.stage_index = index;
+        self.percent_complete = ((index as f32 / self.total_stages as f32) * 100.0) as u8;
+    }
+}
+
+impl Job {
+    pub fn new(id: Uuid, config: ProcessConfig, input_filename: String, input_size_bytes: usize) -> Self {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        Self {
+            id,
+            status: JobStatus::Queued,
+            progress: JobProgress::new(),
+            created_at: now,
+            updated_at: now,
+            config,
+            result: None,
+            result_content_type: None,
+            error: None,
+            input_filename,
+            input_size_bytes,
+        }
+    }
+}

@@ -1,0 +1,43 @@
+[package]
+name = "poddyclip-api"
+version.workspace = true
+edition.workspace = true
+description = "HTTP API for poddyclip audio processing"
+
+[[bin]]
+name = "poddyclip-api"
+path = "src/main.rs"
+
+[dependencies]
+# Core library
+poddyclip = { path = "../poddyclip" }
+
+# Web framework
+axum = { version = "0.8", features = ["multipart", "macros"] }
+tokio = { version = "1", features = ["full"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace", "limit"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Audio I/O
+symphonia = { version = "0.5.5", features = ["mp3", "wav", "pcm", "flac", "aac"] }
+hound = "3.5"
+mp3lame-encoder = "0.2"
+
+# Job storage
+dashmap = "6"
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Utilities
+thiserror = "2"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+bytes = "1"
+
+# Configuration
+dotenvy = "0.15"

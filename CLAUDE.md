@@ -2,6 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Memory
+
+  Start sessions with `memo context`. Before answering questions about this project, try `memo similar "topic" --here`.
+
+  Save important discoveries:
+  - `memo remember learned "..."` - gotchas, patterns, how things work
+  - `memo remember preference "..."` - user choices, workflow preferences
+  - `memo remember fact "..."` - config locations, API details, decisions made
+
+  Remember to use it before compacting if you want to save important info.
+
+
 ## Build Commands
 
 ```bash

@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/poddyclip",
     "crates/poddyclip-cli",
+    "crates/poddyclip-api",
     "crates/poddyclip-plugin",
     "xtask",
 ]
