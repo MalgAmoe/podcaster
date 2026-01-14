@@ -1,7 +1,7 @@
 name = "Gentle"
 description = "Minimal processing, preserve dynamics"
 
-denoiser = 2
+denoiser = 1
 expander = 1
 compressor = { type = "peak", preset = 1 }
 fixeq = true

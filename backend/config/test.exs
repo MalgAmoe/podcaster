@@ -22,6 +22,9 @@ config :poddyclip_backend, PoddyclipBackend.Repo,
 # Oban - run jobs inline in tests
 config :poddyclip_backend, Oban, testing: :inline
 
+# Use test adapter for Mailer
+config :poddyclip_backend, PoddyclipBackend.Mailer, adapter: Swoosh.Adapters.Test
+
 # Print only warnings and errors during test
 config :logger, level: :warning
 
