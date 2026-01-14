@@ -7,7 +7,21 @@
 # General application configuration
 import Config
 
+config :poddyclip_backend, :scopes,
+  user: [
+    default: true,
+    module: PoddyclipBackend.Accounts.Scope,
+    assign_key: :current_scope,
+    access_path: [:user, :id],
+    schema_key: :user_id,
+    schema_type: :id,
+    schema_table: :users,
+    test_data_fixture: PoddyclipBackend.AccountsFixtures,
+    test_setup_helper: :register_and_log_in_user
+  ]
+
 config :poddyclip_backend,
+  ecto_repos: [PoddyclipBackend.Repo],
   generators: [timestamp_type: :utc_datetime]
 
 # Configure the endpoint
@@ -49,6 +63,14 @@ config :logger, :default_formatter,
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
+
+# Swoosh - disable API client for local adapter
+config :swoosh, :api_client, false
+
+# Oban job queue
+config :poddyclip_backend, Oban,
+  repo: PoddyclipBackend.Repo,
+  queues: [processing: 4]
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

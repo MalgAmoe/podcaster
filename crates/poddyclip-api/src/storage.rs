@@ -110,6 +110,24 @@ impl Storage {
         Ok(())
     }
 
+    /// Download an object from S3
+    pub async fn download(&self, key: &str) -> Result<Vec<u8>> {
+        let response = self
+            .bucket
+            .get_object(key)
+            .await
+            .context("Failed to download from S3")?;
+
+        tracing::info!(
+            "Downloaded {} bytes from s3://{}/{}",
+            response.bytes().len(),
+            self.bucket.name(),
+            key
+        );
+
+        Ok(response.bytes().to_vec())
+    }
+
     /// Check if storage is available
     pub async fn health_check(&self) -> Result<()> {
         // Try to list objects (empty prefix, limit 1)

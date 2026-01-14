@@ -63,6 +63,19 @@ config :poddyclip_backend, dev_routes: true
 # Poddyclip API service URL
 config :poddyclip_backend, :poddyclip_api_url, "http://localhost:3000"
 
+# Database configuration
+config :poddyclip_backend, PoddyclipBackend.Repo,
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  database: "poddyclip_backend_dev",
+  stacktrace: true,
+  show_sensitive_data_on_connection_error: true,
+  pool_size: 10
+
+# Mailer configuration - use local adapter for development
+config :poddyclip_backend, PoddyclipBackend.Mailer, adapter: Swoosh.Adapters.Local
+
 # Do not include metadata nor timestamps in development logs
 config :logger, :default_formatter, format: "[$level] $message\n"
 

@@ -1,5 +1,15 @@
 import Config
 
+# Load .env file from project root (shared with Rust API)
+env_file = Path.expand("../.env", __DIR__ |> Path.dirname() |> Path.dirname())
+env_local = Path.expand("../.env.local", __DIR__ |> Path.dirname() |> Path.dirname())
+
+cond do
+  File.exists?(env_local) -> Dotenvy.source!(env_local)
+  File.exists?(env_file) -> Dotenvy.source!(env_file)
+  true -> :ok
+end
+
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
 # system starts, so it is typically used to load production configuration
@@ -23,7 +33,46 @@ end
 config :poddyclip_backend, PoddyclipBackendWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
+# S3 Configuration (Garage or AWS S3 compatible)
+# Supports S3_ENDPOINT (full URL) or S3_HOST (just hostname)
+s3_endpoint = System.get_env("S3_ENDPOINT") || System.get_env("S3_HOST")
+
+if s3_endpoint do
+  # Parse endpoint URL to extract scheme, host, port
+  uri = URI.parse(if String.starts_with?(s3_endpoint, "http"), do: s3_endpoint, else: "http://#{s3_endpoint}")
+  s3_scheme = "#{uri.scheme}://"
+  s3_host = uri.host || s3_endpoint
+  s3_port = uri.port || (if uri.scheme == "https", do: 443, else: 80)
+
+  config :ex_aws,
+    access_key_id: System.get_env("S3_ACCESS_KEY"),
+    secret_access_key: System.get_env("S3_SECRET_KEY"),
+    region: System.get_env("S3_REGION", "garage")
+
+  config :ex_aws, :s3,
+    scheme: s3_scheme,
+    host: s3_host,
+    port: s3_port
+
+  config :poddyclip_backend, :s3,
+    bucket: System.get_env("S3_BUCKET", "poddyclip"),
+    enabled: true
+else
+  config :poddyclip_backend, :s3, enabled: false
+end
+
 if config_env() == :prod do
+  database_url =
+    System.get_env("DATABASE_URL") ||
+      raise """
+      environment variable DATABASE_URL is missing.
+      For example: ecto://USER:PASS@HOST/DATABASE
+      """
+
+  config :poddyclip_backend, PoddyclipBackend.Repo,
+    url: database_url,
+    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10")
+
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you
   # want to use a different value for prod and you most likely don't want

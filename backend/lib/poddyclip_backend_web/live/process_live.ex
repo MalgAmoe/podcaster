@@ -1,16 +1,21 @@
 defmodule PoddyclipBackendWeb.ProcessLive do
   use PoddyclipBackendWeb, :live_view
 
-  alias PoddyclipBackend.Processing.{JobTracker, Client}
+  alias PoddyclipBackend.Processing
+  alias PoddyclipBackend.Processing.Client
+  alias PoddyclipBackend.Storage
 
   @impl true
   def mount(_params, _session, socket) do
     # Fetch available presets
-    presets = case Client.list_presets() do
-      {:ok, %{"chain_presets" => presets}} ->
-        Enum.map(presets, fn %{"name" => name} -> name end)
-      _ -> ["podcast", "broadcast", "gentle"]
-    end
+    presets =
+      case Client.list_presets() do
+        {:ok, %{"chain_presets" => presets}} ->
+          Enum.map(presets, fn %{"name" => name} -> name end)
+
+        _ ->
+          ["podcast", "broadcast", "gentle"]
+      end
 
     {:ok,
      socket
@@ -18,39 +23,66 @@ defmodule PoddyclipBackendWeb.ProcessLive do
      |> assign(:selected_preset, "podcast")
      |> assign(:job, nil)
      |> assign(:error, nil)
+     |> assign(:pending_file, nil)
      |> allow_upload(:audio,
        accept: ~w(audio/*),
-       max_entries: 1,
-       max_file_size: 100_000_000
+       max_file_size: 100_000_000,
+       progress: &handle_progress/3,
+       auto_upload: true
      )}
   end
 
-  @impl true
-  def handle_event("validate", _params, socket) do
-    {:noreply, socket}
+  # Track upload progress
+  defp handle_progress(:audio, entry, socket) do
+    if entry.done? do
+      {:noreply, socket}
+    else
+      {:noreply, socket}
+    end
   end
 
+  # Preset selection
   @impl true
   def handle_event("select_preset", %{"preset" => preset}, socket) do
     {:noreply, assign(socket, :selected_preset, preset)}
   end
 
+  # Validate upload
+  @impl true
+  def handle_event("validate", _params, socket) do
+    {:noreply, socket}
+  end
+
+  # Cancel upload
+  @impl true
+  def handle_event("cancel-upload", %{"ref" => ref}, socket) do
+    {:noreply, cancel_upload(socket, :audio, ref)}
+  end
+
+  # Process - upload to S3 then start job
   @impl true
   def handle_event("process", _params, socket) do
-    case uploaded_entries(socket, :audio) do
-      {[entry], []} ->
-        # Consume the upload and get the binary
-        {binary, filename} =
-          consume_uploaded_entry(socket, entry, fn %{path: path} ->
-            {:ok, {File.read!(path), entry.client_name}}
-          end)
+    user_id = socket.assigns.current_scope.user.id
 
-        # Submit to JobTracker
+    # Consume uploaded file and upload to S3
+    uploaded_files =
+      consume_uploaded_entries(socket, :audio, fn %{path: path}, entry ->
+        filename = entry.client_name
+        content = File.read!(path)
+
+        case Storage.upload(user_id, filename, content) do
+          {:ok, key} -> {:ok, {filename, key}}
+          {:error, reason} -> {:error, reason}
+        end
+      end)
+
+    case uploaded_files do
+      [{filename, input_key}] ->
         opts = [chain: socket.assigns.selected_preset]
-        case JobTracker.submit_job(binary, filename, opts) do
+
+        case Processing.submit_job_from_s3(input_key, filename, user_id, opts) do
           {:ok, job} ->
-            # Subscribe to job updates
-            JobTracker.subscribe(job.id)
+            Processing.subscribe(job.id)
 
             {:noreply,
              socket
@@ -58,14 +90,14 @@ defmodule PoddyclipBackendWeb.ProcessLive do
              |> assign(:error, nil)}
 
           {:error, reason} ->
-            {:noreply, assign(socket, :error, "Failed to submit job: #{inspect(reason)}")}
+            {:noreply, assign(socket, :error, "Failed: #{inspect(reason)}")}
         end
 
-      {[], [_invalid]} ->
-        {:noreply, assign(socket, :error, "Invalid file type or file too large")}
+      [] ->
+        {:noreply, assign(socket, :error, "Please select a file first")}
 
-      _ ->
-        {:noreply, assign(socket, :error, "Please select an audio file")}
+      {:error, reason} ->
+        {:noreply, assign(socket, :error, "Upload failed: #{inspect(reason)}")}
     end
   end
 
@@ -102,15 +134,17 @@ defmodule PoddyclipBackendWeb.ProcessLive do
     end
   end
 
+  # Reset - allow starting over
   @impl true
   def handle_event("reset", _params, socket) do
     # Cancel job if in progress
     if socket.assigns.job do
-      JobTracker.cancel_job(socket.assigns.job.id)
+      Processing.cancel_job(socket.assigns.job.id)
     end
 
     {:noreply,
      socket
+     |> assign(:pending_file, nil)
      |> assign(:job, nil)
      |> assign(:error, nil)}
   end
@@ -143,7 +177,7 @@ defmodule PoddyclipBackendWeb.ProcessLive do
 
   defp upload_form(assigns) do
     ~H"""
-    <form id="upload-form" phx-submit="process" phx-change="validate" class="space-y-6">
+    <form phx-submit="process" phx-change="validate" class="space-y-6">
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-2">
           Select Audio File
@@ -153,35 +187,53 @@ defmodule PoddyclipBackendWeb.ProcessLive do
           phx-drop-target={@uploads.audio.ref}
         >
           <.live_file_input upload={@uploads.audio} class="hidden" />
-
-          <%= for entry <- @uploads.audio.entries do %>
-            <div class="flex items-center justify-between bg-gray-50 rounded p-3 mb-2">
-              <span class="text-sm"><%= entry.client_name %></span>
-              <span class="text-sm text-gray-500"><%= format_bytes(entry.client_size) %></span>
+          <label for={@uploads.audio.ref} class="cursor-pointer">
+            <div class="text-gray-500">
+              <svg
+                class="mx-auto h-12 w-12 text-gray-400"
+                stroke="currentColor"
+                fill="none"
+                viewBox="0 0 48 48"
+              >
+                <path
+                  d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              <p class="mt-1">Click or drag to select audio file</p>
+              <p class="text-xs text-gray-400 mt-1">WAV, MP3, FLAC up to 100MB</p>
             </div>
+          </label>
+        </div>
+
+        <%= for entry <- @uploads.audio.entries do %>
+          <div class="mt-4 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-sm font-medium"><%= entry.client_name %></span>
+              <button type="button" phx-click="cancel-upload" phx-value-ref={entry.ref} class="text-red-500 text-sm">
+                Cancel
+              </button>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2">
+              <div
+                class="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                style={"width: #{entry.progress}%"}
+              />
+            </div>
+            <p class="text-xs text-gray-500"><%= entry.progress %>%</p>
 
             <%= for err <- upload_errors(@uploads.audio, entry) do %>
               <p class="text-red-500 text-sm"><%= error_to_string(err) %></p>
             <% end %>
-          <% end %>
-
-          <%= if @uploads.audio.entries == [] do %>
-            <label for={@uploads.audio.ref} class="cursor-pointer">
-              <div class="text-gray-500">
-                <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                  <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-                <p class="mt-1">Drop audio file here or click to browse</p>
-                <p class="text-xs text-gray-400 mt-1">WAV, MP3, FLAC up to 100MB</p>
-              </div>
-            </label>
-          <% end %>
-        </div>
+          </div>
+        <% end %>
       </div>
 
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-2">
-          Processing Preset
+          Select Processing Preset
         </label>
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
           <%= for preset <- @presets do %>
@@ -189,12 +241,7 @@ defmodule PoddyclipBackendWeb.ProcessLive do
               type="button"
               phx-click="select_preset"
               phx-value-preset={preset}
-              class={"px-4 py-2 rounded border text-sm font-medium transition-colors " <>
-                if preset == @selected_preset do
-                  "bg-blue-600 text-white border-blue-600"
-                else
-                  "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-                end}
+              class={preset_button_class(preset, @selected_preset)}
             >
               <%= String.capitalize(preset) %>
             </button>
@@ -205,12 +252,27 @@ defmodule PoddyclipBackendWeb.ProcessLive do
       <button
         type="submit"
         disabled={@uploads.audio.entries == []}
-        class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
       >
         Process Audio
       </button>
     </form>
     """
+  end
+
+  defp error_to_string(:too_large), do: "File is too large (max 100MB)"
+  defp error_to_string(:not_accepted), do: "File type not accepted"
+  defp error_to_string(:too_many_files), do: "Too many files"
+  defp error_to_string(err), do: "Error: #{inspect(err)}"
+
+  defp preset_button_class(preset, selected_preset) do
+    base = "px-4 py-2 rounded border text-sm font-medium transition-colors "
+
+    if preset == selected_preset do
+      base <> "bg-blue-600 text-white border-blue-600"
+    else
+      base <> "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+    end
   end
 
   defp job_status(assigns) do
@@ -283,13 +345,4 @@ defmodule PoddyclipBackendWeb.ProcessLive do
   defp status_text(:completed), do: "Completed"
   defp status_text(:failed), do: "Failed"
   defp status_text(_), do: "Unknown"
-
-  defp format_bytes(bytes) when bytes < 1024, do: "#{bytes} B"
-  defp format_bytes(bytes) when bytes < 1_048_576, do: "#{Float.round(bytes / 1024, 1)} KB"
-  defp format_bytes(bytes), do: "#{Float.round(bytes / 1_048_576, 1)} MB"
-
-  defp error_to_string(:too_large), do: "File is too large (max 100MB)"
-  defp error_to_string(:not_accepted), do: "Invalid file type"
-  defp error_to_string(:too_many_files), do: "Only one file at a time"
-  defp error_to_string(err), do: inspect(err)
 end

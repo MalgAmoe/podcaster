@@ -1,0 +1,165 @@
+defmodule PoddyclipBackend.Processing do
+  @moduledoc """
+  Context for audio processing jobs.
+  Handles job submission, persistence, and status tracking via Oban.
+  """
+
+  alias PoddyclipBackend.Processing.{Job, Client, PollWorker}
+  alias PoddyclipBackend.Repo
+  import Ecto.Query
+
+  @doc """
+  Submit an audio file for processing.
+
+  Creates a job record in the database and enqueues an Oban worker
+  to poll for status updates.
+
+  ## Options
+    * `:chain` - Name of the processing chain preset to use
+    * `:output_format` - "wav" or "mp3" (default: "mp3")
+    * `:mp3_bitrate` - Bitrate for MP3 output (default: 192)
+  """
+  def submit_job(audio_binary, filename, user_id, opts \\ []) do
+    case Client.process_audio(audio_binary, filename, opts) do
+      {:ok, %{"job_id" => rust_job_id}} ->
+        job =
+          %Job{}
+          |> Job.changeset(%{
+            rust_job_id: rust_job_id,
+            filename: filename,
+            status: :processing,
+            user_id: user_id
+          })
+          |> Repo.insert!()
+
+        # Enqueue polling worker
+        %{job_id: job.id}
+        |> PollWorker.new()
+        |> Oban.insert!()
+
+        {:ok, job}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Submit a job for processing using an S3 input key.
+
+  The audio file should already be uploaded to S3. This function:
+  1. Creates a job record in the database
+  2. Notifies the Rust API to start processing
+  3. Enqueues an Oban worker to poll for status
+
+  ## Options
+    * `:chain` - Name of the processing chain preset to use
+    * `:output_format` - "wav" or "mp3" (default: "mp3")
+    * `:mp3_bitrate` - Bitrate for MP3 output (default: 192)
+  """
+  def submit_job_from_s3(input_s3_key, filename, user_id, opts \\ []) do
+    # Create job record first
+    job =
+      %Job{}
+      |> Job.changeset(%{
+        filename: filename,
+        status: :queued,
+        input_s3_key: input_s3_key,
+        chain: opts[:chain],
+        user_id: user_id
+      })
+      |> Repo.insert!()
+
+    # Notify Rust API to start processing
+    case Client.start_processing(job.id, input_s3_key, opts) do
+      {:ok, %{"job_id" => rust_job_id}} ->
+        updated_job =
+          job
+          |> Job.changeset(%{rust_job_id: rust_job_id, status: :processing})
+          |> Repo.update!()
+
+        # Enqueue polling worker
+        %{job_id: updated_job.id}
+        |> PollWorker.new()
+        |> Oban.insert!()
+
+        {:ok, updated_job}
+
+      {:error, reason} ->
+        # Job stays queued, can be retried later
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Get a job by ID.
+  """
+  def get_job(job_id) do
+    Repo.get(Job, job_id)
+  end
+
+  @doc """
+  Get a job by ID, raises if not found.
+  """
+  def get_job!(job_id) do
+    Repo.get!(Job, job_id)
+  end
+
+  @doc """
+  List all jobs for a user, ordered by most recent first.
+  """
+  def list_jobs_for_user(user_id) do
+    Job
+    |> where([j], j.user_id == ^user_id)
+    |> order_by([j], desc: j.inserted_at)
+    |> Repo.all()
+  end
+
+  @doc """
+  List active (non-completed, non-failed) jobs for a user.
+  """
+  def list_active_jobs_for_user(user_id) do
+    Job
+    |> where([j], j.user_id == ^user_id)
+    |> where([j], j.status in [:queued, :processing])
+    |> order_by([j], desc: j.inserted_at)
+    |> Repo.all()
+  end
+
+  @doc """
+  Subscribe to updates for a job.
+  Updates are broadcast as {:job_updated, job} messages.
+  """
+  def subscribe(job_id) do
+    Phoenix.PubSub.subscribe(PoddyclipBackend.PubSub, "job:#{job_id}")
+  end
+
+  @doc """
+  Unsubscribe from job updates.
+  """
+  def unsubscribe(job_id) do
+    Phoenix.PubSub.unsubscribe(PoddyclipBackend.PubSub, "job:#{job_id}")
+  end
+
+  @doc """
+  Cancel a job if possible.
+  Marks the job as failed and attempts to delete from Rust API.
+  """
+  def cancel_job(job_id) do
+    case get_job(job_id) do
+      nil ->
+        {:error, :not_found}
+
+      job ->
+        # Try to delete from Rust API (best effort)
+        if job.rust_job_id do
+          Client.delete_job(job.rust_job_id)
+        end
+
+        # Mark as failed
+        job
+        |> Job.changeset(%{status: :failed, error: "Cancelled by user"})
+        |> Repo.update()
+    end
+  end
+end
