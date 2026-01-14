@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use axum::{
-    routing::{get, post},
+    routing::{delete, get, post},
     Router,
 };
 use tokio::net::TcpListener;
@@ -15,7 +15,7 @@ use tower_http::{
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use poddyclip_api::handlers::{create_s3_job, delete_job, get_job_result, get_job_status, health, list_presets, process_audio_upload};
+use poddyclip_api::handlers::{create_s3_job, delete_job, health, list_presets};
 use poddyclip_api::state::{AppConfig, AppState};
 use poddyclip_api::storage::{Storage, StorageConfig};
 
@@ -82,10 +82,8 @@ async fn main() {
     let app = Router::new()
         .route("/health", get(health))
         .route("/presets", get(list_presets))
-        .route("/process", post(process_audio_upload))
         .route("/jobs", post(create_s3_job))
-        .route("/jobs/{id}", get(get_job_status).delete(delete_job))
-        .route("/jobs/{id}/result", get(get_job_result))
+        .route("/jobs/{id}", delete(delete_job))
         .layer(RequestBodyLimitLayer::new(max_body_size))
         .layer(
             CorsLayer::new()

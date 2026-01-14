@@ -1,14 +1,20 @@
 import Config
 
 # Load .env file from project root (shared with Rust API)
-env_file = Path.expand("../.env", __DIR__ |> Path.dirname() |> Path.dirname())
-env_local = Path.expand("../.env.local", __DIR__ |> Path.dirname() |> Path.dirname())
+# __DIR__ = backend/config, so go up twice to get project root
+project_root = __DIR__ |> Path.dirname() |> Path.dirname()
+env_file = Path.join(project_root, ".env")
+env_local = Path.join(project_root, ".env.local")
 
-cond do
-  File.exists?(env_local) -> Dotenvy.source!(env_local)
-  File.exists?(env_file) -> Dotenvy.source!(env_file)
-  true -> :ok
-end
+# Dotenvy.source! returns a map but doesn't set env vars, so we do it manually
+env_vars =
+  cond do
+    File.exists?(env_local) -> Dotenvy.source!(env_local)
+    File.exists?(env_file) -> Dotenvy.source!(env_file)
+    true -> %{}
+  end
+
+Enum.each(env_vars, fn {k, v} -> System.put_env(k, v) end)
 
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
@@ -33,7 +39,7 @@ end
 config :poddyclip_backend, PoddyclipBackendWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
-# S3 Configuration (Garage or AWS S3 compatible)
+# S3 Configuration (MinIO or AWS S3 compatible)
 # Supports S3_ENDPOINT (full URL) or S3_HOST (just hostname)
 s3_endpoint = System.get_env("S3_ENDPOINT") || System.get_env("S3_HOST")
 
@@ -47,7 +53,7 @@ if s3_endpoint do
   config :ex_aws,
     access_key_id: System.get_env("S3_ACCESS_KEY"),
     secret_access_key: System.get_env("S3_SECRET_KEY"),
-    region: System.get_env("S3_REGION", "garage")
+    region: System.get_env("S3_REGION", "us-east-1")
 
   config :ex_aws, :s3,
     scheme: s3_scheme,

@@ -5,12 +5,14 @@ use uuid::Uuid;
 
 use crate::models::{Job, JobStatus};
 use crate::storage::Storage;
+use crate::webhook::WebhookClient;
 
 #[derive(Clone)]
 pub struct AppState {
     pub jobs: Arc<DashMap<Uuid, Job>>,
     pub config: Arc<AppConfig>,
     pub storage: Option<Arc<Storage>>,
+    pub webhook: WebhookClient,
 }
 
 pub struct AppConfig {
@@ -71,6 +73,7 @@ impl AppState {
             jobs: Arc::new(DashMap::new()),
             config: Arc::new(config),
             storage: storage.map(Arc::new),
+            webhook: WebhookClient::new(),
         }
     }
 

@@ -21,6 +21,15 @@ pub struct Job {
     pub error: Option<String>,
     pub input_filename: String,
     pub input_size_bytes: usize,
+    /// External job ID from Phoenix (for webhook callbacks)
+    #[serde(skip)]
+    pub phoenix_job_id: Option<i64>,
+    /// Webhook URL to notify on status changes
+    #[serde(skip)]
+    pub webhook_url: Option<String>,
+    /// Webhook secret for authentication
+    #[serde(skip)]
+    pub webhook_secret: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -77,6 +86,16 @@ impl Job {
             error: None,
             input_filename,
             input_size_bytes,
+            phoenix_job_id: None,
+            webhook_url: None,
+            webhook_secret: None,
         }
+    }
+
+    pub fn with_webhook(mut self, phoenix_job_id: Option<i64>, webhook_url: Option<String>, webhook_secret: Option<String>) -> Self {
+        self.phoenix_job_id = phoenix_job_id;
+        self.webhook_url = webhook_url;
+        self.webhook_secret = webhook_secret;
+        self
     }
 }

@@ -12,22 +12,20 @@ services:
       - postgres-data:/var/lib/postgresql/data
     restart: unless-stopped
 
-  garage:
-    image: dxflrs/garage:v1.0.1
-    container_name: poddyclip-garage
+  minio:
+    image: minio/minio:latest
+    container_name: poddyclip-minio
     ports:
-      - "3900:3900"  # S3 API
-      - "3901:3901"  # RPC
-      - "3902:3902"  # Web
-      - "3903:3903"  # Admin API
+      - "9000:9000"  # S3 API
+      - "9001:9001"  # Web Console
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
     volumes:
-      - ./garage.toml:/etc/garage.toml:ro
-      - garage-meta:/var/lib/garage/meta
-      - garage-data:/var/lib/garage/data
-    command: ["/garage", "server"]
+      - minio-data:/data
+    command: server /data --console-address ":9001"
     restart: unless-stopped
 
 volumes:
   postgres-data:
-  garage-meta:
-  garage-data:
+  minio-data:

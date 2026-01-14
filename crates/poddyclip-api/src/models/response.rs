@@ -1,29 +1,11 @@
 use serde::Serialize;
 use uuid::Uuid;
 
-use super::JobProgress;
-
 #[derive(Debug, Serialize)]
 pub struct ProcessResponse {
     pub job_id: Uuid,
     pub status: String,
     pub message: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct JobStatusResponse {
-    pub id: Uuid,
-    pub status: String,
-    pub progress: JobProgress,
-    pub created_at: u64,
-    pub updated_at: u64,
-    pub error: Option<String>,
-    pub input_filename: String,
-    pub input_size_bytes: usize,
-    pub result_ready: bool,
-    /// Presigned download URL (if result is stored in S3)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub download_url: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

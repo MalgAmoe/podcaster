@@ -65,19 +65,20 @@ defmodule PoddyclipBackendWeb.ProcessLive do
     user_id = socket.assigns.current_scope.user.id
 
     # Consume uploaded file and upload to S3
+    # Note: consume_uploaded_entries requires {:ok, _} return, so we wrap errors
     uploaded_files =
       consume_uploaded_entries(socket, :audio, fn %{path: path}, entry ->
         filename = entry.client_name
         content = File.read!(path)
 
         case Storage.upload(user_id, filename, content) do
-          {:ok, key} -> {:ok, {filename, key}}
-          {:error, reason} -> {:error, reason}
+          {:ok, key} -> {:ok, {:ok, filename, key}}
+          {:error, reason} -> {:ok, {:error, reason}}
         end
       end)
 
     case uploaded_files do
-      [{filename, input_key}] ->
+      [{:ok, filename, input_key}] ->
         opts = [chain: socket.assigns.selected_preset]
 
         case Processing.submit_job_from_s3(input_key, filename, user_id, opts) do
@@ -93,11 +94,11 @@ defmodule PoddyclipBackendWeb.ProcessLive do
             {:noreply, assign(socket, :error, "Failed: #{inspect(reason)}")}
         end
 
+      [{:error, reason}] ->
+        {:noreply, assign(socket, :error, "S3 upload failed: #{inspect(reason)}")}
+
       [] ->
         {:noreply, assign(socket, :error, "Please select a file first")}
-
-      {:error, reason} ->
-        {:noreply, assign(socket, :error, "Upload failed: #{inspect(reason)}")}
     end
   end
 
@@ -105,32 +106,10 @@ defmodule PoddyclipBackendWeb.ProcessLive do
   def handle_event("download", _params, socket) do
     job = socket.assigns.job
 
-    if job && job.status == :completed do
-      # If we have a presigned URL from S3, redirect to it
-      if job.download_url do
-        {:noreply, redirect(socket, external: job.download_url)}
-      else
-        # Fallback: fetch from Rust API (legacy in-memory storage)
-        case Client.get_job_result(job.rust_job_id) do
-          {:ok, binary, content_type} ->
-            extension = if String.contains?(content_type, "mpeg"), do: ".mp3", else: ".wav"
-            base_name = Path.rootname(job.filename)
-            download_name = "#{base_name}_processed#{extension}"
-
-            {:noreply,
-             socket
-             |> push_event("download", %{
-               data: Base.encode64(binary),
-               filename: download_name,
-               content_type: content_type
-             })}
-
-          {:error, reason} ->
-            {:noreply, assign(socket, :error, "Failed to download: #{inspect(reason)}")}
-        end
-      end
+    if job && job.status == :completed && job.download_url do
+      {:noreply, redirect(socket, external: job.download_url)}
     else
-      {:noreply, socket}
+      {:noreply, assign(socket, :error, "Download not available")}
     end
   end
 
