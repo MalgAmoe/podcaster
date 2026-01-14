@@ -9,10 +9,11 @@ defmodule PoddyclipBackend.Application do
   def start(_type, _args) do
     children = [
       PoddyclipBackendWeb.Telemetry,
+      PoddyclipBackend.Repo,
       {DNSCluster, query: Application.get_env(:poddyclip_backend, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: PoddyclipBackend.PubSub},
-      # Job tracker for poddyclip-api integration
-      PoddyclipBackend.Processing.JobTracker,
+      # Oban job queue
+      {Oban, Application.fetch_env!(:poddyclip_backend, Oban)},
       # Start to serve requests, typically the last entry
       PoddyclipBackendWeb.Endpoint
     ]

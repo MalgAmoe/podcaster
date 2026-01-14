@@ -1,78 +1,29 @@
 defmodule PoddyclipBackend.Processing.Job do
   @moduledoc """
-  Represents a processing job submitted to poddyclip-api.
+  Ecto schema for processing jobs submitted to poddyclip-api.
   """
 
-  @type status :: :queued | :processing | :completed | :failed
+  use Ecto.Schema
+  import Ecto.Changeset
 
-  @type t :: %__MODULE__{
-          id: String.t(),
-          rust_job_id: String.t() | nil,
-          filename: String.t(),
-          status: status(),
-          progress: map(),
-          error: String.t() | nil,
-          created_at: DateTime.t(),
-          updated_at: DateTime.t(),
-          user_id: String.t() | nil,
-          result_path: String.t() | nil,
-          download_url: String.t() | nil
-        }
+  schema "jobs" do
+    field :rust_job_id, :string
+    field :filename, :string
+    field :status, Ecto.Enum, values: [:queued, :processing, :completed, :failed]
+    field :progress, :map, default: %{}
+    field :error, :string
+    field :download_url, :string
+    field :input_s3_key, :string
+    field :chain, :string
 
-  defstruct [
-    :id,
-    :rust_job_id,
-    :filename,
-    :status,
-    :progress,
-    :error,
-    :created_at,
-    :updated_at,
-    :user_id,
-    :result_path,
-    :download_url
-  ]
+    belongs_to :user, PoddyclipBackend.Accounts.User
 
-  def new(filename, opts \\ []) do
-    now = DateTime.utc_now()
-
-    %__MODULE__{
-      id: generate_id(),
-      rust_job_id: nil,
-      filename: filename,
-      status: :queued,
-      progress: %{"stage" => "pending", "percent_complete" => 0},
-      error: nil,
-      created_at: now,
-      updated_at: now,
-      user_id: Keyword.get(opts, :user_id),
-      result_path: nil,
-      download_url: nil
-    }
+    timestamps(type: :utc_datetime)
   end
 
-  def update_from_rust_status(job, rust_status) do
-    status =
-      case rust_status["status"] do
-        "queued" -> :queued
-        "processing" -> :processing
-        "completed" -> :completed
-        "failed" -> :failed
-        _ -> job.status
-      end
-
-    progress = rust_status["progress"] || job.progress
-
-    %{job |
-      status: status,
-      progress: progress,
-      error: rust_status["error"],
-      download_url: rust_status["download_url"],
-      updated_at: DateTime.utc_now()
-    }
-  end
-
-  defp generate_id do
-    :crypto.strong_rand_bytes(16) |> Base.url_encode64(padding: false)
+  def changeset(job, attrs) do
+    job
+    |> cast(attrs, [:rust_job_id, :filename, :status, :progress, :error, :download_url, :user_id, :input_s3_key, :chain])
+    |> validate_required([:filename, :status, :user_id])
   end
 end

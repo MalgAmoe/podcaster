@@ -1,0 +1,5 @@
+defmodule PoddyclipBackendWeb.UserRegistrationHTML do
+  use PoddyclipBackendWeb, :html
+
+  embed_templates "user_registration_html/*"
+end

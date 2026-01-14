@@ -80,6 +80,44 @@ defmodule PoddyclipBackend.Processing.Client do
   end
 
   @doc """
+  Start processing a job using an S3 input key.
+
+  This is the preferred method - the audio file is already in S3,
+  and the Rust API will download it from there.
+
+  ## Options
+    * `:chain` - Name of the processing chain preset to use
+    * `:output_format` - "wav" or "mp3" (default: "mp3")
+    * `:mp3_bitrate` - Bitrate for MP3 output (default: 192)
+  """
+  def start_processing(phoenix_job_id, input_s3_key, opts \\ []) do
+    config = %{
+      phoenix_job_id: phoenix_job_id,
+      input_s3_key: input_s3_key,
+      chain: Keyword.get(opts, :chain),
+      output_format: Keyword.get(opts, :output_format, "mp3"),
+      mp3_bitrate: Keyword.get(opts, :mp3_bitrate, 192)
+    }
+
+    case Req.post("#{base_url()}/jobs",
+           json: config,
+           receive_timeout: 30_000
+         ) do
+      {:ok, %{status: 200, body: body}} ->
+        {:ok, body}
+
+      {:ok, %{status: 202, body: body}} ->
+        {:ok, body}
+
+      {:ok, %{status: status, body: body}} ->
+        {:error, {:http_error, status, body}}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @doc """
   Get the status of a processing job.
   """
   def get_job_status(job_id) do

@@ -40,8 +40,10 @@ defmodule PoddyclipBackend.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
+      {:bcrypt_elixir, "~> 3.0"},
       {:phoenix, "~> 1.8.3"},
       {:phoenix_html, "~> 4.1"},
+      {:phoenix_ecto, "~> 4.4"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.1.0"},
       {:lazy_html, ">= 0.1.0", only: :test},
@@ -64,7 +66,21 @@ defmodule PoddyclipBackend.MixProject do
       # HTTP client for poddyclip-api
       {:req, "~> 0.5"},
       # Multipart form encoding
-      {:multipart, "~> 0.4"}
+      {:multipart, "~> 0.4"},
+      # Database
+      {:ecto_sql, "~> 3.10"},
+      {:postgrex, ">= 0.0.0"},
+      # Email
+      {:swoosh, "~> 1.4"},
+      # Background jobs
+      {:oban, "~> 2.18"},
+      # Environment variables
+      {:dotenvy, "~> 0.8"},
+      # S3 client for direct uploads
+      {:ex_aws, "~> 2.5"},
+      {:ex_aws_s3, "~> 2.5"},
+      {:sweet_xml, "~> 0.7"},
+      {:hackney, "~> 1.20"}
     ]
   end
 
@@ -76,7 +92,9 @@ defmodule PoddyclipBackend.MixProject do
   # See the documentation for `Mix` for more info on aliases.
   defp aliases do
     [
-      setup: ["deps.get", "assets.setup", "assets.build"],
+      setup: ["deps.get", "ecto.setup", "assets.setup", "assets.build"],
+      "ecto.setup": ["ecto.create", "ecto.migrate"],
+      "ecto.reset": ["ecto.drop", "ecto.setup"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["compile", "tailwind poddyclip_backend", "esbuild poddyclip_backend"],
       "assets.deploy": [
