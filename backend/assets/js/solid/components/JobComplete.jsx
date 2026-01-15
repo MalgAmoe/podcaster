@@ -8,18 +8,22 @@ export function JobComplete() {
   const [isPlaying, setIsPlaying] = createSignal(false);
   const [currentTime, setCurrentTime] = createSignal(0);
 
-  // Create blob URL for original file
+  // Create URL for original file - prefer local blob, fall back to S3
   const originalUrl = createMemo(() => {
+    // Prefer local file if available (same session, no network)
     if (store.file) {
       return URL.createObjectURL(store.file);
     }
-    return null;
+    // Fall back to S3 URL (after reload)
+    return store.job?.original_url || null;
   });
 
-  // Cleanup blob URL on unmount
+  // Cleanup blob URL on unmount (only if it's a blob URL, not S3)
   onCleanup(() => {
     const url = originalUrl();
-    if (url) URL.revokeObjectURL(url);
+    if (url && url.startsWith("blob:")) {
+      URL.revokeObjectURL(url);
+    }
   });
 
   // Get current audio URL based on toggle

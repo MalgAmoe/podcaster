@@ -32,6 +32,10 @@ export const api = {
     return request("GET", "/api/presets");
   },
 
+  async getCurrentJob() {
+    return request("GET", "/api/jobs/current");
+  },
+
   async presignUpload(filename) {
     return request("POST", "/api/presign-upload", { filename });
   },

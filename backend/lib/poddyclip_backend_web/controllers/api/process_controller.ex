@@ -151,6 +151,47 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   end
 
   @doc """
+  GET /api/jobs/current - Get the user's current active job (for reload recovery).
+
+  Returns the most recent job that is either still processing or
+  completed/failed within the last 24 hours.
+
+  Response: {"job": {...}} or {"job": null}
+  """
+  def current_job(conn, _params) do
+    user = conn.assigns.current_user
+
+    case Processing.get_current_job(user.id) do
+      nil ->
+        json(conn, %{job: nil})
+
+      job ->
+        json(conn, %{job: job_to_json(job)})
+    end
+  end
+
+  defp job_to_json(job) do
+    %{
+      id: job.id,
+      status: Atom.to_string(job.status),
+      progress: job.progress || %{},
+      filename: job.filename,
+      download_url: job.download_url,
+      original_url: maybe_presign_input(job.input_s3_key),
+      error: job.error
+    }
+  end
+
+  defp maybe_presign_input(nil), do: nil
+
+  defp maybe_presign_input(key) do
+    case Storage.presign_download(key) do
+      {:ok, url} -> url
+      _ -> nil
+    end
+  end
+
+  @doc """
   GET /api/user - Get current user info.
 
   Response: {"email": "user@example.com", "id": 123}

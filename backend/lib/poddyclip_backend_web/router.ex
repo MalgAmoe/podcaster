@@ -51,12 +51,13 @@ defmodule PoddyclipBackendWeb.Router do
     post "/jobs/:job_id/status", WebhookController, :job_status
   end
 
-  # JSON API for React frontend (session-authenticated)
+  # JSON API for frontend (session-authenticated)
   scope "/api", PoddyclipBackendWeb.Api do
     pipe_through :api_auth
 
     get "/presets", ProcessController, :presets
     post "/presign-upload", ProcessController, :presign_upload
+    get "/jobs/current", ProcessController, :current_job
     post "/jobs", ProcessController, :create_job
     delete "/jobs/:id", ProcessController, :cancel_job
     get "/user", ProcessController, :current_user
