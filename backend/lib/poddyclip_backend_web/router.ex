@@ -2,6 +2,7 @@ defmodule PoddyclipBackendWeb.Router do
   use PoddyclipBackendWeb, :router
 
   import PoddyclipBackendWeb.UserAuth
+  import Plug.Conn
 
   pipeline :browser do
     plug :accepts, ["html"]
@@ -17,11 +18,34 @@ defmodule PoddyclipBackendWeb.Router do
     plug :accepts, ["json"]
   end
 
+  # API pipeline with session-based auth (for React frontend)
+  pipeline :api_auth do
+    plug :accepts, ["json"]
+    plug :fetch_session
+    plug :fetch_current_scope_for_user
+    plug :require_authenticated_api_user
+  end
+
+  defp require_authenticated_api_user(conn, _opts) do
+    if conn.assigns[:current_scope] && conn.assigns.current_scope.user do
+      assign(conn, :current_user, conn.assigns.current_scope.user)
+    else
+      conn
+      |> put_status(:unauthorized)
+      |> Phoenix.Controller.json(%{error: "Unauthorized"})
+      |> halt()
+    end
+  end
+
   scope "/", PoddyclipBackendWeb do
     pipe_through [:browser, :require_authenticated_user]
 
+    # React process page (default)
+    get "/", PageController, :process
+
+    # LiveView process page (legacy, for rollback)
     live_session :authenticated, on_mount: [{PoddyclipBackendWeb.UserAuthLive, :require_authenticated_user}] do
-      live "/", ProcessLive
+      live "/legacy", ProcessLive
     end
   end
 
@@ -30,6 +54,17 @@ defmodule PoddyclipBackendWeb.Router do
     pipe_through :api
 
     post "/jobs/:job_id/status", WebhookController, :job_status
+  end
+
+  # JSON API for React frontend (session-authenticated)
+  scope "/api", PoddyclipBackendWeb.Api do
+    pipe_through :api_auth
+
+    get "/presets", ProcessController, :presets
+    post "/presign-upload", ProcessController, :presign_upload
+    post "/jobs", ProcessController, :create_job
+    delete "/jobs/:id", ProcessController, :cancel_job
+    get "/user", ProcessController, :current_user
   end
 
   # Enable LiveDashboard and Swoosh mailbox in development

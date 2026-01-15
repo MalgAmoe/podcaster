@@ -88,6 +88,14 @@ window.addEventListener("phx:download", (event) => {
 // >> liveSocket.disableLatencySim()
 window.liveSocket = liveSocket
 
+// Mount React app if container exists
+const reactRoot = document.getElementById("react-process-app");
+if (reactRoot) {
+  import("./react/index.jsx").then(({ mountApp }) => {
+    mountApp(reactRoot);
+  });
+}
+
 // The lines below enable quality of life phoenix_live_reload
 // development features:
 //
