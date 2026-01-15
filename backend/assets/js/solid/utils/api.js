@@ -1,5 +1,3 @@
-// API client for React frontend
-
 const getCSRFToken = () => {
   const meta = document.querySelector("meta[name='csrf-token']");
   return meta ? meta.getAttribute("content") : "";
@@ -30,32 +28,19 @@ async function request(method, path, body = null) {
 }
 
 export const api = {
-  // GET /api/presets
   async getPresets() {
     return request("GET", "/api/presets");
   },
 
-  // POST /api/presign-upload
   async presignUpload(filename) {
     return request("POST", "/api/presign-upload", { filename });
   },
 
-  // POST /api/jobs
   async createJob(s3Key, filename, preset) {
-    return request("POST", "/api/jobs", {
-      s3_key: s3Key,
-      filename,
-      preset,
-    });
+    return request("POST", "/api/jobs", { s3_key: s3Key, filename, preset });
   },
 
-  // DELETE /api/jobs/:id
   async cancelJob(jobId) {
     return request("DELETE", `/api/jobs/${jobId}`);
-  },
-
-  // GET /api/user
-  async getCurrentUser() {
-    return request("GET", "/api/user");
   },
 };

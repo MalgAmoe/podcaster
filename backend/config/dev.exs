@@ -15,7 +15,7 @@ config :poddyclip_backend, PoddyclipBackendWeb.Endpoint,
   debug_errors: true,
   secret_key_base: "Eo4SE3ZtlFTN2xqIUg1vSUeCS/jdEjWvpkgM53FwhR4w/FcDfHilIPTfmxpp6IPZ",
   watchers: [
-    esbuild: {Esbuild, :install_and_run, [:poddyclip_backend, ~w(--sourcemap=inline --watch)]},
+    node: ["build.mjs", "--watch", cd: Path.expand("../assets", __DIR__)],
     tailwind: {Tailwind, :install_and_run, [:poddyclip_backend, ~w(--watch)]}
   ]
 
