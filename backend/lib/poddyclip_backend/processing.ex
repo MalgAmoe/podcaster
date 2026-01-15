@@ -85,6 +85,26 @@ defmodule PoddyclipBackend.Processing do
   end
 
   @doc """
+  Get the user's current active job for recovery on page reload.
+
+  Returns the most recent job that is either:
+  - Still processing (queued or processing status), OR
+  - Completed/failed within the last 24 hours
+
+  Returns nil if no such job exists.
+  """
+  def get_current_job(user_id) do
+    cutoff = DateTime.utc_now() |> DateTime.add(-24, :hour)
+
+    Job
+    |> where([j], j.user_id == ^user_id)
+    |> where([j], j.status in [:queued, :processing] or j.updated_at > ^cutoff)
+    |> order_by([j], desc: j.updated_at)
+    |> limit(1)
+    |> Repo.one()
+  end
+
+  @doc """
   Subscribe to updates for a job.
   Updates are broadcast as {:job_updated, job} messages.
   """

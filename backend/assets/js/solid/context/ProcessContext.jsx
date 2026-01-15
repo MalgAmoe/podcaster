@@ -22,13 +22,25 @@ export function ProcessProvider(props) {
   let socket = null;
   let channel = null;
 
-  // Load presets on mount
+  // Load presets and check for existing job on mount
   onMount(async () => {
     try {
+      // Load presets
       const { presets } = await api.getPresets();
       setStore("presets", presets);
+
+      // Check for existing job (reload recovery)
+      const { job } = await api.getCurrentJob();
+      if (job) {
+        console.log("Recovered job:", job.id, job.status);
+        setStore({
+          job,
+          filename: job.filename,
+          uploadState: "ready", // Show job result, not upload form
+        });
+      }
     } catch (err) {
-      console.error("Failed to load presets:", err);
+      console.error("Failed to initialize:", err);
     }
   });
 
@@ -65,7 +77,8 @@ export function ProcessProvider(props) {
         .receive("error", (e) => console.error("Join failed", e));
 
       channel.on("job_updated", (payload) => {
-        setStore("job", payload.job);
+        // Merge to preserve fields like original_url that server doesn't send
+        setStore("job", (prev) => ({ ...prev, ...payload.job }));
       });
     }
   });
