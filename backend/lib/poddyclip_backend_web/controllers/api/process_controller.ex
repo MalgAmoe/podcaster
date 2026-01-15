@@ -1,6 +1,6 @@
 defmodule PoddyclipBackendWeb.Api.ProcessController do
   @moduledoc """
-  JSON API endpoints for the React process page.
+  JSON API endpoints for the process page.
   """
   use PoddyclipBackendWeb, :controller
 
@@ -32,10 +32,17 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   POST /api/presign-upload - Generate S3 presigned PUT URL.
 
   Request: {"filename": "episode.mp3"}
-  Response: {"url": "https://...", "key": "inputs/user_id/uuid.mp3"}
+  Response: {"url": "https://...", "key": "inputs/user_id/input.mp3"}
+
+  Note: Each user has a single input slot. Previous input files are deleted
+  before generating a new upload URL.
   """
   def presign_upload(conn, %{"filename" => filename}) do
     user = conn.assigns.current_user
+
+    # Delete any existing input files for this user (single slot per user)
+    Storage.delete_user_inputs(user.id)
+
     key = Storage.input_key(user.id, filename)
 
     case Storage.presign_upload(key) do
