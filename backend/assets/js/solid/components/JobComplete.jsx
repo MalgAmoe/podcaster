@@ -1,8 +1,31 @@
-import { Show } from "solid-js";
+import { Show, createSignal, createMemo, onCleanup } from "solid-js";
 import { useProcess } from "../context/ProcessContext";
+import { WaveformPlayer } from "./WaveformPlayer";
 
 export function JobComplete() {
   const { store, reset } = useProcess();
+  const [activeTrack, setActiveTrack] = createSignal("processed");
+  const [isPlaying, setIsPlaying] = createSignal(false);
+  const [currentTime, setCurrentTime] = createSignal(0);
+
+  // Create blob URL for original file
+  const originalUrl = createMemo(() => {
+    if (store.file) {
+      return URL.createObjectURL(store.file);
+    }
+    return null;
+  });
+
+  // Cleanup blob URL on unmount
+  onCleanup(() => {
+    const url = originalUrl();
+    if (url) URL.revokeObjectURL(url);
+  });
+
+  // Get current audio URL based on toggle
+  const currentUrl = createMemo(() => {
+    return activeTrack() === "original" ? originalUrl() : store.job?.download_url;
+  });
 
   function handleDownload() {
     if (store.job?.download_url) {
@@ -24,6 +47,39 @@ export function JobComplete() {
         </h3>
         <p class="text-base-content/60 text-sm mt-1">Your audio is ready!</p>
         <p class="text-base-content/40 text-xs mt-1 truncate max-w-full">{store.job?.filename}</p>
+
+        <Show when={store.job?.download_url}>
+          <div class="w-full mt-6 p-4 bg-base-300 rounded-2xl space-y-4">
+            {/* A/B Toggle */}
+            <div class="flex justify-center gap-2">
+              <button
+                type="button"
+                class={`btn btn-sm ${activeTrack() === "original" ? "btn-primary" : "btn-outline"}`}
+                onClick={() => setActiveTrack("original")}
+              >
+                Original
+              </button>
+              <button
+                type="button"
+                class={`btn btn-sm ${activeTrack() === "processed" ? "btn-primary" : "btn-outline"}`}
+                onClick={() => setActiveTrack("processed")}
+              >
+                Processed
+              </button>
+            </div>
+
+            {/* Waveform Player with synced state */}
+            <Show when={currentUrl()}>
+              <WaveformPlayer
+                audioUrl={currentUrl()}
+                currentTime={currentTime()}
+                isPlaying={isPlaying()}
+                onTimeUpdate={setCurrentTime}
+                onPlayingChange={setIsPlaying}
+              />
+            </Show>
+          </div>
+        </Show>
 
         <div class="flex gap-3 mt-6">
           <button onClick={handleDownload} class="btn btn-primary gap-2">
