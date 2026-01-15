@@ -28,11 +28,11 @@ liveSocket.connect()
 // >> liveSocket.disableLatencySim()
 window.liveSocket = liveSocket
 
-// Mount React app if container exists
-const reactRoot = document.getElementById("react-process-app");
-if (reactRoot) {
-  import("./react/index.jsx").then(({ mountApp }) => {
-    mountApp(reactRoot);
+// Mount Solid app if container exists
+const solidRoot = document.getElementById("solid-process-app");
+if (solidRoot) {
+  import("./solid/index.jsx").then(({ mountApp }) => {
+    mountApp(solidRoot);
   });
 }
 

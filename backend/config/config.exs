@@ -35,25 +35,8 @@ config :poddyclip_backend, PoddyclipBackendWeb.Endpoint,
   pubsub_server: PoddyclipBackend.PubSub,
   live_view: [signing_salt: "Z6+3ZWqJ"]
 
-# Configure esbuild (the version is required)
-config :esbuild,
-  version: "0.25.4",
-  poddyclip_backend: [
-    args:
-      ~w(js/app.js --bundle --target=es2022 --outdir=../priv/static/assets/js --external:/fonts/* --external:/images/* --alias:@=. --loader:.jsx=jsx),
-    cd: Path.expand("../assets", __DIR__),
-    env: %{
-      "NODE_PATH" =>
-        Enum.join(
-          [
-            Path.expand("../assets/node_modules", __DIR__),
-            Path.expand("../deps", __DIR__),
-            Mix.Project.build_path()
-          ],
-          ":"
-        )
-    }
-  ]
+# Disable default esbuild - we use custom build script
+config :esbuild, version: "0.25.4"
 
 # Configure tailwind (the version is required)
 config :tailwind,
