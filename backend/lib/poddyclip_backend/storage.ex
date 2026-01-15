@@ -55,13 +55,40 @@ defmodule PoddyclipBackend.Storage do
   end
 
   @doc """
-  Generate a unique S3 key for a user's input file.
-  Preserves the original file extension for format detection.
+  Generate the S3 key for a user's input file.
+  Uses a fixed name per user (single slot) with the file extension preserved.
   """
   def input_key(user_id, filename) do
-    uuid = Ecto.UUID.generate()
     ext = Path.extname(filename)
-    "inputs/#{user_id}/#{uuid}#{ext}"
+    "inputs/#{user_id}/input#{ext}"
+  end
+
+  @doc """
+  Delete all input files for a user.
+  Called before uploading to ensure only one input file exists.
+  """
+  def delete_user_inputs(user_id) do
+    if enabled?() do
+      prefix = "inputs/#{user_id}/"
+
+      case ExAws.S3.list_objects(bucket(), prefix: prefix) |> ExAws.request() do
+        {:ok, %{body: %{contents: contents}}} when is_list(contents) ->
+          # Delete each object found
+          Enum.each(contents, fn %{key: key} ->
+            ExAws.S3.delete_object(bucket(), key) |> ExAws.request()
+          end)
+          :ok
+
+        {:ok, _} ->
+          # No objects found, nothing to delete
+          :ok
+
+        {:error, reason} ->
+          {:error, reason}
+      end
+    else
+      {:error, :s3_not_configured}
+    end
   end
 
   @doc """

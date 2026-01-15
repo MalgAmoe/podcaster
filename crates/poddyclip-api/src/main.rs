@@ -16,7 +16,7 @@ use tower_http::{
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use poddyclip_api::handlers::{convert_audio, create_s3_job, delete_job, health, list_presets, process_trial};
+use poddyclip_api::handlers::{create_s3_job, delete_job, health, list_presets};
 use poddyclip_api::require_api_key;
 use poddyclip_api::state::{AppConfig, AppState};
 use poddyclip_api::storage::{Storage, StorageConfig};
@@ -91,8 +91,6 @@ async fn main() {
     let protected_routes = Router::new()
         .route("/jobs", post(create_s3_job))
         .route("/jobs/{id}", delete(delete_job))
-        .route("/convert", post(convert_audio))
-        .route("/trial", post(process_trial))
         .route_layer(middleware::from_fn_with_state(state.clone(), require_api_key));
 
     // Public routes
