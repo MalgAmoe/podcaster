@@ -10,9 +10,85 @@
    The heroicons installation itself is managed by your mix.exs */
 @plugin "../vendor/heroicons";
 
-/* daisyUI Tailwind Plugin with built-in themes */
+/* daisyUI Tailwind Plugin with custom theme */
 @plugin "../vendor/daisyui" {
-  themes: light --default, nord, dim --prefersdark;
+  themes: false;
+}
+
+/* Custom dark purple theme */
+[data-theme="poddyclip"] {
+  --color-base-100: #0f0a19;
+  --color-base-200: #1a1225;
+  --color-base-300: #251a32;
+  --color-base-content: #e5e5e5;
+
+  --color-primary: #7c3aed;
+  --color-primary-content: #ffffff;
+
+  --color-secondary: #6d28d9;
+  --color-secondary-content: #ffffff;
+
+  --color-accent: #8b5cf6;
+  --color-accent-content: #ffffff;
+
+  --color-neutral: #1f1f1f;
+  --color-neutral-content: #e5e5e5;
+
+  --color-success: #7c3aed;
+  --color-success-content: #ffffff;
+
+  --color-warning: #f59e0b;
+  --color-warning-content: #000000;
+
+  --color-error: #ef4444;
+  --color-error-content: #ffffff;
+
+  --color-info: #7c3aed;
+  --color-info-content: #ffffff;
+
+  --rounded-box: 1.5rem;
+  --rounded-btn: 9999px;
+  --rounded-badge: 9999px;
+  --animation-btn: 0.25s;
+  --animation-input: 0.2s;
+  --btn-focus-scale: 0.95;
+  --border-btn: 0px;
+  --tab-border: 1px;
+  --tab-radius: 0.5rem;
+}
+
+/* Clean button styles - super round pills! */
+[data-theme="poddyclip"] .btn {
+  border: none;
+  border-radius: 9999px;
+}
+
+[data-theme="poddyclip"] .btn-outline {
+  border: 1px solid currentColor;
+  border-radius: 9999px;
+}
+
+[data-theme="poddyclip"] .btn-ghost {
+  border: none;
+  border-radius: 9999px;
+}
+
+/* Purple focus rings instead of default orange */
+[data-theme="poddyclip"] .btn:focus-visible,
+[data-theme="poddyclip"] .btn:focus {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+[data-theme="poddyclip"] *:focus {
+  outline-color: #7c3aed;
+}
+
+/* Override any orange/yellow accent colors */
+[data-theme="poddyclip"] {
+  --tw-ring-color: #7c3aed;
+  accent-color: #7c3aed;
 }
 
 /* Add variants based on LiveView classes */
@@ -36,4 +112,33 @@
 
 .animate-pulse-slow {
   animation: pulse-slow 2s ease-in-out infinite;
+}
+
+@keyframes munch {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  25% { transform: scale(1.1) rotate(-5deg); }
+  50% { transform: scale(0.95) rotate(0deg); }
+  75% { transform: scale(1.1) rotate(5deg); }
+}
+
+.animate-munch {
+  animation: munch 0.5s ease-in-out infinite;
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+}
+
+.animate-wiggle {
+  animation: wiggle 0.3s ease-in-out infinite;
+}
+
+@keyframes bounce-soft {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.animate-bounce-soft {
+  animation: bounce-soft 1s ease-in-out infinite;
 }

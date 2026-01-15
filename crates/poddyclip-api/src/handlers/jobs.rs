@@ -12,7 +12,7 @@ use uuid::Uuid;
 use crate::audio::{decode_audio, encode_mp3, encode_wav};
 use crate::error::ApiError;
 use crate::models::{Job, JobStatus, OutputFormat, ProcessConfig, ProcessResponse};
-use crate::processing::process_audio;
+use crate::processing::{process_audio, CancelledError};
 use crate::state::AppState;
 
 #[derive(Serialize)]
@@ -29,6 +29,10 @@ pub async fn delete_job(
 ) -> Result<Json<DeleteResponse>, ApiError> {
     // Check if job exists
     let job = state.get_job(&job_id).ok_or(ApiError::JobNotFound(job_id))?;
+
+    // Signal cancellation to the processing task (if still running)
+    job.cancel();
+    info!("Job {} cancellation requested", job_id);
 
     // Delete from S3 if present
     if let (Some(ref s3_key), Some(ref storage)) = (&job.result_s3_key, &state.storage) {
@@ -136,6 +140,9 @@ pub async fn create_s3_job(
     let job_id = Uuid::new_v4();
     let job = Job::new(job_id, config.clone(), filename.clone(), audio_bytes.len())
         .with_webhook(req.phoenix_job_id, req.webhook_url.clone(), req.webhook_secret.clone());
+
+    // Get cancellation flag before inserting job (Arc is cloned)
+    let cancelled = job.cancelled.clone();
     state.insert_job(job);
 
     info!(
@@ -175,8 +182,14 @@ pub async fn create_s3_job(
                 // Decode audio
                 let (mut samples, metadata) = decode_audio(&audio_bytes, Some(&filename))?;
 
-                // Progress callback that updates job state and sends webhook
-                let progress_callback = Box::new(move |stage: &str, index: u8| {
+                // Progress callback that updates job state, sends webhook, and checks for cancellation
+                let progress_callback = Box::new(move |stage: &str, index: u8| -> Result<(), CancelledError> {
+                    // Check if job was cancelled
+                    if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
+                        info!("Job {} cancelled at stage {}", job_id, stage);
+                        return Err(CancelledError);
+                    }
+
                     tracing::debug!("Job {} progress: {} ({}/17)", job_id, stage, index);
                     progress_state.update_job(&job_id, |j| {
                         j.progress.update(stage, index);
@@ -190,6 +203,8 @@ pub async fn create_s3_job(
                             webhook.notify(&job, None).await;
                         });
                     }
+
+                    Ok(())
                 });
 
                 // Process with progress updates
@@ -261,7 +276,7 @@ pub async fn create_s3_job(
                     }
                     j.result_content_type = Some(content_type);
                     j.result_s3_key = s3_key;
-                    j.progress.update("completed", 17);
+                    j.progress.update("completed", 24);
                     j.updated_at = now();
                 });
                 info!("Job {} completed successfully", job_id);
