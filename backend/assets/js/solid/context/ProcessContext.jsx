@@ -1,4 +1,4 @@
-import { createContext, useContext, createSignal, createEffect, onMount, onCleanup } from "solid-js";
+import { createContext, useContext, createEffect, onMount, onCleanup } from "solid-js";
 import { createStore } from "solid-js/store";
 import { Socket } from "phoenix";
 import { api } from "../utils/api";
