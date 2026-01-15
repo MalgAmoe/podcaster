@@ -40,13 +40,8 @@ defmodule PoddyclipBackendWeb.Router do
   scope "/", PoddyclipBackendWeb do
     pipe_through [:browser, :require_authenticated_user]
 
-    # React process page (default)
+    # React process page
     get "/", PageController, :process
-
-    # LiveView process page (legacy, for rollback)
-    live_session :authenticated, on_mount: [{PoddyclipBackendWeb.UserAuthLive, :require_authenticated_user}] do
-      live "/legacy", ProcessLive
-    end
   end
 
   # Internal API for Rust service webhooks

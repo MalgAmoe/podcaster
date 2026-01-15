@@ -8,50 +8,10 @@ import topbar from "../vendor/topbar"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 
-// S3 direct upload handler for LiveView external uploads
-const Uploaders = {
-  S3(entries, onViewError) {
-    entries.forEach(entry => {
-      const { url } = entry.meta
-
-      const xhr = new XMLHttpRequest()
-
-      // Track upload progress
-      xhr.upload.addEventListener("progress", (event) => {
-        if (event.lengthComputable) {
-          const percent = Math.round((event.loaded / event.total) * 100)
-          entry.progress(percent)
-        }
-      })
-
-      xhr.addEventListener("load", () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          entry.progress(100)
-        } else {
-          entry.error("Upload failed")
-        }
-      })
-
-      xhr.addEventListener("error", () => {
-        entry.error("Upload failed")
-      })
-
-      xhr.open("PUT", url, true)
-      xhr.send(entry.file)
-    })
-  }
-}
-
-// Custom hooks
-const Hooks = {
-  ...colocatedHooks
-}
-
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: Hooks,
-  uploaders: Uploaders,
+  hooks: colocatedHooks,
 })
 
 // Show progress bar on live navigation and form submits
@@ -61,26 +21,6 @@ window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
 
 // connect if there are any LiveViews on the page
 liveSocket.connect()
-
-// Handle file downloads from LiveView
-window.addEventListener("phx:download", (event) => {
-  const { data, filename, content_type } = event.detail;
-  const byteCharacters = atob(data);
-  const byteNumbers = new Array(byteCharacters.length);
-  for (let i = 0; i < byteCharacters.length; i++) {
-    byteNumbers[i] = byteCharacters.charCodeAt(i);
-  }
-  const byteArray = new Uint8Array(byteNumbers);
-  const blob = new Blob([byteArray], { type: content_type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-})
 
 // expose liveSocket on window for web console debug logs and latency simulation:
 // >> liveSocket.enableDebug()
