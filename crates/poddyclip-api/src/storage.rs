@@ -139,6 +139,62 @@ impl Storage {
         Ok(response.bytes().to_vec())
     }
 
+    /// Download a byte range from S3 (for partial audio extraction)
+    pub async fn download_range(&self, key: &str, start: u64, end: u64) -> Result<Vec<u8>> {
+        let response = self
+            .bucket
+            .get_object_range(key, start, Some(end))
+            .await
+            .context("Failed to download range from S3")?;
+
+        tracing::info!(
+            "Downloaded range {}-{} ({} bytes) from s3://{}/{}",
+            start,
+            end,
+            response.bytes().len(),
+            self.bucket.name(),
+            key
+        );
+
+        Ok(response.bytes().to_vec())
+    }
+
+    /// Upload a WAV file to S3 for trial processing
+    pub async fn upload_input(&self, user_id: &str, data: &[u8], filename: &str) -> Result<String> {
+        let key = format!("inputs/{}/{}", user_id, filename);
+
+        self.bucket
+            .put_object_with_content_type(&key, data, "audio/wav")
+            .await
+            .context("Failed to upload to S3")?;
+
+        tracing::info!(
+            "Uploaded {} bytes to s3://{}/{}",
+            data.len(),
+            self.bucket.name(),
+            key
+        );
+
+        Ok(key)
+    }
+
+    /// Upload a WAV file to a specific key (for caching converted audio)
+    pub async fn upload_wav(&self, key: &str, data: &[u8]) -> Result<()> {
+        self.bucket
+            .put_object_with_content_type(key, data, "audio/wav")
+            .await
+            .context("Failed to upload WAV to S3")?;
+
+        tracing::info!(
+            "Uploaded WAV {} bytes to s3://{}/{}",
+            data.len(),
+            self.bucket.name(),
+            key
+        );
+
+        Ok(())
+    }
+
     /// Check if storage is available
     pub async fn health_check(&self) -> Result<()> {
         // Try to list objects (empty prefix, limit 1)
