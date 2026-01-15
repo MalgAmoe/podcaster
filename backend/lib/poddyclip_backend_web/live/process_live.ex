@@ -138,15 +138,8 @@ defmodule PoddyclipBackendWeb.ProcessLive do
   def render(assigns) do
     ~H"""
     <div class="min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center p-4">
-      <!-- Steps indicator -->
-      <ul class="steps steps-horizontal mb-8">
-        <li class={step_class(:upload, @job)}>Upload</li>
-        <li class={step_class(:process, @job)}>Process</li>
-        <li class={step_class(:download, @job)}>Download</li>
-      </ul>
-
       <!-- Main card -->
-      <div class="card card-bordered bg-base-100 w-full max-w-lg shadow-lg">
+      <div class="card bg-base-200 w-full max-w-lg border border-base-300 rounded-3xl">
         <div class="card-body">
           <%= if @error do %>
             <div role="alert" class="alert alert-error mb-4">
@@ -164,6 +157,13 @@ defmodule PoddyclipBackendWeb.ProcessLive do
           <% end %>
         </div>
       </div>
+
+      <!-- Steps indicator -->
+      <ul class="steps steps-horizontal mt-8">
+        <li class={step_class(:upload, @job)}>Feed</li>
+        <li class={step_class(:process, @job)}>Munch</li>
+        <li class={step_class(:download, @job)}>Enjoy</li>
+      </ul>
     </div>
     """
   end
@@ -172,19 +172,22 @@ defmodule PoddyclipBackendWeb.ProcessLive do
     ~H"""
     <form phx-submit="process" phx-change="validate" class="space-y-6">
       <!-- Hidden file input - always rendered -->
-      <.live_file_input upload={@uploads.audio} class="hidden" />
+      <.live_file_input
+        upload={@uploads.audio}
+        class="hidden"
+      />
 
       <!-- Upload zone -->
       <%= if @uploads.audio.entries == [] do %>
         <label
           for={@uploads.audio.ref}
-          class="border-2 border-dashed border-base-300 rounded-2xl p-12 text-center
+          class="border-2 border-dashed border-base-300 rounded-3xl p-12 text-center
                  hover:border-primary hover:bg-primary/5 transition-all duration-200
                  cursor-pointer group block"
           phx-drop-target={@uploads.audio.ref}
         >
           <div class="flex flex-col items-center gap-4">
-            <!-- Upload icon in circle -->
+            <!-- Upload icon -->
             <div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center
                         group-hover:bg-primary/20 transition-colors">
               <svg class="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -193,39 +196,71 @@ defmodule PoddyclipBackendWeb.ProcessLive do
               </svg>
             </div>
             <div>
-              <p class="font-medium text-base-content">Drop your audio file here</p>
-              <p class="text-sm text-base-content/60 mt-1">or click to browse</p>
+              <p class="font-medium text-base-content text-lg">Feed the cow! 🐄</p>
+              <p class="text-sm text-base-content/60 mt-1">She's VERY hungry for your audio</p>
             </div>
-            <p class="text-xs text-base-content/40">WAV, MP3, FLAC • Max 100MB</p>
+            <p class="text-xs text-base-content/40">nom nom nom • WAV, MP3, FLAC</p>
           </div>
         </label>
       <% else %>
-        <!-- File selected state -->
+        <!-- File selected - show waveform and controls -->
         <%= for entry <- @uploads.audio.entries do %>
-          <div class="flex items-center gap-4 p-4 bg-base-200 rounded-xl">
-            <div class="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-              <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-              </svg>
+          <div class="space-y-4" phx-hook="AudioPreview" id={"audio-preview-#{entry.ref}"}>
+            <!-- Hidden audio element for playback (phx-update ignore so LiveView doesn't reset it) -->
+            <div phx-update="ignore" id={"audio-container-#{entry.ref}"}>
+              <audio class="hidden"></audio>
             </div>
-            <div class="flex-1 min-w-0">
-              <p class="font-medium truncate"><%= entry.client_name %></p>
-              <%= if entry.done? do %>
-                <p class="text-sm text-success">Ready to process</p>
-              <% else %>
-                <div class="flex items-center gap-2 mt-1">
-                  <progress class="progress progress-primary flex-1 h-2" value={entry.progress} max="100"></progress>
-                  <span class="text-xs text-base-content/60 w-8"><%= entry.progress %>%</span>
-                </div>
-              <% end %>
+
+            <!-- Waveform canvas (also ignore to preserve drawn waveform) -->
+            <div phx-update="ignore" id={"canvas-container-#{entry.ref}"}>
+              <canvas
+                class="w-full h-24 rounded-2xl cursor-pointer bg-base-100 border border-base-300"
+                width="600"
+                height="96"
+              ></canvas>
             </div>
-            <button type="button" phx-click="cancel-upload" phx-value-ref={entry.ref}
-                    class="btn btn-ghost btn-sm btn-circle">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+
+            <!-- Playback controls -->
+            <div class="flex items-center gap-3">
+              <button type="button" data-action="stop" class="btn btn-circle btn-sm btn-ghost">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <rect x="6" y="6" width="12" height="12" rx="1" />
+                </svg>
+              </button>
+              <button type="button" data-action="play" class="btn btn-circle btn-sm btn-primary">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </button>
+              <span data-time class="text-sm text-base-content/70 font-mono">0:00 / 0:00</span>
+            </div>
+
+            <!-- File info + upload progress -->
+            <div class="flex items-center gap-4 p-4 bg-base-300 rounded-2xl">
+              <div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                </svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="font-medium truncate"><%= entry.client_name %></p>
+                <%= if entry.done? do %>
+                  <p class="text-sm text-primary">Ready to munch! 🤤</p>
+                <% else %>
+                  <div class="flex items-center gap-2 mt-1">
+                    <progress class="progress progress-primary flex-1 h-2" value={entry.progress} max="100"></progress>
+                    <span class="text-xs text-base-content/60 w-8"><%= entry.progress %>%</span>
+                  </div>
+                <% end %>
+              </div>
+              <button type="button" phx-click="cancel-upload" phx-value-ref={entry.ref}
+                      class="btn btn-ghost btn-sm btn-circle">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           <%= for err <- upload_errors(@uploads.audio, entry) do %>
@@ -235,11 +270,9 @@ defmodule PoddyclipBackendWeb.ProcessLive do
       <% end %>
 
       <!-- Preset selection -->
-      <div class="form-control">
-        <label class="label">
-          <span class="label-text font-medium">Processing Style</span>
-        </label>
-        <div class="flex flex-wrap gap-2">
+      <div class="form-control text-center">
+        <p class="font-medium mb-3">How hard should the cow chew? 🐄</p>
+        <div class="flex flex-wrap gap-2 justify-center mt-2">
           <%= for preset <- @presets do %>
             <button
               type="button"
@@ -261,9 +294,9 @@ defmodule PoddyclipBackendWeb.ProcessLive do
       >
         <%= if Enum.any?(@uploads.audio.entries, & not &1.done?) do %>
           <span class="loading loading-spinner loading-sm"></span>
-          Uploading...
+          Feeding the cow...
         <% else %>
-          Process Audio
+          🐄 MUNCH IT!
         <% end %>
       </button>
     </form>
@@ -287,8 +320,9 @@ defmodule PoddyclipBackendWeb.ProcessLive do
             <%= @job.progress["percent_complete"] || 0 %>%
           </div>
 
-          <p class="mt-6 text-lg font-medium"><%= @job.progress["stage"] || "Starting..." %></p>
-          <p class="text-base-content/60 text-sm mt-1 truncate max-w-full"><%= @job.filename %></p>
+          <p class="mt-6 text-xl font-bold"><span class="inline-block animate-munch">🐄</span> *munch munch munch*</p>
+          <p class="text-base-content/60 mt-2"><%= friendly_stage(@job.progress["stage"]) %></p>
+          <p class="text-base-content/40 text-sm mt-1 truncate max-w-full"><%= @job.filename %></p>
 
           <button phx-click="reset" class="btn btn-ghost btn-sm mt-6 text-error">
             Cancel
@@ -298,25 +332,26 @@ defmodule PoddyclipBackendWeb.ProcessLive do
       <% @job.status == :completed -> %>
         <!-- Completed state -->
         <div class="flex flex-col items-center py-8">
-          <div class="w-20 h-20 rounded-full bg-success/10 flex items-center justify-center mb-6">
-            <svg class="w-10 h-10 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-6">
+            <svg class="w-10 h-10 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
             </svg>
           </div>
 
-          <h3 class="text-xl font-bold">Processing Complete!</h3>
-          <p class="text-base-content/60 mt-2 truncate max-w-full"><%= @job.filename %></p>
+          <h3 class="text-2xl font-bold">MOOO! <span class="inline-block animate-bounce-soft">🐄</span>✨</h3>
+          <p class="text-base-content/60 mt-2">The cow is satisfied. Your audio is now delicious.</p>
+          <p class="text-base-content/40 text-sm mt-1 truncate max-w-full"><%= @job.filename %></p>
 
           <div class="flex gap-3 mt-8">
-            <button phx-click="download" class="btn btn-success btn-lg gap-2">
+            <button phx-click="download" class="btn btn-primary btn-lg gap-2">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                       d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
-              Download
+              Grab it!
             </button>
             <button phx-click="reset" class="btn btn-ghost">
-              Process Another
+              🐄 Feed me more!
             </button>
           </div>
         </div>
@@ -330,11 +365,11 @@ defmodule PoddyclipBackendWeb.ProcessLive do
             </svg>
           </div>
 
-          <h3 class="text-xl font-bold text-error">Processing Failed</h3>
+          <h3 class="text-2xl font-bold text-error">The cow choked! 🐄💀</h3>
           <p class="text-base-content/60 mt-2 text-center px-4"><%= friendly_job_error(@job.error) %></p>
 
           <button phx-click="reset" class="btn btn-primary mt-8">
-            Try Again
+            Feed her again
           </button>
         </div>
 
@@ -419,6 +454,35 @@ defmodule PoddyclipBackendWeb.ProcessLive do
         "Please try a different file."
     end
   end
+
+  # Friendly stage names for progress display
+  defp friendly_stage(nil), do: "Reading audio..."
+  defp friendly_stage("decoding"), do: "Reading audio..."
+  defp friendly_stage("filters"), do: "Cutting rumble & hiss..."
+  defp friendly_stage("input_gain"), do: "Balancing levels..."
+  defp friendly_stage("analyzing_reverb"), do: "Detecting room sound..."
+  defp friendly_stage("dereverb"), do: "Removing room echo..."
+  defp friendly_stage("analyzing_noise"), do: "Finding background noise..."
+  defp friendly_stage("denoise"), do: "Cleaning up noise..."
+  defp friendly_stage("spectral_gate"), do: "Gating quiet parts..."
+  defp friendly_stage("analyzing_peaks"), do: "Finding harsh tones..."
+  defp friendly_stage("peak_attenuation"), do: "Smoothing harsh tones..."
+  defp friendly_stage("expander"), do: "Opening up dynamics..."
+  defp friendly_stage("compressor"), do: "Leveling out..."
+  defp friendly_stage("analyzing_eq"), do: "Checking the tone..."
+  defp friendly_stage("fixeq"), do: "Fixing muddy spots..."
+  defp friendly_stage("deesser"), do: "Taming the S's..."
+  defp friendly_stage("saturation"), do: "Adding warmth..."
+  defp friendly_stage("buttercomp"), do: "Gluing it together..."
+  defp friendly_stage("analyzing_enhance"), do: "Optimizing presence..."
+  defp friendly_stage("enhanceeq"), do: "Brightening up..."
+  defp friendly_stage("radio"), do: "Broadcast polish..."
+  defp friendly_stage("tape"), do: "Adding analog feel..."
+  defp friendly_stage("analyzing_levels"), do: "Measuring loudness..."
+  defp friendly_stage("output"), do: "Final limiting..."
+  defp friendly_stage("encoding"), do: "Saving your file..."
+  defp friendly_stage("completed"), do: "Done! 🐄✨"
+  defp friendly_stage(other), do: other
 
   # Simplify job error messages from Rust
   defp friendly_job_error(nil), do: "Unknown error"

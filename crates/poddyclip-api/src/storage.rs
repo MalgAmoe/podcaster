@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use s3::creds::Credentials;
 use s3::region::Region;
 use s3::Bucket;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use uuid::Uuid;
@@ -87,11 +88,21 @@ impl Storage {
         Ok(key)
     }
 
-    /// Generate a presigned URL for downloading
+    /// Generate a presigned URL for downloading (forces download with Content-Disposition)
     pub async fn presign_get(&self, key: &str) -> Result<String> {
+        // Extract filename from key (e.g., "results/{job_id}/filename.mp3" -> "filename.mp3")
+        let filename = key.split('/').last().unwrap_or("download");
+
+        // Add response-content-disposition to force browser download
+        let mut custom_queries = HashMap::new();
+        custom_queries.insert(
+            "response-content-disposition".to_string(),
+            format!("attachment; filename=\"{}\"", filename),
+        );
+
         let url = self
             .bucket
-            .presign_get(key, self.presign_expiry.as_secs() as u32, None)
+            .presign_get(key, self.presign_expiry.as_secs() as u32, Some(custom_queries))
             .await
             .context("Failed to generate presigned URL")?;
 

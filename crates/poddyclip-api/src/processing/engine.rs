@@ -3,6 +3,7 @@
 use std::path::Path;
 
 use anyhow::Result;
+use thiserror::Error;
 
 use poddyclip::analysis;
 use poddyclip::analysis::lufs::measure_integrated_lufs;
@@ -27,28 +28,40 @@ use poddyclip::traits::{Stereo, StereoProcessor};
 use crate::models::{CompressorType, ProcessConfig};
 use crate::processing::chain::{load_chain, ChainPreset};
 
-/// Progress callback type
-pub type ProgressCallback = Box<dyn Fn(&str, u8) + Send>;
+/// Error returned when a job is cancelled
+#[derive(Debug, Error)]
+#[error("Job was cancelled")]
+pub struct CancelledError;
+
+/// Progress callback type - returns Ok(()) to continue, Err to cancel
+pub type ProgressCallback = Box<dyn Fn(&str, u8) -> Result<(), CancelledError> + Send>;
 
 /// Processing stages for progress tracking
 const STAGES: &[&str] = &[
-    "decoding",        // 0
-    "filters",         // 1
-    "input_gain",      // 2
-    "dereverb",        // 3
-    "denoise",         // 4
-    "spectral_gate",   // 5
-    "peak_attenuation", // 6
-    "expander",        // 7
-    "compressor",      // 8
-    "fixeq",           // 9
-    "deesser",         // 10
-    "saturation",      // 11
-    "buttercomp",      // 12
-    "enhanceeq",       // 13
-    "tape",            // 14
-    "output",          // 15
-    "encoding",        // 16
+    "decoding",           // 0
+    "filters",            // 1
+    "input_gain",         // 2
+    "analyzing_reverb",   // 3
+    "dereverb",           // 4
+    "analyzing_noise",    // 5
+    "denoise",            // 6
+    "spectral_gate",      // 7
+    "analyzing_peaks",    // 8
+    "peak_attenuation",   // 9
+    "expander",           // 10
+    "compressor",         // 11
+    "analyzing_eq",       // 12
+    "fixeq",              // 13
+    "deesser",            // 14
+    "saturation",         // 15
+    "buttercomp",         // 16
+    "analyzing_enhance",  // 17
+    "enhanceeq",          // 18
+    "tape",               // 19
+    "radio",              // 20
+    "analyzing_levels",   // 21
+    "output",             // 22
+    "encoding",           // 23
 ];
 
 /// Run the full processing chain on audio samples
@@ -61,11 +74,12 @@ pub fn process_audio(
 ) -> Result<()> {
     let is_stereo = samples.len() >= 2;
 
-    // Report progress helper
-    let report = |stage: &str, index: u8| {
+    // Report progress helper - returns error if cancelled
+    let report = |stage: &str, index: u8| -> Result<()> {
         if let Some(ref cb) = on_progress {
-            cb(stage, index);
+            cb(stage, index).map_err(|e| anyhow::anyhow!(e))?;
         }
+        Ok(())
     };
 
     // Load chain preset if specified (overrides individual settings)
@@ -80,7 +94,7 @@ pub fn process_audio(
     // =========================================================================
     // FILTERS
     // =========================================================================
-    report("filters", 1);
+    report("filters", 1)?;
 
     if effective_config.filters_enabled {
         let slope = if effective_config.hp_slope == 24 {
@@ -104,7 +118,7 @@ pub fn process_audio(
     // =========================================================================
     // INPUT GAIN
     // =========================================================================
-    report("input_gain", 2);
+    report("input_gain", 2)?;
 
     let gain_db = analyze_gain(samples, DEFAULT_TARGET_RMS_DB, DEFAULT_TARGET_PEAK_DB);
     apply_gain(samples, gain_db);
@@ -112,9 +126,8 @@ pub fn process_audio(
     // =========================================================================
     // DE-REVERB (optional)
     // =========================================================================
-    report("dereverb", 3);
-
     if effective_config.dereverb > 0 {
+        report("analyzing_reverb", 3)?;
         let mono_for_reverb = if is_stereo {
             analysis::utils::mix_to_mono(&samples[0], &samples[1])
         } else {
@@ -124,6 +137,7 @@ pub fn process_audio(
         let cepstral = analysis::CepstralAnalysis::from_spectrum(&spectrum);
         let reverb_analysis = analysis::ReverbAnalysis::from_analyses(&spectrum, &cepstral);
 
+        report("dereverb", 4)?;
         let mut dereverb = poddyclip::dereverb::DeReverbProcessor::new_with_preset(
             sample_rate,
             effective_config.dereverb,
@@ -143,11 +157,11 @@ pub fn process_audio(
     // =========================================================================
     // DENOISE
     // =========================================================================
-    report("denoise", 4);
-
+    report("analyzing_noise", 5)?;
     let preset: usize = effective_config.denoiser_preset.into();
     let result = analyze_audio(&samples[0], sample_rate);
 
+    report("denoise", 6)?;
     if is_stereo {
         let mut left_denoiser =
             RealtimeDenoiser::new_with_preset(sample_rate, preset).ok_or_else(|| anyhow::anyhow!("Invalid preset"))?;
@@ -167,7 +181,7 @@ pub fn process_audio(
     // =========================================================================
     // SPECTRAL GATE (optional)
     // =========================================================================
-    report("spectral_gate", 5);
+    report("spectral_gate", 7)?;
 
     if effective_config.spectral_gate > 0 {
         if is_stereo {
@@ -193,14 +207,14 @@ pub fn process_audio(
     // =========================================================================
     // PEAK ATTENUATION (optional)
     // =========================================================================
-    report("peak_attenuation", 6);
-
     if effective_config.depeak {
+        report("analyzing_peaks", 8)?;
         let analyze_samples = (sample_rate as usize).min(samples[0].len());
         let params = PeakAttenuatorParams::default();
         let peak_profile = detect_tonal_peaks(&samples[0][..analyze_samples], sample_rate, &params);
 
         if !peak_profile.peak_bins.is_empty() {
+            report("peak_attenuation", 9)?;
             if is_stereo {
                 let mut left_attenuator = PeakAttenuator::new(sample_rate);
                 let mut right_attenuator = PeakAttenuator::new(sample_rate);
@@ -222,7 +236,7 @@ pub fn process_audio(
     // =========================================================================
     // EXPANDER
     // =========================================================================
-    report("expander", 7);
+    report("expander", 10)?;
 
     if effective_config.expander_enabled {
         let mut expander = StereoExpander::new_with_preset(sample_rate as f32, effective_config.expander_preset)
@@ -238,7 +252,7 @@ pub fn process_audio(
     // =========================================================================
     // COMPRESSOR
     // =========================================================================
-    report("compressor", 8);
+    report("compressor", 11)?;
 
     if effective_config.compressor_enabled {
         let use_fet = effective_config.compressor_type == CompressorType::Fet;
@@ -269,9 +283,8 @@ pub fn process_audio(
     // =========================================================================
     // FIXEQ
     // =========================================================================
-    report("fixeq", 9);
-
     if effective_config.fixeq_enabled {
+        report("analyzing_eq", 12)?;
         let mono = if is_stereo {
             analysis::utils::mix_to_mono(&samples[0], &samples[1])
         } else {
@@ -279,6 +292,7 @@ pub fn process_audio(
         };
         let spectrum = analysis::SpectralAnalysis::new(&mono, sample_rate);
 
+        report("fixeq", 13)?;
         let mut fixeq = FixEq::new(sample_rate as f32);
         fixeq.configure_from_spectrum(&spectrum, preset, is_stereo);
         if is_stereo {
@@ -292,7 +306,7 @@ pub fn process_audio(
     // =========================================================================
     // DE-ESSER
     // =========================================================================
-    report("deesser", 10);
+    report("deesser", 14)?;
 
     if effective_config.deesser_enabled {
         let mut deesser = StereoDeEsser::new(sample_rate as f32);
@@ -312,7 +326,7 @@ pub fn process_audio(
     // =========================================================================
     // SATURATION (Channel9)
     // =========================================================================
-    report("saturation", 11);
+    report("saturation", 15)?;
 
     if effective_config.saturation_enabled {
         let sat_preset = get_saturation_preset(effective_config.saturation_preset)
@@ -330,7 +344,7 @@ pub fn process_audio(
     // =========================================================================
     // BUTTERCOMP
     // =========================================================================
-    report("buttercomp", 12);
+    report("buttercomp", 16)?;
 
     if effective_config.buttercomp_enabled {
         let buttercomp_amount = get_buttercomp_preset(effective_config.buttercomp_preset)
@@ -348,9 +362,8 @@ pub fn process_audio(
     // =========================================================================
     // ENHANCEEQ (or RadioVoice)
     // =========================================================================
-    report("enhanceeq", 13);
-
     if !effective_config.radio && effective_config.enhanceeq_enabled {
+        report("analyzing_enhance", 17)?;
         let eq_preset_data = get_eq_preset(effective_config.enhanceeq_preset)
             .ok_or_else(|| anyhow::anyhow!("Invalid EQ preset"))?;
         let mono_for_enhance = if is_stereo {
@@ -359,6 +372,8 @@ pub fn process_audio(
             samples[0].clone()
         };
         let enhance_spectrum = analysis::SpectralAnalysis::new(&mono_for_enhance, sample_rate);
+
+        report("enhanceeq", 18)?;
         let mut enhanceeq_proc = StereoEnhanceEq::new(sample_rate as f32);
         enhanceeq_proc.configure_from_spectrum(&enhance_spectrum);
 
@@ -381,7 +396,7 @@ pub fn process_audio(
     // =========================================================================
     // TAPE
     // =========================================================================
-    report("tape", 14);
+    report("tape", 19)?;
 
     if effective_config.tape_enabled {
         let sat_preset = get_saturation_preset(effective_config.tape_preset)
@@ -408,6 +423,7 @@ pub fn process_audio(
     // RADIO VOICE EQ (optional)
     // =========================================================================
     if effective_config.radio {
+        report("radio", 20)?;
         let mut radio = RadioVoiceProcessor::new(sample_rate);
         radio.set_amount(effective_config.radio_amount);
 
@@ -431,13 +447,13 @@ pub fn process_audio(
     // =========================================================================
     // OUTPUT STAGE
     // =========================================================================
-    report("output", 15);
-
     if effective_config.output_enabled {
+        report("analyzing_levels", 21)?;
         let lufs = measure_integrated_lufs(samples, sample_rate);
         let lufs_gain_db = effective_config.lufs_target - lufs;
         apply_gain(samples, lufs_gain_db);
 
+        report("output", 22)?;
         let mut limiter = Limiter::new(-1.0, 5.0, 100.0, sample_rate as f32);
         if is_stereo {
             let (left, right) = samples.split_at_mut(1);

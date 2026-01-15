@@ -25,8 +25,8 @@ case "${1:-}" in
         cd docker && docker compose up
         ;;
     api)
-        echo -e "${GREEN}Starting Rust API...${NC}"
-        cargo run -p poddyclip-api
+        echo -e "${GREEN}Starting Rust API (release build)...${NC}"
+        cargo run --release -p poddyclip-api
         ;;
     web)
         echo -e "${GREEN}Starting Phoenix...${NC}"

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -30,6 +31,9 @@ pub struct Job {
     /// Webhook secret for authentication
     #[serde(skip)]
     pub webhook_secret: Option<String>,
+    /// Cancellation flag - set to true to request job cancellation
+    #[serde(skip)]
+    pub cancelled: Arc<AtomicBool>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -54,7 +58,7 @@ impl JobProgress {
         Self {
             stage: "queued".to_string(),
             stage_index: 0,
-            total_stages: 17,
+            total_stages: 24,
             percent_complete: 0,
         }
     }
@@ -89,6 +93,7 @@ impl Job {
             phoenix_job_id: None,
             webhook_url: None,
             webhook_secret: None,
+            cancelled: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -97,5 +102,15 @@ impl Job {
         self.webhook_url = webhook_url;
         self.webhook_secret = webhook_secret;
         self
+    }
+
+    /// Request cancellation of this job
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Relaxed);
+    }
+
+    /// Check if cancellation has been requested
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::Relaxed)
     }
 }
