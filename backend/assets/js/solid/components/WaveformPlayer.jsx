@@ -1,7 +1,10 @@
 import { createSignal, createEffect, Show, untrack } from "solid-js";
 
+// Module-level cache for decoded AudioBuffers (survives component re-renders)
+const audioBufferCache = new Map();
+
 export function WaveformPlayer(props) {
-  // props: audioUrl, currentTime (optional), isPlaying (optional), onTimeUpdate, onPlayingChange
+  // props: audioUrl, cacheKey (optional), currentTime (optional), isPlaying (optional), onTimeUpdate, onPlayingChange
 
   let canvasRef;
   let audioRef;
@@ -30,6 +33,17 @@ export function WaveformPlayer(props) {
     pendingPlay = untrack(() => isPlaying());
     lastUrl = url;
 
+    // Check cache first - use cacheKey if provided, otherwise URL
+    const key = props.cacheKey || url;
+    const cached = audioBufferCache.get(key);
+    if (cached) {
+      setAudioBuffer(cached);
+      setDuration(cached.duration);
+      setLoading(false);
+      drawWaveform(cached);
+      return;
+    }
+
     setLoading(true);
     setAudioBuffer(null);
 
@@ -38,6 +52,9 @@ export function WaveformPlayer(props) {
       const arrayBuffer = await response.arrayBuffer();
       const audioContext = new AudioContext();
       const buffer = await audioContext.decodeAudioData(arrayBuffer);
+
+      // Cache the decoded buffer using cacheKey if provided
+      audioBufferCache.set(key, buffer);
 
       setAudioBuffer(buffer);
       setDuration(buffer.duration);
