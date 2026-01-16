@@ -8,21 +8,30 @@ export function JobComplete() {
   const [isPlaying, setIsPlaying] = createSignal(false);
   const [currentTime, setCurrentTime] = createSignal(0);
 
+  // Track blob URL to revoke when creating new one (prevents memory leak)
+  let currentBlobUrl = null;
+
   // Create URL for original file - prefer local blob, fall back to S3
   const originalUrl = createMemo(() => {
+    // Revoke previous blob URL before creating new one
+    if (currentBlobUrl) {
+      URL.revokeObjectURL(currentBlobUrl);
+      currentBlobUrl = null;
+    }
+
     // Prefer local file if available (same session, no network)
     if (store.file) {
-      return URL.createObjectURL(store.file);
+      currentBlobUrl = URL.createObjectURL(store.file);
+      return currentBlobUrl;
     }
     // Fall back to S3 URL (after reload)
     return store.job?.original_url || null;
   });
 
-  // Cleanup blob URL on unmount (only if it's a blob URL, not S3)
+  // Cleanup blob URL on unmount
   onCleanup(() => {
-    const url = originalUrl();
-    if (url && url.startsWith("blob:")) {
-      URL.revokeObjectURL(url);
+    if (currentBlobUrl) {
+      URL.revokeObjectURL(currentBlobUrl);
     }
   });
 
