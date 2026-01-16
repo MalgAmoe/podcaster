@@ -2,6 +2,7 @@ defmodule PoddyclipBackendWeb.JobChannel do
   use Phoenix.Channel
 
   alias PoddyclipBackend.Processing
+  alias PoddyclipBackend.Storage
 
   @doc """
   Join a job channel. Verifies the user owns the job.
@@ -41,7 +42,16 @@ defmodule PoddyclipBackendWeb.JobChannel do
       progress: job.progress || %{},
       error: job.error,
       download_url: job.download_url,
+      original_url: presign_key(job.input_s3_key),
       filename: job.filename
     }
+  end
+
+  defp presign_key(nil), do: nil
+  defp presign_key(key) do
+    case Storage.presign_download(key) do
+      {:ok, url} -> url
+      _ -> nil
+    end
   end
 end

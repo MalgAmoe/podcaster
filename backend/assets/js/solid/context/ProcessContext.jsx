@@ -7,6 +7,7 @@ const ProcessContext = createContext();
 
 export function ProcessProvider(props) {
   const [store, setStore] = createStore({
+    initializing: true, // Loading initial state
     file: null,
     s3Key: null,
     filename: null,
@@ -32,7 +33,6 @@ export function ProcessProvider(props) {
       // Check for existing job (reload recovery)
       const { job } = await api.getCurrentJob();
       if (job) {
-        console.log("Recovered job:", job.id, job.status);
         setStore({
           job,
           filename: job.filename,
@@ -41,6 +41,8 @@ export function ProcessProvider(props) {
       }
     } catch (err) {
       console.error("Failed to initialize:", err);
+    } finally {
+      setStore("initializing", false);
     }
   });
 
@@ -73,7 +75,6 @@ export function ProcessProvider(props) {
 
       channel = socket.channel(`job:${jobId}`, {});
       channel.join()
-        .receive("ok", () => console.log("Joined job:" + jobId))
         .receive("error", (e) => console.error("Join failed", e));
 
       channel.on("job_updated", (payload) => {
@@ -158,7 +159,15 @@ export function ProcessProvider(props) {
     setStore("error", null);
   }
 
-  function reset() {
+  async function reset() {
+    // Delete job from server first (cleanup)
+    if (store.job?.id) {
+      try {
+        await api.cancelJob(store.job.id);
+      } catch (err) {
+        // Ignore - job might already be gone
+      }
+    }
     setStore({
       file: null,
       s3Key: null,

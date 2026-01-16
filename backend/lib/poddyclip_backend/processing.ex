@@ -133,7 +133,8 @@ defmodule PoddyclipBackend.Processing do
           status: parse_status(params["status"]),
           progress: params["progress"] || %{},
           error: params["error"],
-          download_url: params["download_url"]
+          download_url: params["download_url"],
+          result_s3_key: params["result_s3_key"]
         }
 
         updated_job =
@@ -157,13 +158,29 @@ defmodule PoddyclipBackend.Processing do
   end
 
   @doc """
+  Delete a job from the database.
+  Used for cleaning up stale or invalid jobs.
+  """
+  def delete_job(job_id) do
+    case get_job(job_id) do
+      nil -> {:error, :not_found}
+      job -> Repo.delete(job)
+    end
+  end
+
+  @doc """
   Cancel a job if possible.
   Marks the job as failed and attempts to delete from Rust API.
+  For already-failed jobs, deletes them from the database (cleanup).
   """
   def cancel_job(job_id) do
     case get_job(job_id) do
       nil ->
         {:error, :not_found}
+
+      %{status: status} = job when status in [:failed, :completed] ->
+        # Already finished, just delete from database (cleanup)
+        Repo.delete(job)
 
       job ->
         # Try to delete from Rust API (best effort)

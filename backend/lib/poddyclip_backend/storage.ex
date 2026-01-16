@@ -44,11 +44,25 @@ defmodule PoddyclipBackend.Storage do
 
   @doc """
   Generate a presigned URL for downloading a file.
+
+  Options:
+    - `:filename` - Custom filename for Content-Disposition header
   """
-  def presign_download(key, expires_in \\ 3600) do
+  def presign_download(key, opts \\ []) do
     if enabled?() do
       config = ExAws.Config.new(:s3)
-      ExAws.S3.presigned_url(config, :get, bucket(), key, expires_in: expires_in)
+      expires_in = opts[:expires_in] || 3600
+
+      query_params =
+        case opts[:filename] do
+          nil -> []
+          name -> [{"response-content-disposition", "attachment; filename=\"#{name}\""}]
+        end
+
+      ExAws.S3.presigned_url(config, :get, bucket(), key,
+        expires_in: expires_in,
+        query_params: query_params
+      )
     else
       {:error, :s3_not_configured}
     end

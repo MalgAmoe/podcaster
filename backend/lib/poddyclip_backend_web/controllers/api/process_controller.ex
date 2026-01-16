@@ -156,6 +156,9 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   Returns the most recent job that is either still processing or
   completed/failed within the last 24 hours.
 
+  If a completed job's result file no longer exists in S3, the job is
+  deleted and null is returned (user sees fresh UI).
+
   Response: {"job": {...}} or {"job": null}
   """
   def current_job(conn, _params) do
@@ -165,7 +168,27 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
       nil ->
         json(conn, %{job: nil})
 
+      %{status: :completed, result_s3_key: key} = job when not is_nil(key) ->
+        # Verify result file still exists
+        if Storage.exists?(key) do
+          json(conn, %{job: job_to_json(job)})
+        else
+          # File gone, clean up and return fresh state
+          Processing.delete_job(job.id)
+          json(conn, %{job: nil})
+        end
+
+      %{status: :completed} = job ->
+        # Completed but no result_s3_key (old job format), clean up
+        Processing.delete_job(job.id)
+        json(conn, %{job: nil})
+
+      %{status: :failed} = job ->
+        # Failed jobs - show error so user can acknowledge
+        json(conn, %{job: job_to_json(job)})
+
       job ->
+        # Processing/queued - return as-is
         json(conn, %{job: job_to_json(job)})
     end
   end
@@ -177,14 +200,13 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
       progress: job.progress || %{},
       filename: job.filename,
       download_url: job.download_url,
-      original_url: maybe_presign_input(job.input_s3_key),
+      original_url: presign_key(job.input_s3_key),
       error: job.error
     }
   end
 
-  defp maybe_presign_input(nil), do: nil
-
-  defp maybe_presign_input(key) do
+  defp presign_key(nil), do: nil
+  defp presign_key(key) do
     case Storage.presign_download(key) do
       {:ok, url} -> url
       _ -> nil

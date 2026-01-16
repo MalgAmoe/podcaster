@@ -13,6 +13,7 @@ pub struct WebhookPayload {
     pub progress: JobProgress,
     pub error: Option<String>,
     pub download_url: Option<String>,
+    pub result_s3_key: Option<String>,
 }
 
 /// HTTP client for sending webhooks
@@ -46,6 +47,7 @@ impl WebhookClient {
             progress: job.progress.clone(),
             error: job.error.clone(),
             download_url,
+            result_s3_key: job.result_s3_key.clone(),
         };
 
         let mut request = self.client.post(&url).json(&payload);
