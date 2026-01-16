@@ -23,6 +23,9 @@ export function ProcessProvider(props) {
   let socket = null;
   let channel = null;
 
+  // Upload abort controller - prevents race conditions and orphaned uploads
+  let uploadXhr = null;
+
   // Load presets and check for existing job on mount
   onMount(async () => {
     try {
@@ -48,6 +51,11 @@ export function ProcessProvider(props) {
 
   // Cleanup on component unmount
   onCleanup(() => {
+    // Abort any pending upload
+    if (uploadXhr) {
+      uploadXhr.abort();
+      uploadXhr = null;
+    }
     if (channel) channel.leave();
     if (socket) socket.disconnect();
   });
@@ -85,6 +93,15 @@ export function ProcessProvider(props) {
   });
 
   async function uploadFile(file) {
+    // Prevent concurrent uploads
+    if (store.uploadState === "uploading") return;
+
+    // Cancel any pending upload
+    if (uploadXhr) {
+      uploadXhr.abort();
+      uploadXhr = null;
+    }
+
     setStore({
       file,
       filename: file.name,
@@ -98,6 +115,7 @@ export function ProcessProvider(props) {
 
       await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
+        uploadXhr = xhr;
 
         xhr.upload.addEventListener("progress", (e) => {
           if (e.lengthComputable) {
@@ -106,6 +124,7 @@ export function ProcessProvider(props) {
         });
 
         xhr.addEventListener("load", () => {
+          uploadXhr = null;
           if (xhr.status >= 200 && xhr.status < 300) {
             resolve();
           } else {
@@ -113,7 +132,15 @@ export function ProcessProvider(props) {
           }
         });
 
-        xhr.addEventListener("error", () => reject(new Error("Upload failed")));
+        xhr.addEventListener("error", () => {
+          uploadXhr = null;
+          reject(new Error("Upload failed"));
+        });
+
+        xhr.addEventListener("abort", () => {
+          uploadXhr = null;
+          reject(new Error("Upload cancelled"));
+        });
 
         xhr.open("PUT", url, true);
         xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
@@ -122,7 +149,10 @@ export function ProcessProvider(props) {
 
       setStore({ s3Key: key, uploadState: "ready" });
     } catch (err) {
-      setStore({ error: err.message, uploadState: "error" });
+      // Don't show error for aborted uploads
+      if (err.message !== "Upload cancelled") {
+        setStore({ error: err.message, uploadState: "error" });
+      }
     }
   }
 

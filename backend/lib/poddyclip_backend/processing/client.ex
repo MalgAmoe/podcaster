@@ -75,6 +75,7 @@ defmodule PoddyclipBackend.Processing.Client do
     config = %{
       phoenix_job_id: phoenix_job_id,
       input_s3_key: input_s3_key,
+      user_id: Keyword.get(opts, :user_id),
       filename: Keyword.get(opts, :filename),
       chain: Keyword.get(opts, :chain),
       output_format: Keyword.get(opts, :output_format, "mp3"),

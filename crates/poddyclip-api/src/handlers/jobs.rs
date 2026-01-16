@@ -62,6 +62,8 @@ pub async fn delete_job(
 pub struct CreateS3JobRequest {
     pub phoenix_job_id: Option<i64>,
     pub input_s3_key: String,
+    /// User ID for output path (results/{user_id}/output.ext)
+    pub user_id: Option<i64>,
     /// Original filename (for output naming)
     pub filename: Option<String>,
     pub chain: Option<String>,
@@ -154,6 +156,7 @@ pub async fn create_s3_job(
     let state_clone = state.clone();
     let chains_dir = state.config.chains_dir.clone();
     let job_timeout = state.config.job_timeout_seconds;
+    let user_id_for_upload = req.user_id;
     let filename_for_upload = filename.clone();
     let webhook_client = state.webhook.clone();
 
@@ -232,20 +235,12 @@ pub async fn create_s3_job(
 
         match result {
             Ok(Ok(Ok((output_bytes, content_type)))) => {
-                // Upload to S3 if storage is configured
-                let s3_key = if let Some(ref storage) = state_clone.storage {
+                // Upload to S3 if storage is configured and user_id is present
+                let s3_key = if let (Some(ref storage), Some(user_id)) = (&state_clone.storage, user_id_for_upload) {
                     let extension = if content_type == "audio/mpeg" { ".mp3" } else { ".wav" };
-                    let output_filename = format!(
-                        "{}_processed{}",
-                        std::path::Path::new(&filename_for_upload)
-                            .file_stem()
-                            .unwrap_or_default()
-                            .to_string_lossy(),
-                        extension
-                    );
 
                     match storage
-                        .upload_result(job_id, &output_bytes, &content_type, &output_filename)
+                        .upload_result(user_id, &output_bytes, &content_type, &filename_for_upload, extension)
                         .await
                     {
                         Ok(key) => {
@@ -257,6 +252,9 @@ pub async fn create_s3_job(
                             None
                         }
                     }
+                } else if state_clone.storage.is_some() && user_id_for_upload.is_none() {
+                    error!("Job {} has no user_id, cannot upload to S3", job_id);
+                    None
                 } else {
                     None
                 };

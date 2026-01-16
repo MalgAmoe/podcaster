@@ -28,7 +28,7 @@ export function getFriendlyJobError(error) {
 export function getUploadError(error) {
   switch (error) {
     case "too_large":
-      return "File is too large (max 100MB)";
+      return "File is too large (max 500MB)";
     case "not_accepted":
       return "File type not accepted";
     case "too_many_files":

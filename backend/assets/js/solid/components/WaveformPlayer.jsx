@@ -1,7 +1,27 @@
 import { createSignal, createEffect, Show, untrack } from "solid-js";
 
-// Module-level cache for decoded AudioBuffers (survives component re-renders)
+// Module-level cache for decoded AudioBuffers with LRU eviction
+const MAX_CACHE_ENTRIES = 5;
 const audioBufferCache = new Map();
+
+function cacheBuffer(key, buffer) {
+  // Evict oldest entry if at limit (Map maintains insertion order)
+  if (audioBufferCache.size >= MAX_CACHE_ENTRIES) {
+    const firstKey = audioBufferCache.keys().next().value;
+    audioBufferCache.delete(firstKey);
+  }
+  audioBufferCache.set(key, buffer);
+}
+
+// Shared AudioContext to avoid browser throttling (limit ~6-10 concurrent)
+let sharedAudioContext = null;
+
+function getAudioContext() {
+  if (!sharedAudioContext || sharedAudioContext.state === "closed") {
+    sharedAudioContext = new AudioContext();
+  }
+  return sharedAudioContext;
+}
 
 export function WaveformPlayer(props) {
   // props: audioUrl, cacheKey (optional), currentTime (optional), isPlaying (optional), onTimeUpdate, onPlayingChange
@@ -40,7 +60,17 @@ export function WaveformPlayer(props) {
       setAudioBuffer(cached);
       setDuration(cached.duration);
       setLoading(false);
-      drawWaveform(cached);
+      // For cached audio, seek immediately after a microtask (DOM update)
+      queueMicrotask(() => {
+        if (audioRef && pendingSeek !== null) {
+          audioRef.currentTime = pendingSeek;
+          pendingSeek = null;
+        }
+        if (audioRef && pendingPlay) {
+          audioRef.play();
+          pendingPlay = false;
+        }
+      });
       return;
     }
 
@@ -50,25 +80,24 @@ export function WaveformPlayer(props) {
     try {
       const response = await fetch(url);
       const arrayBuffer = await response.arrayBuffer();
-      const audioContext = new AudioContext();
+      const audioContext = getAudioContext();
       const buffer = await audioContext.decodeAudioData(arrayBuffer);
 
-      // Cache the decoded buffer using cacheKey if provided
-      audioBufferCache.set(key, buffer);
+      // Cache the decoded buffer using cacheKey if provided (LRU eviction)
+      cacheBuffer(key, buffer);
 
       setAudioBuffer(buffer);
       setDuration(buffer.duration);
       setLoading(false);
-      drawWaveform(buffer);
     } catch (err) {
       console.error("Failed to decode audio:", err);
       setLoading(false);
     }
   });
 
-  // Handle audio ready - restore position and play state
+  // Handle audio ready - restore position and play state after URL change
   function handleCanPlay() {
-    if (pendingSeek !== null && pendingSeek > 0) {
+    if (pendingSeek !== null) {
       audioRef.currentTime = pendingSeek;
       pendingSeek = null;
     }
@@ -116,6 +145,15 @@ export function WaveformPlayer(props) {
     ctx.fillRect(x - 1, 0, 2, canvasRef.height);
   }
 
+  // Draw waveform when buffer is ready AND canvas is mounted
+  // (canvas only mounts after loading() becomes false)
+  createEffect(() => {
+    const buffer = audioBuffer();
+    if (!loading() && buffer) {
+      drawWaveform(buffer);
+    }
+  });
+
   createEffect(() => {
     currentTime();
     drawPlayhead();
@@ -152,7 +190,8 @@ export function WaveformPlayer(props) {
   function handleCanvasClick(e) {
     const rect = canvasRef.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const percent = x / canvasRef.width;
+    // Use displayed width (rect.width), not canvas internal width (canvasRef.width)
+    const percent = x / rect.width;
     const newTime = percent * duration();
 
     audioRef.currentTime = newTime;

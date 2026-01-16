@@ -5,7 +5,6 @@ use s3::Bucket;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use uuid::Uuid;
 
 /// S3-compatible storage client for storing processed audio files
 #[derive(Clone)]
@@ -68,15 +67,23 @@ impl Storage {
 
     /// Upload processed audio to S3
     /// Returns the object key
+    ///
+    /// Path format: results/{user_id}/{filename_stem}_processed{extension}
     pub async fn upload_result(
         &self,
-        job_id: Uuid,
+        user_id: i64,
         data: &[u8],
         content_type: &str,
         filename: &str,
+        extension: &str,
     ) -> Result<String> {
-        // Generate a unique key: results/{job_id}/{filename}
-        let key = format!("results/{}/{}", job_id, filename);
+        // Extract stem from original filename, fallback to "audio"
+        let stem = std::path::Path::new(filename)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("audio");
+
+        let key = format!("results/{}/{}_processed{}", user_id, stem, extension);
 
         self.bucket
             .put_object_with_content_type(&key, data, content_type)
