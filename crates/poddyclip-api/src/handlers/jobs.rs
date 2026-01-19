@@ -66,7 +66,14 @@ pub struct CreateS3JobRequest {
     pub user_id: Option<i64>,
     /// Original filename (for output naming)
     pub filename: Option<String>,
+    /// Legacy chain preset (deprecated, use category/mode/strength)
     pub chain: Option<String>,
+    /// Audio category: "voice" or "mixed"
+    pub category: Option<String>,
+    /// Processing mode: "repair", "natural", or "studio"
+    pub mode: Option<String>,
+    /// Processing strength: 1-5
+    pub strength: Option<u8>,
     #[serde(default)]
     pub output_format: Option<String>,
     #[serde(default = "default_mp3_bitrate")]
@@ -120,23 +127,35 @@ pub async fn create_s3_job(
         return Err(ApiError::ServerBusy);
     }
 
-    // Validate chain preset exists if specified
-    if let Some(ref chain_name) = req.chain {
+    // Build ProcessConfig from request
+    // If category/mode/strength are provided, use dynamic builder
+    // Otherwise fall back to chain preset (legacy) or defaults
+    let mut config = if req.category.is_some() || req.mode.is_some() || req.strength.is_some() {
+        ProcessConfig::from_dynamic(
+            req.category.as_deref(),
+            req.mode.as_deref(),
+            req.strength,
+        )
+    } else if let Some(ref chain_name) = req.chain {
+        // Legacy chain preset support
         if !state.config.chains_dir.join(format!("{}.toml", chain_name)).exists() {
             return Err(ApiError::ChainNotFound(chain_name.clone()));
         }
-    }
-
-    // Build ProcessConfig from request
-    let config = ProcessConfig {
-        chain: req.chain,
-        output_format: match req.output_format.as_deref() {
-            Some("wav") => OutputFormat::Wav,
-            _ => OutputFormat::Mp3,
-        },
-        mp3_bitrate: req.mp3_bitrate,
-        ..ProcessConfig::default()
+        ProcessConfig {
+            chain: req.chain,
+            ..ProcessConfig::default()
+        }
+    } else {
+        // Default to voice/natural/3
+        ProcessConfig::from_dynamic(None, None, None)
     };
+
+    // Apply output format settings
+    config.output_format = match req.output_format.as_deref() {
+        Some("wav") => OutputFormat::Wav,
+        _ => OutputFormat::Mp3,
+    };
+    config.mp3_bitrate = req.mp3_bitrate;
 
     // Create job with webhook info
     let job_id = Uuid::new_v4();

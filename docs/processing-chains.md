@@ -4,6 +4,34 @@
 
 Chains are TOML configuration files that define which processors to apply and at what intensity. They live in the `chains/` directory.
 
+## Web UI Configuration
+
+The web interface uses a simplified three-setting configuration:
+
+- **Category**: `voice` or `mixed`
+- **Mode**: `repair`, `natural`, or `studio`
+- **Strength**: 1-5 (Gentle, Light, Moderate, Strong, Aggressive)
+
+This generates a `ProcessConfig` that feeds into the same processing pipeline as TOML chains.
+
+The logic that maps category/mode/strength to processor settings is in:
+`crates/poddyclip-api/src/models/request.rs` → `ProcessConfig::build_config()`
+
+### API
+
+```json
+POST /api/jobs
+{
+  "s3_key": "inputs/123/audio.mp3",
+  "filename": "episode.mp3",
+  "category": "voice",
+  "mode": "natural",
+  "strength": 3
+}
+```
+
+---
+
 ## Quick Answer: Can I Add Processors in Any Order?
 
 **No.** The processing order is **fixed and immutable**. Chains only control which processors are enabled and their intensity (preset 1-5). The engine always applies processors in the same sequence regardless of the order in your TOML file.

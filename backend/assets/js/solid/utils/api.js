@@ -28,10 +28,6 @@ async function request(method, path, body = null) {
 }
 
 export const api = {
-  async getPresets() {
-    return request("GET", "/api/presets");
-  },
-
   async getCurrentJob() {
     return request("GET", "/api/jobs/current");
   },
@@ -40,8 +36,14 @@ export const api = {
     return request("POST", "/api/presign-upload", { filename });
   },
 
-  async createJob(s3Key, filename, preset) {
-    return request("POST", "/api/jobs", { s3_key: s3Key, filename, preset });
+  async createJob(s3Key, filename, config) {
+    return request("POST", "/api/jobs", {
+      s3_key: s3Key,
+      filename,
+      category: config.category,
+      mode: config.mode,
+      strength: config.strength
+    });
   },
 
   async cancelJob(jobId) {

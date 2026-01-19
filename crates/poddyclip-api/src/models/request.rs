@@ -18,6 +18,25 @@ pub enum CompressorType {
     Fet,
 }
 
+/// Audio category - determines filter settings
+#[derive(Debug, Clone, Copy, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Category {
+    #[default]
+    Voice,
+    Mixed,
+}
+
+/// Processing mode - determines the overall processing approach
+#[derive(Debug, Clone, Copy, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ProcessingMode {
+    Repair,
+    #[default]
+    Natural,
+    Studio,
+}
+
 /// Configuration for audio processing - mirrors CLI arguments
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -114,5 +133,150 @@ impl Default for ProcessConfig {
             radio: false,
             radio_amount: 1.0,
         }
+    }
+}
+
+impl ProcessConfig {
+    /// Build a ProcessConfig from dynamic category/mode/strength parameters.
+    /// This replaces the chain preset system with a more intuitive UI.
+    pub fn from_dynamic(
+        category: Option<&str>,
+        mode: Option<&str>,
+        strength: Option<u8>,
+    ) -> Self {
+        let category = match category {
+            Some("mixed") => Category::Mixed,
+            _ => Category::Voice,
+        };
+        let mode = match mode {
+            Some("repair") => ProcessingMode::Repair,
+            Some("studio") => ProcessingMode::Studio,
+            _ => ProcessingMode::Natural,
+        };
+        let strength = strength.unwrap_or(3).clamp(1, 5);
+
+        Self::build_config(category, mode, strength)
+    }
+
+    fn build_config(category: Category, mode: ProcessingMode, strength: u8) -> Self {
+        let mut c = Self::default();
+
+        // Don't use chain presets - we're building from scratch
+        c.chain = None;
+
+        // Category settings - affects filter slopes
+        match category {
+            Category::Voice => {
+                c.filters_enabled = true;
+                c.hp_slope = 24; // Steeper for voice isolation
+            }
+            Category::Mixed => {
+                c.filters_enabled = true;
+                c.hp_slope = 12; // Gentler for music content
+            }
+        }
+
+        // Mode settings - determines processing approach
+        match mode {
+            ProcessingMode::Repair => {
+                // Heavy cleanup, minimal coloring
+                c.denoiser_preset = (strength + 1).min(5);
+                c.dereverb = strength;
+                c.spectral_gate = strength;
+                c.declick = true;
+                c.depeak = true;
+                c.depeak_max_db = 18.0 - (strength as f32 * 2.0); // More aggressive at higher strength
+
+                c.expander_enabled = true;
+                c.expander_preset = strength;
+
+                c.compressor_enabled = true;
+                c.compressor_type = CompressorType::Peak;
+                c.compressor_preset = strength;
+
+                c.fixeq_enabled = true;
+                c.fixeq_preset = strength;
+                c.deesser_enabled = true;
+
+                // No saturation/enhancement in repair mode
+                c.saturation_enabled = false;
+                c.tape_enabled = false;
+                c.buttercomp_enabled = false;
+                c.enhanceeq_enabled = false;
+
+                c.output_enabled = true;
+                c.lufs_target = -18.0; // More headroom for repaired audio
+                c.radio = false;
+            }
+            ProcessingMode::Natural => {
+                // Balanced processing - clean but not sterile
+                c.denoiser_preset = strength;
+                c.dereverb = 0; // Off
+                c.spectral_gate = 0;
+                c.declick = false;
+                c.depeak = false;
+
+                c.expander_enabled = true;
+                c.expander_preset = ((strength + 1) / 2).max(1);
+
+                c.compressor_enabled = true;
+                c.compressor_type = CompressorType::Peak;
+                c.compressor_preset = strength;
+
+                c.fixeq_enabled = true;
+                c.fixeq_preset = ((strength + 1) / 2).max(1);
+                c.deesser_enabled = true;
+
+                // Light saturation at higher strengths
+                c.saturation_enabled = strength >= 3;
+                c.saturation_preset = ((strength + 1) / 2).max(1);
+                c.tape_enabled = false;
+                c.buttercomp_enabled = strength >= 3;
+                c.buttercomp_preset = ((strength + 1) / 2).max(1);
+
+                c.enhanceeq_enabled = true;
+                c.enhanceeq_preset = strength;
+
+                c.output_enabled = true;
+                c.lufs_target = -16.0;
+                c.radio = false;
+            }
+            ProcessingMode::Studio => {
+                // Full polish, rich sound
+                c.denoiser_preset = ((strength + 1) / 2).max(1); // Light denoising
+                c.dereverb = 0;
+                c.spectral_gate = 0;
+                c.declick = false;
+                c.depeak = false;
+
+                c.expander_enabled = true;
+                c.expander_preset = strength;
+
+                c.compressor_enabled = true;
+                c.compressor_type = CompressorType::Fet; // Character compression
+                c.compressor_preset = strength;
+
+                c.fixeq_enabled = true;
+                c.fixeq_preset = strength;
+                c.deesser_enabled = true;
+
+                // Full saturation chain for warmth
+                c.saturation_enabled = true;
+                c.saturation_preset = strength;
+                c.tape_enabled = true;
+                c.tape_preset = strength;
+                c.buttercomp_enabled = true;
+                c.buttercomp_preset = strength;
+
+                c.enhanceeq_enabled = true;
+                c.enhanceeq_preset = strength;
+
+                c.output_enabled = true;
+                c.lufs_target = -14.0; // Louder, broadcast-style
+                c.radio = false;
+            }
+        }
+
+        c
     }
 }

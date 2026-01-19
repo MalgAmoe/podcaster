@@ -14,8 +14,12 @@ export function ProcessProvider(props) {
     filename: null,
     uploadProgress: 0,
     uploadState: "idle", // idle, uploading, ready, error
-    presets: ["podcast", "broadcast", "gentle"],
-    selectedPreset: "podcast",
+    // Processing configuration - each category stores its own mode + strength
+    processingConfig: {
+      category: "voice", // "voice" | "mixed"
+      voice: { mode: "natural", strength: 3 },
+      mixed: { mode: "natural", strength: 3 }
+    },
     job: null,
     error: null,
   });
@@ -27,13 +31,9 @@ export function ProcessProvider(props) {
   // Upload abort controller - prevents race conditions and orphaned uploads
   let uploadXhr = null;
 
-  // Load presets and check for existing job on mount
+  // Check for existing job on mount
   onMount(async () => {
     try {
-      // Load presets
-      const { presets } = await api.getPresets();
-      setStore("presets", presets);
-
       // Check for existing job (reload recovery)
       const { job } = await api.getCurrentJob();
       if (job) {
@@ -157,9 +157,24 @@ export function ProcessProvider(props) {
     }
   }
 
-  function selectPreset(preset) {
-    setStore("selectedPreset", preset);
+  // Processing config actions
+  function setCategory(category) {
+    setStore("processingConfig", "category", category);
   }
+
+  function setMode(mode) {
+    const cat = store.processingConfig.category;
+    setStore("processingConfig", cat, "mode", mode);
+  }
+
+  function setStrength(strength) {
+    const cat = store.processingConfig.category;
+    setStore("processingConfig", cat, "strength", Math.max(1, Math.min(5, strength)));
+  }
+
+  // Computed helpers for current config
+  const currentMode = () => store.processingConfig[store.processingConfig.category].mode;
+  const currentStrength = () => store.processingConfig[store.processingConfig.category].strength;
 
   async function submitJob() {
     if (!store.s3Key || !store.filename) {
@@ -168,7 +183,13 @@ export function ProcessProvider(props) {
     }
 
     try {
-      const job = await api.createJob(store.s3Key, store.filename, store.selectedPreset);
+      const cat = store.processingConfig.category;
+      const config = {
+        category: cat,
+        mode: store.processingConfig[cat].mode,
+        strength: store.processingConfig[cat].strength
+      };
+      const job = await api.createJob(store.s3Key, store.filename, config);
       setStore({ job, error: null });
     } catch (err) {
       setStore("error", err.message);
@@ -216,7 +237,11 @@ export function ProcessProvider(props) {
   const value = {
     store,
     uploadFile,
-    selectPreset,
+    setCategory,
+    setMode,
+    setStrength,
+    currentMode,
+    currentStrength,
     submitJob,
     cancelJob,
     clearError,

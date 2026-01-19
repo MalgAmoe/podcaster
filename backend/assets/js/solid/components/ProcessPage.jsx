@@ -1,7 +1,7 @@
 import { Show, Switch, Match } from "solid-js";
 import { useProcess } from "../context/ProcessContext";
 import { UploadZone } from "./UploadZone";
-import { PresetSelector } from "./PresetSelector";
+import { ProcessingConfig } from "./ProcessingConfig";
 import { JobProgress } from "./JobProgress";
 import { JobComplete } from "./JobComplete";
 import { JobFailed } from "./JobFailed";
@@ -26,7 +26,7 @@ export function ProcessPage() {
             <Show when={store.job} fallback={
               <div class="space-y-6">
                 <UploadZone />
-                <PresetSelector />
+                <ProcessingConfig />
                 <button
                   type="button"
                   onClick={submitJob}
