@@ -70,14 +70,19 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   @doc """
   POST /api/jobs - Create a processing job.
 
-  Request: {"s3_key": "...", "filename": "...", "preset": "podcast"}
+  Request: {"s3_key": "...", "filename": "...", "category": "voice", "mode": "natural", "strength": 3}
   Response: {"id": 123, "status": "queued", "filename": "..."}
   """
   def create_job(conn, %{"s3_key" => s3_key, "filename" => filename} = params) do
     user = conn.assigns.current_user
-    preset = params["preset"] || "podcast"
 
-    case Processing.submit_job_from_s3(s3_key, filename, user.id, chain: preset) do
+    opts = [
+      category: params["category"] || "voice",
+      mode: params["mode"] || "natural",
+      strength: params["strength"] || 3
+    ]
+
+    case Processing.submit_job_from_s3(s3_key, filename, user.id, opts) do
       {:ok, job} ->
         json(conn, %{
           id: job.id,

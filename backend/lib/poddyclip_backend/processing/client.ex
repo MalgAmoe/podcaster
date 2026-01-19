@@ -67,7 +67,9 @@ defmodule PoddyclipBackend.Processing.Client do
 
   ## Options
     * `:filename` - Original filename (for output naming)
-    * `:chain` - Name of the processing chain preset to use
+    * `:category` - Audio category: "voice" or "mixed" (default: "voice")
+    * `:mode` - Processing mode: "repair", "natural", or "studio" (default: "natural")
+    * `:strength` - Processing strength: 1-5 (default: 3)
     * `:output_format` - "wav" or "mp3" (default: "mp3")
     * `:mp3_bitrate` - Bitrate for MP3 output (default: 192)
   """
@@ -77,7 +79,9 @@ defmodule PoddyclipBackend.Processing.Client do
       input_s3_key: input_s3_key,
       user_id: Keyword.get(opts, :user_id),
       filename: Keyword.get(opts, :filename),
-      chain: Keyword.get(opts, :chain),
+      category: Keyword.get(opts, :category, "voice"),
+      mode: Keyword.get(opts, :mode, "natural"),
+      strength: Keyword.get(opts, :strength, 3),
       output_format: Keyword.get(opts, :output_format, "mp3"),
       mp3_bitrate: Keyword.get(opts, :mp3_bitrate, 192),
       webhook_url: webhook_url(),
