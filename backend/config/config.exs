@@ -63,7 +63,22 @@ config :swoosh, :api_client, false
 # Oban job queue
 config :poddyclip_backend, Oban,
   repo: PoddyclipBackend.Repo,
-  queues: [processing: 4]
+  queues: [default: 10, processing: 4],
+  plugins: [
+    Oban.Plugins.Pruner,
+    {Oban.Plugins.Cron,
+     crontab: [
+       # Cleanup old jobs every hour
+       {"0 * * * *", PoddyclipBackend.Workers.CleanupJobs},
+       # Cleanup orphaned S3 files daily at 3am
+       {"0 3 * * *", PoddyclipBackend.Workers.CleanupOrphanedFiles}
+     ]}
+  ]
+
+# Cleanup configuration
+config :poddyclip_backend, :cleanup,
+  job_retention_days: 7,
+  stale_job_hours: 2
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
