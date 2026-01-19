@@ -2,6 +2,7 @@ import { createContext, useContext, createEffect, onMount, onCleanup } from "sol
 import { createStore } from "solid-js/store";
 import { Socket } from "phoenix";
 import { api } from "../utils/api";
+import { clearAudioCache } from "../components/WaveformPlayer";
 
 const ProcessContext = createContext();
 
@@ -190,6 +191,9 @@ export function ProcessProvider(props) {
   }
 
   async function reset() {
+    // Clear audio buffer cache to free memory
+    clearAudioCache();
+
     // Delete job from server first (cleanup)
     if (store.job?.id) {
       try {

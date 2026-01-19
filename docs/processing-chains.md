@@ -73,7 +73,7 @@ expander = 2                              # Noise gate
 compressor = { type = "peak", preset = 3 } # or type = "fet"
 
 # EQ & Tone
-fixeq = true        # true = default preset
+fixeq = 3           # 1-5 preset level (or false to disable)
 deesser = true
 saturation = 2      # Channel9 warmth
 buttercomp = 3      # Airwindows compression
@@ -110,7 +110,7 @@ description = "Minimal processing, preserve dynamics"
 denoiser = 1
 expander = 1
 compressor = { type = "peak", preset = 1 }
-fixeq = true
+fixeq = 1
 deesser = true
 output = -18
 ```
@@ -123,7 +123,7 @@ description = "Balanced processing for conversational podcasts"
 denoiser = 3
 expander = 2
 compressor = { type = "peak", preset = 3 }
-fixeq = true
+fixeq = 3
 deesser = true
 saturation = 2
 buttercomp = 3
@@ -140,7 +140,7 @@ description = "Radio-ready, polished sound"
 denoiser = 4
 expander = 4
 compressor = { type = "fet", preset = 4 }
-fixeq = true
+fixeq = 4
 deesser = true
 saturation = 3
 buttercomp = 4
@@ -153,8 +153,8 @@ output = -14
 
 1. Create a new `.toml` file in `chains/`
 2. Set `name` (required) and `description` (optional)
-3. Configure processors - omit or set `false` to disable
-4. Set output LUFS target
+3. Configure processors - **omitted processors are disabled by default**
+4. Set output LUFS target (omit for no normalization)
 
 **Minimal chain (just denoising):**
 ```toml
@@ -178,7 +178,7 @@ expander = 2
 compressor = { type = "peak", preset = 2 }
 
 # Standard EQ
-fixeq = true
+fixeq = 2
 deesser = true
 
 # Light enhancement

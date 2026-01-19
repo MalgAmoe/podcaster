@@ -294,7 +294,7 @@ pub fn process_audio(
 
         report("fixeq", 13)?;
         let mut fixeq = FixEq::new(sample_rate as f32);
-        fixeq.configure_from_spectrum(&spectrum, preset, is_stereo);
+        fixeq.configure_from_spectrum(&spectrum, effective_config.fixeq_preset as usize, is_stereo);
         if is_stereo {
             let (left, right) = samples.split_at_mut(1);
             fixeq.process_stereo(&mut left[0], &mut right[0]);
@@ -491,7 +491,8 @@ fn config_from_chain(chain: &ChainPreset, request: &ProcessConfig) -> ProcessCon
             crate::processing::chain::CompressorType::Fet => CompressorType::Fet,
         },
         compressor_preset: chain.compressor.preset,
-        fixeq_enabled: chain.fixeq,
+        fixeq_enabled: chain.fixeq.is_enabled(),
+        fixeq_preset: chain.fixeq.preset().unwrap_or(3),
         deesser_enabled: chain.deesser,
         saturation_enabled: chain.saturation.is_enabled(),
         saturation_preset: chain.saturation.preset().unwrap_or(3),

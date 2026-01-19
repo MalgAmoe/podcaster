@@ -13,6 +13,11 @@ function cacheBuffer(key, buffer) {
   audioBufferCache.set(key, buffer);
 }
 
+// Clear all cached buffers (call on reset/new job)
+export function clearAudioCache() {
+  audioBufferCache.clear();
+}
+
 // Shared AudioContext to avoid browser throttling (limit ~6-10 concurrent)
 let sharedAudioContext = null;
 
