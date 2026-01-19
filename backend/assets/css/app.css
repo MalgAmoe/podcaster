@@ -34,7 +34,7 @@
   --color-neutral: #1f1f1f;
   --color-neutral-content: #e5e5e5;
 
-  --color-success: #7c3aed;
+  --color-success: #22c55e;
   --color-success-content: #ffffff;
 
   --color-warning: #f59e0b;
@@ -55,6 +55,9 @@
   --border-btn: 0px;
   --tab-border: 1px;
   --tab-radius: 0.5rem;
+
+  /* Typography */
+  font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
 }
 
 /* Clean button styles - super round pills! */

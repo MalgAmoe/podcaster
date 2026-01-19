@@ -194,7 +194,7 @@ defmodule PoddyclipBackendWeb.UserAuth do
     end
   end
 
-  defp signed_in_path(_conn), do: ~p"/"
+  defp signed_in_path(_conn), do: ~p"/app"
 
   @doc """
   Plug for routes that require the user to be authenticated.

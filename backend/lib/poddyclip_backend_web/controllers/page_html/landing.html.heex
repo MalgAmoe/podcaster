@@ -1,0 +1,75 @@
+<div class="min-h-screen">
+  <!-- Hero - The cow speaks -->
+  <section class="min-h-[80vh] flex items-center justify-center px-6">
+    <div class="max-w-2xl text-center">
+      <div class="text-[10rem] leading-none mb-8 hover:animate-munch cursor-default">
+        🐄
+      </div>
+      <h1 class="text-5xl md:text-6xl font-bold mb-6">
+        Give me your <span class="text-primary">tasty audio</span>
+      </h1>
+      <p class="text-2xl text-base-content/70 mb-10">
+        I eat room echo, background noise, and that weird hum.<br/>
+        I poop out podcast-ready audio.
+      </p>
+      <.link href={~p"/users/register"} class="btn btn-primary btn-lg text-lg px-10">
+        Feed the cow
+      </.link>
+    </div>
+  </section>
+
+  <!-- What I eat -->
+  <section class="py-24 px-6 bg-base-200/50">
+    <div class="max-w-3xl mx-auto">
+      <h2 class="text-4xl font-bold mb-12 text-center">
+        I'm not picky
+      </h2>
+      <div class="space-y-4 text-xl">
+        <p><span class="text-base-content/70">That fan noise you didn't notice until editing?</span> <span class="text-primary font-medium">Delicious.</span></p>
+        <p><span class="text-base-content/70">The bathroom reverb from your "recording studio"?</span> <span class="text-primary font-medium">Yum.</span></p>
+        <p><span class="text-base-content/70">Volume all over the place?</span> <span class="text-primary font-medium">Nom nom nom.</span></p>
+        <p><span class="text-base-content/70">Harsh sibilants making you sound like a snake?</span> <span class="text-primary font-medium italic">*chef's kiss*</span></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- The promise -->
+  <section class="py-24 px-6">
+    <div class="max-w-2xl mx-auto text-center">
+      <p class="text-3xl md:text-4xl font-medium mb-6 leading-snug">
+        Other tools make you sound like a robot.<br/>
+        <span class="text-base-content/60">I just make you sound like you recorded somewhere nicer.</span>
+      </p>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="py-24 px-6 bg-base-200/50">
+    <div class="max-w-xl mx-auto text-center">
+      <p class="text-4xl font-bold mb-4">
+        Upload something.
+      </p>
+      <p class="text-4xl font-bold text-base-content/50 mb-10">
+        See what happens.
+      </p>
+      <p class="text-lg text-base-content/60 mb-8">
+        3 free files. No credit card. No sales calls.
+      </p>
+      <.link href={~p"/users/register"} class="btn btn-primary btn-lg text-lg px-10">
+        Let's go
+      </.link>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="py-8 px-6 border-t border-base-300">
+    <div class="max-w-4xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+      <span class="text-base-content/50">🐄 Munchy Cow</span>
+      <nav class="flex gap-6 text-sm text-base-content/50">
+        <.link href={~p"/pricing"} class="hover:text-base-content transition-colors">Pricing</.link>
+        <.link href={~p"/terms"} class="hover:text-base-content transition-colors">Terms</.link>
+        <.link href={~p"/privacy"} class="hover:text-base-content transition-colors">Privacy</.link>
+      </nav>
+    </div>
+  </footer>
+</div>
