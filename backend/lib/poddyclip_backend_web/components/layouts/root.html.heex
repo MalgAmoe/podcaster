@@ -4,6 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="csrf-token" content={get_csrf_token()} />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400;1,9..40,500&display=swap" rel="stylesheet">
     <.live_title default="Munchy Cow">
       {assigns[:page_title]}
     </.live_title>
@@ -23,10 +26,21 @@
         <.link href={~p"/"} class="btn btn-ghost text-xl group"><span class="inline-block group-hover:animate-wiggle">🐄</span> Munchy Cow</.link>
       </div>
       <div class="navbar-end gap-2">
+        <.link href={~p"/pricing"} class="btn btn-ghost btn-sm">Pricing</.link>
         <%= if @current_scope do %>
-          <span class="text-sm text-base-content/70">{@current_scope.user.email}</span>
-          <.link href={~p"/users/settings"} class="btn btn-ghost btn-sm">Settings</.link>
-          <.link href={~p"/users/log-out"} method="delete" class="btn btn-ghost btn-sm">Log out</.link>
+          <.link href={~p"/app"} class="btn btn-primary btn-sm">Open App</.link>
+          <div class="dropdown dropdown-end">
+            <div tabindex="0" role="button" class="btn btn-ghost btn-sm btn-circle">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+              </svg>
+            </div>
+            <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box z-50 w-56 p-2 shadow-lg border border-base-300 mt-2">
+              <li class="menu-title text-xs text-base-content/50 px-2 py-1">{@current_scope.user.email}</li>
+              <li><.link href={~p"/users/settings"}>Settings</.link></li>
+              <li><.link href={~p"/users/log-out"} method="delete">Log out</.link></li>
+            </ul>
+          </div>
         <% else %>
           <.link href={~p"/users/register"} class="btn btn-ghost btn-sm">Register</.link>
           <.link href={~p"/users/log-in"} class="btn btn-primary btn-sm">Log in</.link>

@@ -37,10 +37,20 @@ defmodule PoddyclipBackendWeb.Router do
     end
   end
 
+  # Public pages (no auth required)
   scope "/", PoddyclipBackendWeb do
+    pipe_through [:browser]
+
+    get "/", PageController, :landing
+    get "/pricing", PageController, :pricing
+    get "/terms", PageController, :terms
+    get "/privacy", PageController, :privacy
+  end
+
+  # Authenticated app
+  scope "/app", PoddyclipBackendWeb do
     pipe_through [:browser, :require_authenticated_user]
 
-    # React process page
     get "/", PageController, :process
   end
 

@@ -1,0 +1,87 @@
+<div class="min-h-screen">
+  <!-- Header -->
+  <section class="py-20 px-6">
+    <div class="max-w-2xl mx-auto text-center">
+      <h1 class="text-5xl font-bold mb-4">How much hay?</h1>
+      <p class="text-xl text-base-content/60">
+        Start free. Upgrade when you're hooked.
+      </p>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section class="pb-20 px-6">
+    <div class="max-w-3xl mx-auto">
+      <div class="grid md:grid-cols-2 gap-6">
+        <!-- Free -->
+        <div class="p-8 rounded-3xl bg-base-200/50 border border-base-300">
+          <h2 class="text-2xl font-bold mb-1">Free</h2>
+          <p class="text-base-content/50 mb-6">Kick the tires</p>
+          <p class="text-5xl font-bold mb-8">$0</p>
+          <ul class="space-y-3 mb-8 text-base-content/80">
+            <li>3 files per month</li>
+            <li>30 min per file</li>
+            <li>Same quality as paid</li>
+          </ul>
+          <.link href={~p"/users/register"} class="btn btn-outline btn-block">
+            Start free
+          </.link>
+        </div>
+
+        <!-- Pro -->
+        <div class="p-8 rounded-3xl bg-primary text-primary-content">
+          <h2 class="text-2xl font-bold mb-1">Pro</h2>
+          <p class="text-primary-content/60 mb-6">Feed me more</p>
+          <p class="text-5xl font-bold mb-8">
+            $15<span class="text-xl font-normal text-primary-content/60">/mo</span>
+          </p>
+          <ul class="space-y-3 mb-8 text-primary-content/80">
+            <li>Unlimited files</li>
+            <li>2 hours per file</li>
+            <li>Priority queue</li>
+          </ul>
+          <.link href={~p"/users/register"} class="btn bg-white text-primary hover:bg-white/90 btn-block">
+            Start free trial
+          </.link>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ - casual -->
+  <section class="py-20 px-6 bg-base-200/50">
+    <div class="max-w-2xl mx-auto">
+      <h2 class="text-3xl font-bold text-center mb-12">You might be wondering</h2>
+      <div class="space-y-8">
+        <div>
+          <h3 class="font-semibold text-lg mb-2">What formats work?</h3>
+          <p class="text-base-content/70">WAV, MP3, FLAC, M4A, whatever. You get WAV back.</p>
+        </div>
+        <div>
+          <h3 class="font-semibold text-lg mb-2">How fast?</h3>
+          <p class="text-base-content/70">Usually a couple minutes. Pro skips the line.</p>
+        </div>
+        <div>
+          <h3 class="font-semibold text-lg mb-2">Can I cancel?</h3>
+          <p class="text-base-content/70">Anytime. No contracts, no guilt trips.</p>
+        </div>
+        <div>
+          <h3 class="font-semibold text-lg mb-2">What if it sounds bad?</h3>
+          <p class="text-base-content/70">Email me. I'll make it right or refund you. I'm a cow, not a monster.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="py-8 px-6 border-t border-base-300">
+    <div class="max-w-4xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+      <span class="text-base-content/50">🐄 Munchy Cow</span>
+      <nav class="flex gap-6 text-sm text-base-content/50">
+        <.link href={~p"/"} class="hover:text-base-content transition-colors">Home</.link>
+        <.link href={~p"/terms"} class="hover:text-base-content transition-colors">Terms</.link>
+        <.link href={~p"/privacy"} class="hover:text-base-content transition-colors">Privacy</.link>
+      </nav>
+    </div>
+  </footer>
+</div>
