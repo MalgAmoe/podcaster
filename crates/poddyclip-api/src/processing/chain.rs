@@ -21,9 +21,9 @@ pub struct ChainPreset {
     pub expander: ProcessorSetting,
     #[serde(default)]
     pub compressor: CompressorSetting,
-    #[serde(default = "default_true")]
-    pub fixeq: bool,
-    #[serde(default = "default_true")]
+    #[serde(default)]
+    pub fixeq: ProcessorSetting,
+    #[serde(default)]
     pub deesser: bool,
     #[serde(default)]
     pub saturation: ProcessorSetting,
@@ -51,7 +51,7 @@ pub enum ProcessorSetting {
 
 impl Default for ProcessorSetting {
     fn default() -> Self {
-        ProcessorSetting::Default
+        ProcessorSetting::Disabled
     }
 }
 
@@ -133,7 +133,7 @@ pub enum OutputSetting {
 
 impl Default for OutputSetting {
     fn default() -> Self {
-        OutputSetting::Default
+        OutputSetting::Disabled
     }
 }
 
@@ -215,7 +215,7 @@ impl Default for CompressorSetting {
         CompressorSetting {
             comp_type: CompressorType::Peak,
             preset: 3,
-            enabled: true,
+            enabled: false,
         }
     }
 }
@@ -304,10 +304,6 @@ impl<'de> Deserialize<'de> for CompressorSetting {
 
 fn default_preset() -> u8 {
     3
-}
-
-fn default_true() -> bool {
-    true
 }
 
 fn default_radio_amount() -> f32 {

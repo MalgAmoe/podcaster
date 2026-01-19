@@ -55,6 +55,7 @@ pub struct ProcessConfig {
 
     // EQ
     pub fixeq_enabled: bool,
+    pub fixeq_preset: u8,
     pub deesser_enabled: bool,
     pub enhanceeq_enabled: bool,
     pub enhanceeq_preset: u8,
@@ -98,6 +99,7 @@ impl Default for ProcessConfig {
             compressor_type: CompressorType::Peak,
             compressor_preset: 3,
             fixeq_enabled: true,
+            fixeq_preset: 1,
             deesser_enabled: true,
             enhanceeq_enabled: true,
             enhanceeq_preset: 3,

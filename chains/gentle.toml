@@ -4,10 +4,9 @@ description = "Minimal processing, preserve dynamics"
 denoiser = 1
 expander = 1
 compressor = { type = "peak", preset = 1 }
-fixeq = true
+fixeq = 1
 deesser = true
 saturation = 1
 buttercomp = 1
 enhanceeq = 1
-tape = 1
 output = -18           # More dynamic range

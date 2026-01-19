@@ -1,13 +1,13 @@
 name = "Podcast"
 description = "Balanced processing for conversational podcasts"
 
-denoiser = 3
-expander = 2           # Light - preserve natural room
+declick = 1
+denoiser = 1
+expander = 1          # Light - preserve natural room
 compressor = { type = "peak", preset = 3 }
-fixeq = true
+fixeq = 1
 deesser = true
 saturation = 2         # Light warmth
-buttercomp = 3
+buttercomp = 1
 enhanceeq = 3
-tape = 2
 output = -16           # Standard podcast LUFS

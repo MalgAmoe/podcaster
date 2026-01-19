@@ -85,7 +85,7 @@ export function JobComplete() {
             <Show when={currentUrl()}>
               <WaveformPlayer
                 audioUrl={currentUrl()}
-                cacheKey={activeTrack()}
+                cacheKey={`${store.job.id}-${activeTrack()}`}
                 currentTime={currentTime()}
                 isPlaying={isPlaying()}
                 onTimeUpdate={setCurrentTime}
