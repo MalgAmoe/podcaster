@@ -31,7 +31,6 @@ pub enum Category {
 #[derive(Debug, Clone, Copy, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ProcessingMode {
-    Repair,
     #[default]
     Natural,
     Studio,
@@ -153,9 +152,8 @@ impl ProcessConfig {
             _ => Category::Voice,
         };
         let mode = match mode {
-            Some("repair") => ProcessingMode::Repair,
             Some("studio") => ProcessingMode::Studio,
-            _ => ProcessingMode::Natural,
+            _ => ProcessingMode::Natural, // "repair" falls back to Natural
         };
         let strength = strength.unwrap_or(2).clamp(1, 3);
 
@@ -182,42 +180,12 @@ impl ProcessConfig {
 
         // Mode settings - determines processing approach
         match mode {
-            ProcessingMode::Repair => {
-                // Heavy cleanup, minimal coloring
-                c.denoiser_preset = strength;
-                c.dereverb = strength;
-                c.spectral_gate = strength;
-                c.declick = true;
-                c.depeak = true;
-                c.depeak_max_db = 18.0 - (strength as f32 * 2.0); // More aggressive at higher strength
-
-                c.expander_enabled = true;
-                c.expander_preset = strength;
-
-                c.compressor_enabled = true;
-                c.compressor_type = CompressorType::Peak;
-                c.compressor_preset = strength;
-
-                c.fixeq_enabled = true;
-                c.fixeq_preset = strength;
-                c.deesser_enabled = true;
-
-                // No saturation/enhancement in repair mode
-                c.saturation_enabled = false;
-                c.tape_enabled = false;
-                c.buttercomp_enabled = false;
-                c.enhanceeq_enabled = false;
-
-                c.output_enabled = true;
-                c.lufs_target = -18.0; // More headroom for repaired audio
-                c.radio = false;
-            }
             ProcessingMode::Natural => {
                 // Balanced processing - clean but not sterile
                 c.denoiser_preset = strength;
                 c.dereverb = 0; // Off
                 c.spectral_gate = 0;
-                c.declick = false;
+                c.declick = true;
                 c.depeak = false;
 
                 c.expander_enabled = true;
@@ -250,7 +218,7 @@ impl ProcessConfig {
                 c.denoiser_preset = strength;
                 c.dereverb = 0;
                 c.spectral_gate = 0;
-                c.declick = false;
+                c.declick = true;
                 c.depeak = false;
 
                 c.expander_enabled = true;
@@ -267,17 +235,16 @@ impl ProcessConfig {
                 // Full saturation chain for warmth
                 c.saturation_enabled = true;
                 c.saturation_preset = strength;
-                c.tape_enabled = true;
-                c.tape_preset = strength;
+                c.tape_enabled = false;
+                // c.tape_preset = strength;
                 c.buttercomp_enabled = true;
                 c.buttercomp_preset = strength;
 
-                c.enhanceeq_enabled = true;
-                c.enhanceeq_preset = strength;
+                c.enhanceeq_enabled = false;
 
                 c.output_enabled = true;
                 c.lufs_target = -14.0; // Louder, broadcast-style
-                c.radio = false;
+                c.radio = true;
             }
         }
 
