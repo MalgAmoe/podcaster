@@ -93,9 +93,29 @@ pub struct Preset {
 }
 
 pub const PRESETS: [Preset; 3] = [
-    // 1: Subtle - minimal processing, preserve everything
+    // 1: Subtle - minimal processing, nearly transparent
     Preset {
         name: "Subtle",
+        alpha_base: 10.0,
+        alpha_min: 8.0,
+        alpha_max: 14.0,
+        beta: 0.15,
+        delta: [
+            0.3, 0.36, 0.42, 0.48, 0.54, 0.6, 0.66, // Low (7)
+            0.72, 0.84, 0.96, 0.96, 0.96, 0.96, 0.84, // Mid (7)
+            0.78, 0.72, 0.66, 0.66, 0.66, // High-mid (5)
+            0.6, 0.54, 0.48, 0.42, 0.36, // High (5)
+        ],
+        gamma: [
+            0.50, 0.52, 0.54, 0.56, 0.58, 0.60, 0.62, // Low (7)
+            0.65, 0.68, 0.72, 0.75, 0.78, 0.80, 0.82, // Mid (7)
+            0.84, 0.86, 0.87, 0.88, 0.89, // High-mid (5)
+            0.90, 0.91, 0.92, 0.93, 0.94, // High (5)
+        ],
+    },
+    // 2: Balanced - light noise reduction (default)
+    Preset {
+        name: "Balanced",
         alpha_base: 11.4,
         alpha_min: 6.4,
         alpha_max: 17.8,
@@ -113,9 +133,9 @@ pub const PRESETS: [Preset; 3] = [
             0.80, 0.81, 0.82, 0.83, 0.84, // High (5)
         ],
     },
-    // 2: Balanced - subtle noise reduction (default)
+    // 3: Intense - moderate noise reduction
     Preset {
-        name: "Balanced",
+        name: "Intense",
         alpha_base: 11.4,
         alpha_min: 6.4,
         alpha_max: 17.8,
@@ -132,16 +152,6 @@ pub const PRESETS: [Preset; 3] = [
             0.79, 0.81, 0.82, 0.83, 0.84, // High-mid (5)
             0.85, 0.86, 0.87, 0.88, 0.89, // High (5)
         ],
-    },
-    // 3: Intense - noticeable noise reduction
-    Preset {
-        name: "Intense",
-        alpha_base: 11.4,
-        alpha_min: 6.4,
-        alpha_max: 17.8,
-        beta: 0.005,
-        delta: DEFAULT_DELTA, // Use shared default
-        gamma: DEFAULT_GAMMA, // Use shared default
     },
 ];
 
