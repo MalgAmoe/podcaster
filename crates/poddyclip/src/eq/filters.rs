@@ -127,28 +127,33 @@ pub struct HighPassFilter {
     stage1: SvfBiquad,
     stage2: Option<SvfBiquad>,
     sample_rate: f32,
+    cutoff: f32,
 }
 
 impl HighPassFilter {
     pub fn new(sample_rate: f32, slope: HighPassSlope) -> Self {
-        let stage1 = SvfBiquad::new(HP_FREQUENCY, sample_rate, Q_BUTTERWORTH);
+        Self::new_with_cutoff(sample_rate, slope, HP_FREQUENCY)
+    }
+
+    pub fn new_with_cutoff(sample_rate: f32, slope: HighPassSlope, cutoff: f32) -> Self {
+        let stage1 = SvfBiquad::new(cutoff, sample_rate, Q_BUTTERWORTH);
         let stage2 = match slope {
             HighPassSlope::Slope12dB => None,
             HighPassSlope::Slope24dB => {
-                Some(SvfBiquad::new(HP_FREQUENCY, sample_rate, Q_BUTTERWORTH))
+                Some(SvfBiquad::new(cutoff, sample_rate, Q_BUTTERWORTH))
             }
         };
 
-        Self { stage1, stage2, sample_rate }
+        Self { stage1, stage2, sample_rate, cutoff }
     }
 
     /// Must be called if the host changes sample rate
     pub fn set_sample_rate(&mut self, new_rate: f32) {
         if (self.sample_rate - new_rate).abs() > 0.1 {
             self.sample_rate = new_rate;
-            self.stage1.update(HP_FREQUENCY, new_rate, Q_BUTTERWORTH);
+            self.stage1.update(self.cutoff, new_rate, Q_BUTTERWORTH);
             if let Some(s2) = &mut self.stage2 {
-                s2.update(HP_FREQUENCY, new_rate, Q_BUTTERWORTH);
+                s2.update(self.cutoff, new_rate, Q_BUTTERWORTH);
             }
         }
     }
@@ -221,8 +226,12 @@ pub struct FilterChain {
 
 impl FilterChain {
     pub fn new(sample_rate: f32, hp_slope: HighPassSlope) -> Self {
+        Self::new_with_cutoff(sample_rate, hp_slope, HP_FREQUENCY)
+    }
+
+    pub fn new_with_cutoff(sample_rate: f32, hp_slope: HighPassSlope, hp_cutoff: f32) -> Self {
         Self {
-            hp: HighPassFilter::new(sample_rate, hp_slope),
+            hp: HighPassFilter::new_with_cutoff(sample_rate, hp_slope, hp_cutoff),
             lp: LowPassFilter::new(sample_rate),
         }
     }

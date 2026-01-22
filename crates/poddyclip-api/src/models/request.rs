@@ -59,6 +59,7 @@ pub struct ProcessConfig {
     // Filters
     pub filters_enabled: bool,
     pub hp_slope: u8,
+    pub hp_cutoff: f32,
 
     // Repair
     pub declick: bool,
@@ -113,6 +114,7 @@ impl Default for ProcessConfig {
             depeak_max_db: 18.0,
             filters_enabled: true,
             hp_slope: 24,
+            hp_cutoff: 90.0, // Voice default
             declick: false,
             expander_enabled: true,
             expander_preset: 2,
@@ -161,93 +163,204 @@ impl ProcessConfig {
     }
 
     fn build_config(category: Category, mode: ProcessingMode, strength: u8) -> Self {
-        let mut c = Self::default();
+        match (category, mode) {
+            // =================================================================
+            // VOICE CONFIGS
+            // =================================================================
+            (Category::Voice, ProcessingMode::Natural) => Self {
+                output_format: OutputFormat::Mp3,
+                mp3_bitrate: 192,
+                chain: None,
 
-        // Don't use chain presets - we're building from scratch
-        c.chain = None;
+                // Filters
+                filters_enabled: true,
+                hp_slope: 24,
+                hp_cutoff: 90.0,
 
-        // Category settings - affects filter slopes
-        match category {
-            Category::Voice => {
-                c.filters_enabled = true;
-                c.hp_slope = 24; // Steeper for voice isolation
-            }
-            Category::Mixed => {
-                c.filters_enabled = true;
-                c.hp_slope = 12; // Gentler for music content
-            }
+                // Noise reduction
+                denoiser_preset: strength,
+                dereverb: 0,
+                spectral_gate: 0,
+                declick: true,
+                depeak: false,
+                depeak_max_db: 18.0,
+                ai_denoise: false,
+
+                // Dynamics
+                expander_enabled: true,
+                expander_preset: strength,
+                compressor_enabled: true,
+                compressor_type: CompressorType::Peak,
+                compressor_preset: strength,
+
+                // EQ
+                fixeq_enabled: true,
+                fixeq_preset: strength,
+                deesser_enabled: true,
+                enhanceeq_enabled: true,
+                enhanceeq_preset: strength,
+
+                // Saturation
+                saturation_enabled: strength >= 2,
+                saturation_preset: strength,
+                tape_enabled: false,
+                tape_preset: strength,
+                buttercomp_enabled: strength >= 2,
+                buttercomp_preset: strength,
+
+                // Output
+                output_enabled: true,
+                lufs_target: -16.0,
+                radio: false,
+                radio_amount: 1.0,
+            },
+
+            (Category::Voice, ProcessingMode::Studio) => Self {
+                output_format: OutputFormat::Mp3,
+                mp3_bitrate: 192,
+                chain: None,
+
+                // Filters
+                filters_enabled: true,
+                hp_slope: 24,
+                hp_cutoff: 90.0,
+
+                // Noise reduction
+                denoiser_preset: strength,
+                dereverb: 0,
+                spectral_gate: 0,
+                declick: true,
+                depeak: false,
+                depeak_max_db: 18.0,
+                ai_denoise: false,
+
+                // Dynamics
+                expander_enabled: true,
+                expander_preset: strength,
+                compressor_enabled: true,
+                compressor_type: CompressorType::Fet,
+                compressor_preset: strength,
+
+                // EQ
+                fixeq_enabled: true,
+                fixeq_preset: strength,
+                deesser_enabled: true,
+                enhanceeq_enabled: false,
+                enhanceeq_preset: strength,
+
+                // Saturation
+                saturation_enabled: true,
+                saturation_preset: strength,
+                tape_enabled: false,
+                tape_preset: strength,
+                buttercomp_enabled: true,
+                buttercomp_preset: strength,
+
+                // Output
+                output_enabled: true,
+                lufs_target: -14.0,
+                radio: true,
+                radio_amount: 1.0,
+            },
+
+            // =================================================================
+            // MIXED AUDIO CONFIGS (same as voice for now, different HP)
+            // =================================================================
+            (Category::Mixed, ProcessingMode::Natural) => Self {
+                output_format: OutputFormat::Mp3,
+                mp3_bitrate: 192,
+                chain: None,
+
+                // Filters - gentler for mixed content
+                filters_enabled: true,
+                hp_slope: 24,
+                hp_cutoff: 65.0,
+
+                // Noise reduction
+                denoiser_preset: strength,
+                dereverb: 0,
+                spectral_gate: 0,
+                declick: true,
+                depeak: false,
+                depeak_max_db: 18.0,
+                ai_denoise: false,
+
+                // Dynamics
+                expander_enabled: true,
+                expander_preset: strength,
+                compressor_enabled: true,
+                compressor_type: CompressorType::Peak,
+                compressor_preset: strength,
+
+                // EQ
+                fixeq_enabled: true,
+                fixeq_preset: strength,
+                deesser_enabled: true,
+                enhanceeq_enabled: true,
+                enhanceeq_preset: strength,
+
+                // Saturation
+                saturation_enabled: strength >= 2,
+                saturation_preset: strength,
+                tape_enabled: false,
+                tape_preset: strength,
+                buttercomp_enabled: strength >= 2,
+                buttercomp_preset: strength,
+
+                // Output
+                output_enabled: true,
+                lufs_target: -16.0,
+                radio: false,
+                radio_amount: 1.0,
+            },
+
+            (Category::Mixed, ProcessingMode::Studio) => Self {
+                output_format: OutputFormat::Mp3,
+                mp3_bitrate: 192,
+                chain: None,
+
+                // Filters - gentler for mixed content
+                filters_enabled: true,
+                hp_slope: 24,
+                hp_cutoff: 65.0,
+
+                // Noise reduction
+                denoiser_preset: strength,
+                dereverb: 0,
+                spectral_gate: 0,
+                declick: true,
+                depeak: false,
+                depeak_max_db: 18.0,
+                ai_denoise: false,
+
+                // Dynamics
+                expander_enabled: true,
+                expander_preset: strength,
+                compressor_enabled: true,
+                compressor_type: CompressorType::Fet,
+                compressor_preset: strength,
+
+                // EQ
+                fixeq_enabled: true,
+                fixeq_preset: strength,
+                deesser_enabled: true,
+                enhanceeq_enabled: false,
+                enhanceeq_preset: strength,
+
+                // Saturation
+                saturation_enabled: true,
+                saturation_preset: strength,
+                tape_enabled: false,
+                tape_preset: strength,
+                buttercomp_enabled: true,
+                buttercomp_preset: strength,
+
+                // Output
+                output_enabled: true,
+                lufs_target: -14.0,
+                radio: false,
+                radio_amount: 1.0,
+            },
         }
-
-        // Mode settings - determines processing approach
-        match mode {
-            ProcessingMode::Natural => {
-                // Balanced processing - clean but not sterile
-                c.denoiser_preset = strength;
-                c.dereverb = 0; // Off
-                c.spectral_gate = 0;
-                c.declick = true;
-                c.depeak = false;
-
-                c.expander_enabled = true;
-                c.expander_preset = strength;
-
-                c.compressor_enabled = true;
-                c.compressor_type = CompressorType::Peak;
-                c.compressor_preset = strength;
-
-                c.fixeq_enabled = true;
-                c.fixeq_preset = strength;
-                c.deesser_enabled = true;
-
-                // Light saturation at higher strengths (enabled at 2 and 3)
-                c.saturation_enabled = strength >= 2;
-                c.saturation_preset = strength;
-                c.tape_enabled = false;
-                c.buttercomp_enabled = strength >= 2;
-                c.buttercomp_preset = strength;
-
-                c.enhanceeq_enabled = true;
-                c.enhanceeq_preset = strength;
-
-                c.output_enabled = true;
-                c.lufs_target = -16.0;
-                c.radio = false;
-            }
-            ProcessingMode::Studio => {
-                // Full polish, rich sound
-                c.denoiser_preset = strength;
-                c.dereverb = 0;
-                c.spectral_gate = 0;
-                c.declick = true;
-                c.depeak = false;
-
-                c.expander_enabled = true;
-                c.expander_preset = strength;
-
-                c.compressor_enabled = true;
-                c.compressor_type = CompressorType::Fet; // Character compression
-                c.compressor_preset = strength;
-
-                c.fixeq_enabled = true;
-                c.fixeq_preset = strength;
-                c.deesser_enabled = true;
-
-                // Full saturation chain for warmth
-                c.saturation_enabled = true;
-                c.saturation_preset = strength;
-                c.tape_enabled = false;
-                // c.tape_preset = strength;
-                c.buttercomp_enabled = true;
-                c.buttercomp_preset = strength;
-
-                c.enhanceeq_enabled = false;
-
-                c.output_enabled = true;
-                c.lufs_target = -14.0; // Louder, broadcast-style
-                c.radio = true;
-            }
-        }
-
-        c
     }
 }

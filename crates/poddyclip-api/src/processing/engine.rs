@@ -106,10 +106,11 @@ pub fn process_audio(
         } else {
             HighPassSlope::Slope12dB
         };
+        let cutoff = effective_config.hp_cutoff;
 
         let mut filters = Stereo::from_pair(
-            FilterChain::new(sample_rate as f32, slope),
-            FilterChain::new(sample_rate as f32, slope),
+            FilterChain::new_with_cutoff(sample_rate as f32, slope, cutoff),
+            FilterChain::new_with_cutoff(sample_rate as f32, slope, cutoff),
         );
         if is_stereo {
             let (left, right) = samples.split_at_mut(1);
@@ -526,6 +527,7 @@ fn config_from_chain(chain: &ChainPreset, request: &ProcessConfig) -> ProcessCon
         depeak_max_db: 18.0,
         filters_enabled: true,
         hp_slope: 24,
+        hp_cutoff: 90.0, // Voice default
         declick: false, // Always off for API (offline only)
         expander_enabled: chain.expander.is_enabled(),
         expander_preset: chain.expander.preset().unwrap_or(3),
