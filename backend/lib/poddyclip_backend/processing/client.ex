@@ -70,6 +70,7 @@ defmodule PoddyclipBackend.Processing.Client do
     * `:category` - Audio category: "voice" or "mixed" (default: "voice")
     * `:mode` - Processing mode: "repair", "natural", or "studio" (default: "natural")
     * `:strength` - Processing strength: 1-5 (default: 3)
+    * `:ai_clean` - Enable AI (DeepFilterNet) denoiser (nil = use default for mode)
     * `:output_format` - "wav" or "mp3" (default: "mp3")
     * `:mp3_bitrate` - Bitrate for MP3 output (default: 192)
   """
@@ -82,6 +83,7 @@ defmodule PoddyclipBackend.Processing.Client do
       category: Keyword.get(opts, :category, "voice"),
       mode: Keyword.get(opts, :mode, "natural"),
       strength: Keyword.get(opts, :strength, 3),
+      ai_clean: Keyword.get(opts, :ai_clean),
       output_format: Keyword.get(opts, :output_format, "mp3"),
       mp3_bitrate: Keyword.get(opts, :mp3_bitrate, 192),
       webhook_url: webhook_url(),

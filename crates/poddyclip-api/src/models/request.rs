@@ -96,6 +96,9 @@ pub struct ProcessConfig {
     // Radio voice EQ
     pub radio: bool,
     pub radio_amount: f32,
+
+    // AI Denoise (DeepFilterNet) - voice-focused
+    pub ai_denoise: bool,
 }
 
 impl Default for ProcessConfig {
@@ -132,6 +135,7 @@ impl Default for ProcessConfig {
             lufs_target: -16.0,
             radio: false,
             radio_amount: 1.0,
+            ai_denoise: false, // Off by default, enabled in Repair mode
         }
     }
 }

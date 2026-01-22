@@ -8,6 +8,10 @@ description = "HTTP API for poddyclip audio processing"
 name = "poddyclip-api"
 path = "src/main.rs"
 
+[features]
+default = ["deepfilter"]
+deepfilter = ["poddyclip/deepfilter"]
+
 [dependencies]
 # Core library
 poddyclip = { path = "../poddyclip" }

@@ -82,6 +82,9 @@ pub struct CreateS3JobRequest {
     pub webhook_url: Option<String>,
     /// Secret for webhook authentication
     pub webhook_secret: Option<String>,
+    /// Enable AI (DeepFilterNet) denoiser for voice cleaning
+    #[serde(default)]
+    pub ai_clean: Option<bool>,
 }
 
 fn default_mp3_bitrate() -> u32 {
@@ -156,6 +159,11 @@ pub async fn create_s3_job(
         _ => OutputFormat::Mp3,
     };
     config.mp3_bitrate = req.mp3_bitrate;
+
+    // Allow explicit override of ai_denoise
+    if let Some(ai_clean) = req.ai_clean {
+        config.ai_denoise = ai_clean;
+    }
 
     // Create job with webhook info
     let job_id = Uuid::new_v4();
