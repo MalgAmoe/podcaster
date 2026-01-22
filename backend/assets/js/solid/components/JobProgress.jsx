@@ -21,7 +21,7 @@ export function JobProgress() {
         </div>
 
         <p class="mt-6 text-xl font-bold">
-          <span class="inline-block animate-munch">🐄</span> *munch munch munch*
+          <img src="/images/munchy_cow_head.svg" alt="" class="w-8 h-8 inline-block animate-munch" /> *munch munch munch*
         </p>
         <p class="text-base-content/60 mt-2">{getFriendlyStage(store.job?.progress?.stage)}</p>
         <p class="text-base-content/40 text-sm mt-1 truncate max-w-full">{store.job?.filename}</p>

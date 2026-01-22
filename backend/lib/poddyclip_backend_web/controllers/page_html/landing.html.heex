@@ -2,8 +2,8 @@
   <!-- Hero - The cow speaks -->
   <section class="min-h-[80vh] flex items-center justify-center px-6">
     <div class="max-w-2xl text-center">
-      <div class="text-[10rem] leading-none mb-8 hover:animate-munch cursor-default">
-        🐄
+      <div class="mb-8">
+        <img src="/images/munchy_cow.svg" alt="Munchy Cow" class="w-64 h-auto mx-auto" />
       </div>
       <h1 class="text-5xl md:text-6xl font-bold mb-6">
         Give me your <span class="text-primary">tasty audio</span>
@@ -15,6 +15,9 @@
       <.link href={~p"/users/register"} class="btn btn-primary btn-lg text-lg px-10">
         Feed the cow
       </.link>
+      <p class="text-sm text-base-content/50 mt-4">
+        Free to try. No credit card required.
+      </p>
     </div>
   </section>
 
@@ -58,13 +61,16 @@
       <.link href={~p"/users/register"} class="btn btn-primary btn-lg text-lg px-10">
         Let's go
       </.link>
+      <p class="text-sm text-base-content/50 mt-6">
+        🔒 Your audio stays private. Files deleted after 24 hours.
+      </p>
     </div>
   </section>
 
   <!-- Footer -->
   <footer class="py-8 px-6 border-t border-base-300">
     <div class="max-w-4xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-      <span class="text-base-content/50">🐄 Munchy Cow</span>
+      <span class="text-base-content/50 flex items-center gap-1"><img src="/images/munchy_cow_head.svg" alt="" class="w-6 h-6" /> Munchy Cow</span>
       <nav class="flex gap-6 text-sm text-base-content/50">
         <.link href={~p"/pricing"} class="hover:text-base-content transition-colors">Pricing</.link>
         <.link href={~p"/terms"} class="hover:text-base-content transition-colors">Terms</.link>

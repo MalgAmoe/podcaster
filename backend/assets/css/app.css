@@ -22,7 +22,7 @@
   --color-base-300: #251a32;
   --color-base-content: #e5e5e5;
 
-  --color-primary: #7c3aed;
+  --color-primary: #9333ea;
   --color-primary-content: #ffffff;
 
   --color-secondary: #6d28d9;
@@ -43,7 +43,7 @@
   --color-error: #ef4444;
   --color-error-content: #ffffff;
 
-  --color-info: #7c3aed;
+  --color-info: #9333ea;
   --color-info-content: #ffffff;
 
   --rounded-box: 1.5rem;
@@ -79,19 +79,19 @@
 /* Purple focus rings instead of default orange */
 [data-theme="poddyclip"] .btn:focus-visible,
 [data-theme="poddyclip"] .btn:focus {
-  outline: 2px solid #7c3aed;
+  outline: 2px solid #9333ea;
   outline-offset: 2px;
   box-shadow: none;
 }
 
 [data-theme="poddyclip"] *:focus {
-  outline-color: #7c3aed;
+  outline-color: #9333ea;
 }
 
 /* Override any orange/yellow accent colors */
 [data-theme="poddyclip"] {
-  --tw-ring-color: #7c3aed;
-  accent-color: #7c3aed;
+  --tw-ring-color: #9333ea;
+  accent-color: #9333ea;
 }
 
 /* Add variants based on LiveView classes */

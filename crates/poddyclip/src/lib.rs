@@ -7,6 +7,7 @@
 //! - EQ processing (filters, de-esser, enhancement)
 //! - Saturation effects
 //! - Audio repair (declicking) - offline only
+//! - AI-based denoising (DeepFilterNet) - optional, voice-focused
 
 pub mod analysis;
 pub mod denoiser;
@@ -18,6 +19,9 @@ pub mod saturation;
 pub mod stft;
 pub mod traits;
 
+#[cfg(feature = "deepfilter")]
+pub mod deepfilter;
+
 // Re-export commonly used items
 pub use denoiser::{RealtimeDenoiser, StreamingDenoiser, PRESETS};
 pub use dereverb::{DeReverbProcessor, DeReverbParams, DEREVERB_PRESETS};
@@ -27,3 +31,6 @@ pub use eq::{DeEsser, FilterChain, FixEq, HighPassSlope, RadioVoiceProcessor, St
 pub use repair::Declicker;
 pub use saturation::{Channel9, TapeGlue};
 pub use traits::Stereo;
+
+#[cfg(feature = "deepfilter")]
+pub use deepfilter::DeepFilterDenoiser;
