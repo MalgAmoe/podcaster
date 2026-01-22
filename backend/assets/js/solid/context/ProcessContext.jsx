@@ -195,8 +195,8 @@ export function ProcessProvider(props) {
         category: cat,
         mode: catConfig.mode,
         strength: catConfig.strength,
-        // Only send ai_clean for repair mode where it can be toggled
-        ai_clean: catConfig.mode === "repair" ? catConfig.aiClean : undefined
+        // Only send ai_clean for voice category where it can be toggled
+        ai_clean: cat === "voice" ? catConfig.aiClean : undefined
       };
       const job = await api.createJob(store.s3Key, store.filename, config);
       setStore({ job, error: null });

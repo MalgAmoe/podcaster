@@ -6,11 +6,12 @@ Chains are TOML configuration files that define which processors to apply and at
 
 ## Web UI Configuration
 
-The web interface uses a simplified three-setting configuration:
+The web interface uses a simplified configuration:
 
 - **Category**: `voice` or `mixed`
-- **Mode**: `repair`, `natural`, or `studio`
-- **Strength**: 1-5 (Gentle, Light, Moderate, Strong, Aggressive)
+- **Mode**: `natural` or `studio`
+- **Strength**: 1-3 (Subtle, Balanced, Intense)
+- **AI Clean**: Optional toggle (voice category only) - isolates voice using deep learning
 
 This generates a `ProcessConfig` that feeds into the same processing pipeline as TOML chains.
 

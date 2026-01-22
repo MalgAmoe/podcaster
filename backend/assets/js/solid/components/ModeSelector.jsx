@@ -2,13 +2,12 @@ import { For, Show } from "solid-js";
 import { useProcess } from "../context/ProcessContext";
 
 const MODES = [
-  { id: "repair", label: "Repair" },
   { id: "natural", label: "Natural" },
   { id: "studio", label: "Studio" }
 ];
 
 export function ModeSelector() {
-  const { currentMode, setMode, currentAiClean, setAiClean } = useProcess();
+  const { store, currentMode, setMode, currentAiClean, setAiClean } = useProcess();
 
   return (
     <div class="form-control text-center">
@@ -31,8 +30,8 @@ export function ModeSelector() {
         </For>
       </div>
 
-      {/* AI Clean toggle - only shown in repair mode */}
-      <Show when={currentMode() === "repair"}>
+      {/* AI Clean toggle - only shown for voice category */}
+      <Show when={store.processingConfig.category === "voice"}>
         <div class="mt-4 flex items-center justify-center gap-2">
           <label class="flex items-center gap-2 cursor-pointer">
             <input
