@@ -15,12 +15,12 @@ pub struct ExpanderPreset {
     pub range_db: f32,
 }
 
-/// Preset names (1-5)
-pub const EXPANDER_PRESET_NAMES: [&str; 5] = ["Gentle", "Light", "Moderate", "Strong", "Aggressive"];
+/// Preset names (1-3)
+pub const EXPANDER_PRESET_NAMES: [&str; 3] = ["Subtle", "Balanced", "Intense"];
 
-/// Expander presets (1-5 scale)
-pub const EXPANDER_PRESETS: [ExpanderPreset; 5] = [
-    // 1: Gentle - barely noticeable, preserve dynamics
+/// Expander presets (1-3 scale)
+pub const EXPANDER_PRESETS: [ExpanderPreset; 3] = [
+    // 1: Subtle - barely noticeable, preserve dynamics
     ExpanderPreset {
         threshold_db: -55.0,
         ratio: 1.5,
@@ -28,7 +28,7 @@ pub const EXPANDER_PRESETS: [ExpanderPreset; 5] = [
         release_ms: 100.0,
         range_db: 6.0,
     },
-    // 2: Light - subtle noise reduction
+    // 2: Balanced - subtle noise reduction (default)
     ExpanderPreset {
         threshold_db: -48.0,
         ratio: 1.8,
@@ -36,7 +36,7 @@ pub const EXPANDER_PRESETS: [ExpanderPreset; 5] = [
         release_ms: 80.0,
         range_db: 12.0,
     },
-    // 3: Moderate - balanced (default)
+    // 3: Intense - noticeable noise reduction
     ExpanderPreset {
         threshold_db: -40.0,
         ratio: 2.0,
@@ -44,25 +44,9 @@ pub const EXPANDER_PRESETS: [ExpanderPreset; 5] = [
         release_ms: 50.0,
         range_db: 20.0,
     },
-    // 4: Strong - noticeable noise reduction
-    ExpanderPreset {
-        threshold_db: -35.0,
-        ratio: 3.0,
-        attack_ms: 3.0,
-        release_ms: 40.0,
-        range_db: 30.0,
-    },
-    // 5: Aggressive - near-gate behavior
-    ExpanderPreset {
-        threshold_db: -30.0,
-        ratio: 4.0,
-        attack_ms: 1.0,
-        release_ms: 30.0,
-        range_db: 40.0,
-    },
 ];
 
-/// Get preset name by level (1-5), returns "Unknown" for invalid levels
+/// Get preset name by level (1-3), returns "Unknown" for invalid levels
 pub fn get_expander_preset_name(level: u8) -> &'static str {
     EXPANDER_PRESET_NAMES
         .get((level as usize).saturating_sub(1))

@@ -38,9 +38,9 @@ impl Default for DeReverbParams {
 }
 
 impl DeReverbParams {
-    /// Create params from preset level (1-5)
+    /// Create params from preset level (1-3)
     pub fn from_preset(level: u8) -> Option<Self> {
-        if level == 0 || level > 5 {
+        if level == 0 || level > 3 {
             None
         } else {
             DEREVERB_PRESETS.get((level - 1) as usize).cloned()
@@ -49,52 +49,38 @@ impl DeReverbParams {
 }
 
 // =============================================================================
-// Presets (1-5, matching denoiser pattern)
+// Presets (1-3)
 // =============================================================================
 
 /// Preset definitions
-pub const DEREVERB_PRESETS: [DeReverbParams; 5] = [
-    // 1: Gentle - minimal de-reverb, preserve room character
+pub const DEREVERB_PRESETS: [DeReverbParams; 3] = [
+    // 1: Subtle - minimal de-reverb, preserve room character
     DeReverbParams {
         strength: 0.3,
         gate_threshold_db: -30.0,
         smoothing: 0.9,
         decay_multiplier: 0.8,
     },
-    // 2: Light - subtle reduction
+    // 2: Balanced - subtle reduction (default)
     DeReverbParams {
         strength: 0.5,
         gate_threshold_db: -24.0,
         smoothing: 0.85,
         decay_multiplier: 1.0,
     },
-    // 3: Moderate - balanced (default)
+    // 3: Intense - noticeable reduction
     DeReverbParams {
         strength: 0.7,
         gate_threshold_db: -18.0,
         smoothing: 0.8,
         decay_multiplier: 1.2,
     },
-    // 4: Strong - noticeable reduction
-    DeReverbParams {
-        strength: 0.85,
-        gate_threshold_db: -15.0,
-        smoothing: 0.75,
-        decay_multiplier: 1.5,
-    },
-    // 5: Aggressive - maximum removal
-    DeReverbParams {
-        strength: 1.0,
-        gate_threshold_db: -12.0,
-        smoothing: 0.7,
-        decay_multiplier: 2.0,
-    },
 ];
 
 /// Preset names for display
-pub const PRESET_NAMES: [&str; 5] = ["Gentle", "Light", "Moderate", "Strong", "Aggressive"];
+pub const PRESET_NAMES: [&str; 3] = ["Subtle", "Balanced", "Intense"];
 
-/// Get preset name by level (1-5)
+/// Get preset name by level (1-3)
 pub fn get_preset_name(level: u8) -> &'static str {
     PRESET_NAMES
         .get(level.saturating_sub(1) as usize)

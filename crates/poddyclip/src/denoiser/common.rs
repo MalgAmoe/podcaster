@@ -92,10 +92,10 @@ pub struct Preset {
     pub gamma: [f32; NUM_BANDS],
 }
 
-pub const PRESETS: [Preset; 5] = [
-    // 1: Gentle - minimal processing, preserve everything
+pub const PRESETS: [Preset; 3] = [
+    // 1: Subtle - minimal processing, preserve everything
     Preset {
-        name: "Gentle",
+        name: "Subtle",
         alpha_base: 11.4,
         alpha_min: 6.4,
         alpha_max: 17.8,
@@ -113,9 +113,9 @@ pub const PRESETS: [Preset; 5] = [
             0.80, 0.81, 0.82, 0.83, 0.84, // High (5)
         ],
     },
-    // 2: Light - subtle noise reduction
+    // 2: Balanced - subtle noise reduction (default)
     Preset {
-        name: "Light",
+        name: "Balanced",
         alpha_base: 11.4,
         alpha_min: 6.4,
         alpha_max: 17.8,
@@ -133,9 +133,9 @@ pub const PRESETS: [Preset; 5] = [
             0.85, 0.86, 0.87, 0.88, 0.89, // High (5)
         ],
     },
-    // 3: Moderate - balanced (default)
+    // 3: Intense - noticeable noise reduction
     Preset {
-        name: "Moderate",
+        name: "Intense",
         alpha_base: 11.4,
         alpha_min: 6.4,
         alpha_max: 17.8,
@@ -143,52 +143,12 @@ pub const PRESETS: [Preset; 5] = [
         delta: DEFAULT_DELTA, // Use shared default
         gamma: DEFAULT_GAMMA, // Use shared default
     },
-    // 4: Strong - noticeable noise reduction
-    Preset {
-        name: "Strong",
-        alpha_base: 13.0,
-        alpha_min: 9.0,
-        alpha_max: 20.8,
-        beta: 0.002,
-        delta: [
-            1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, // Low (7)
-            2.5, 2.8, 3.2, 3.2, 3.2, 3.2, 2.8, // Mid (7)
-            2.6, 2.3, 2.1, 2.1, 2.1, // High-mid (5)
-            1.7, 1.5, 1.4, 1.2, 1.0, // High (5)
-        ],
-        gamma: [
-            0.55, 0.57, 0.59, 0.61, 0.63, 0.65, 0.67, // Low (7)
-            0.70, 0.73, 0.77, 0.80, 0.83, 0.85, 0.87, // Mid (7)
-            0.89, 0.91, 0.92, 0.93, 0.94, // High-mid (5)
-            0.95, 0.96, 0.97, 0.97, 0.98, // High (5)
-        ],
-    },
-    // 5: Aggressive - maximum removal, may affect speech
-    Preset {
-        name: "Aggressive",
-        alpha_base: 13.0,
-        alpha_min: 9.0,
-        alpha_max: 20.8,
-        beta: 0.001,
-        delta: [
-            1.2, 1.5, 1.8, 2.0, 2.2, 2.4, 2.6, // Low (7)
-            3.0, 3.5, 4.0, 4.0, 4.0, 4.0, 3.5, // Mid (7)
-            3.2, 2.8, 2.5, 2.5, 2.5, // High-mid (5)
-            2.0, 1.7, 1.5, 1.3, 1.2, // High (5)
-        ],
-        gamma: [
-            0.60, 0.62, 0.64, 0.66, 0.68, 0.70, 0.72, // Low (7)
-            0.75, 0.78, 0.82, 0.85, 0.88, 0.90, 0.92, // Mid (7)
-            0.94, 0.95, 0.96, 0.96, 0.97, // High-mid (5)
-            0.97, 0.98, 0.98, 0.99, 0.99, // High (5)
-        ],
-    },
 ];
 
-pub const DEFAULT_PRESET: u8 = 3; // 1-indexed in CLI
+pub const DEFAULT_PRESET: u8 = 2; // 1-indexed in CLI
 
 pub fn get_preset(level: usize) -> Option<&'static Preset> {
-    if level >= 1 && level <= 5 {
+    if level >= 1 && level <= 3 {
         Some(&PRESETS[level - 1])
     } else {
         None
@@ -221,7 +181,7 @@ pub struct DenoiserParams {
 }
 
 impl DenoiserParams {
-    /// Create params from a preset number (1-5)
+    /// Create params from a preset number (1-3)
     pub fn from_preset(level: usize) -> Option<Self> {
         get_preset(level).map(|p| Self {
             alpha_base: p.alpha_base,
@@ -237,13 +197,13 @@ impl DenoiserParams {
         })
     }
 
-    /// Interpolate between two adjacent presets (0.0 = preset 1, 1.0 = preset 5)
+    /// Interpolate between two adjacent presets (0.0 = preset 1, 1.0 = preset 3)
     /// Useful for plugin's continuous "strength" slider
     pub fn from_strength(strength: f32) -> Self {
         let strength = strength.clamp(0.0, 1.0);
-        let scaled = strength * 4.0; // 0.0-4.0
-        let lower_idx = (scaled as usize).min(3); // 0-3
-        let upper_idx = lower_idx + 1; // 1-4
+        let scaled = strength * 2.0; // 0.0-2.0
+        let lower_idx = (scaled as usize).min(1); // 0-1
+        let upper_idx = lower_idx + 1; // 1-2
         let t = scaled - lower_idx as f32; // 0.0-1.0 between presets
 
         let lower = &PRESETS[lower_idx];
@@ -276,8 +236,8 @@ impl DenoiserParams {
 
 impl Default for DenoiserParams {
     fn default() -> Self {
-        // Default to Moderate preset (level 3)
-        Self::from_preset(3).unwrap()
+        // Default to Balanced preset (level 2)
+        Self::from_preset(2).unwrap()
     }
 }
 

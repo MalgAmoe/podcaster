@@ -47,9 +47,9 @@ impl Default for SpectralGateParams {
 }
 
 impl SpectralGateParams {
-    /// Create params from preset level (1-5)
+    /// Create params from preset level (1-3)
     pub fn from_preset(level: u8) -> Option<Self> {
-        if level == 0 {
+        if level == 0 || level > 3 {
             return None;
         }
         SPECTRAL_GATE_PRESETS
@@ -58,9 +58,9 @@ impl SpectralGateParams {
     }
 }
 
-/// Preset definitions (1-5)
-pub const SPECTRAL_GATE_PRESETS: [SpectralGateParams; 5] = [
-    // 1: Gentle - minimal gating
+/// Preset definitions (1-3)
+pub const SPECTRAL_GATE_PRESETS: [SpectralGateParams; 3] = [
+    // 1: Subtle - minimal gating
     SpectralGateParams {
         enabled: true,
         threshold_db: 3.0,
@@ -72,7 +72,7 @@ pub const SPECTRAL_GATE_PRESETS: [SpectralGateParams; 5] = [
         alpha_fast_down: 0.6,
         alpha_fast_up: 0.97,
     },
-    // 2: Light
+    // 2: Balanced (default)
     SpectralGateParams {
         enabled: true,
         threshold_db: 4.0,
@@ -84,7 +84,7 @@ pub const SPECTRAL_GATE_PRESETS: [SpectralGateParams; 5] = [
         alpha_fast_down: 0.65,
         alpha_fast_up: 0.96,
     },
-    // 3: Moderate (default)
+    // 3: Intense
     SpectralGateParams {
         enabled: true,
         threshold_db: 6.0,
@@ -96,37 +96,13 @@ pub const SPECTRAL_GATE_PRESETS: [SpectralGateParams; 5] = [
         alpha_fast_down: 0.7,
         alpha_fast_up: 0.95,
     },
-    // 4: Strong
-    SpectralGateParams {
-        enabled: true,
-        threshold_db: 8.0,
-        knee_db: 5.0,
-        floor: 0.03,
-        ratio: 0.8,
-        attack_ms: 6.0,
-        release_ms: 40.0,
-        alpha_fast_down: 0.75,
-        alpha_fast_up: 0.93,
-    },
-    // 5: Aggressive
-    SpectralGateParams {
-        enabled: true,
-        threshold_db: 10.0,
-        knee_db: 4.0,
-        floor: 0.02,
-        ratio: 0.9,
-        attack_ms: 8.0,
-        release_ms: 30.0,
-        alpha_fast_down: 0.8,
-        alpha_fast_up: 0.90,
-    },
 ];
 
 /// Preset names for display
-pub const SPECTRAL_GATE_PRESET_NAMES: [&str; 5] =
-    ["Gentle", "Light", "Moderate", "Strong", "Aggressive"];
+pub const SPECTRAL_GATE_PRESET_NAMES: [&str; 3] =
+    ["Subtle", "Balanced", "Intense"];
 
-/// Get preset name by level (1-5)
+/// Get preset name by level (1-3)
 pub fn get_gate_preset_name(level: u8) -> &'static str {
     SPECTRAL_GATE_PRESET_NAMES
         .get(level.saturating_sub(1) as usize)
@@ -366,11 +342,13 @@ mod tests {
 
     #[test]
     fn test_preset_creation() {
-        for level in 1..=5 {
+        for level in 1..=3 {
             let gate = SpectralGate::new_with_preset(48000, level);
             assert!(gate.is_some());
         }
         let invalid = SpectralGate::new_with_preset(48000, 0);
+        assert!(invalid.is_none());
+        let invalid = SpectralGate::new_with_preset(48000, 4);
         assert!(invalid.is_none());
     }
 
