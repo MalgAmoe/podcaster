@@ -8,6 +8,10 @@ description = "CLI for podcast audio enhancement"
 name = "poddyclip"
 path = "src/main.rs"
 
+[features]
+default = ["deepfilter"]
+deepfilter = ["poddyclip/deepfilter"]
+
 [dependencies]
 poddyclip = { path = "../poddyclip" }
 anyhow = "1.0"

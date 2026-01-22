@@ -34,7 +34,9 @@ use poddyclip::eq::{
     StereoEnhanceEq,
 };
 use poddyclip::repair::Declicker;
-use poddyclip::saturation::{get_saturation_preset, get_saturation_preset_name, Channel9, TapeGlue};
+use poddyclip::saturation::{
+    get_saturation_preset, get_saturation_preset_name, Channel9, TapeGlue,
+};
 use poddyclip::traits::{Stereo, StereoProcessor};
 
 #[derive(Parser)]
@@ -85,6 +87,11 @@ struct Args {
     /// De-reverb strength 1-5 (0 = disabled)
     #[arg(long, default_value_t = 0, value_parser = clap::value_parser!(u8).range(0..=5))]
     dereverb: u8,
+
+    /// Use AI (DeepFilterNet) denoiser for voice (auto-tuned based on SNR)
+    #[cfg(feature = "deepfilter")]
+    #[arg(long)]
+    ai_denoise: bool,
 
     /// Spectral gate strength 1-5 (0 = off) - handles intermittent noise
     #[arg(long, default_value_t = 0, value_parser = clap::value_parser!(u8).range(0..=5))]
@@ -215,7 +222,11 @@ fn main() -> Result<()> {
     let chain_preset: Option<ChainPreset> = if let Some(ref name) = args.chain {
         match chain::load_chain(name) {
             Ok(preset) => {
-                println!("Using chain: {} ({})", preset.name, preset.description.as_deref().unwrap_or(""));
+                println!(
+                    "Using chain: {} ({})",
+                    preset.name,
+                    preset.description.as_deref().unwrap_or("")
+                );
                 Some(preset)
             }
             Err(e) => {
@@ -235,8 +246,15 @@ fn main() -> Result<()> {
     // - For bools: CLI wins (disable flags)
 
     // Denoiser preset
-    let denoiser_preset = chain_preset.as_ref().map(|c| c.denoiser).unwrap_or(args.preset);
-    let denoiser_preset = if args.preset != DEFAULT_PRESET { args.preset } else { denoiser_preset };
+    let denoiser_preset = chain_preset
+        .as_ref()
+        .map(|c| c.denoiser)
+        .unwrap_or(args.preset);
+    let denoiser_preset = if args.preset != DEFAULT_PRESET {
+        args.preset
+    } else {
+        denoiser_preset
+    };
 
     // Expander
     let (expander_enabled, expander_preset) = resolve_processor_setting(
@@ -409,11 +427,9 @@ fn main() -> Result<()> {
             poddyclip::dereverb::get_preset_name(dereverb_preset)
         );
 
-        let mut dereverb = poddyclip::dereverb::DeReverbProcessor::new_with_preset(
-            sample_rate,
-            dereverb_preset,
-        )
-        .expect("Invalid dereverb preset");
+        let mut dereverb =
+            poddyclip::dereverb::DeReverbProcessor::new_with_preset(sample_rate, dereverb_preset)
+                .expect("Invalid dereverb preset");
         dereverb.init_with_analysis(&reverb_analysis);
 
         if is_stereo {
@@ -463,6 +479,52 @@ fn main() -> Result<()> {
     }
 
     // =========================================================================
+    // AI DENOISE (DeepFilterNet) - optional, runs before spectral denoiser
+    // =========================================================================
+    #[cfg(feature = "deepfilter")]
+    if args.ai_denoise {
+        println!("\n[AI Denoise (DeepFilterNet)]");
+
+        // Analyze for auto-tuning
+        let df_analysis = poddyclip::deepfilter::analyze_for_deepfilter(&samples[0], sample_rate);
+        println!(
+            "  SNR: {:.1}dB ({})",
+            df_analysis.estimated_snr,
+            df_analysis.noise_severity()
+        );
+        if df_analysis.has_dc_offset {
+            println!("  DC offset detected, will be removed");
+        }
+        if df_analysis.low_freq_energy_ratio > 0.20 {
+            println!(
+                "  Low-freq energy: {:.0}%, applying high-pass",
+                df_analysis.low_freq_energy_ratio * 100.0
+            );
+        }
+
+        // Create denoiser and process
+        match poddyclip::deepfilter::DeepFilterDenoiser::new(sample_rate) {
+            Ok(mut denoiser) => {
+                if is_stereo {
+                    samples[0] = denoiser.process_with_analysis(&samples[0], &df_analysis);
+                    denoiser.reset();
+                    // Re-analyze right channel (may have different noise characteristics)
+                    let df_analysis_r =
+                        poddyclip::deepfilter::analyze_for_deepfilter(&samples[1], sample_rate);
+                    samples[1] = denoiser.process_with_analysis(&samples[1], &df_analysis_r);
+                } else {
+                    samples[0] = denoiser.process_with_analysis(&samples[0], &df_analysis);
+                }
+                println!("  AI denoising complete");
+            }
+            Err(e) => {
+                eprintln!("  Warning: Failed to initialize DeepFilterNet: {}", e);
+                eprintln!("  Skipping AI denoising, will use spectral denoiser only");
+            }
+        }
+    }
+
+    // =========================================================================
     // SPECTRAL GATE (optional, after denoiser)
     // =========================================================================
     if args.spectral_gate > 0 {
@@ -474,18 +536,18 @@ fn main() -> Result<()> {
         );
 
         if is_stereo {
-            let mut left_gate =
-                SpectralGate::new_with_preset(sample_rate, args.spectral_gate).expect("Invalid preset");
-            let mut right_gate =
-                SpectralGate::new_with_preset(sample_rate, args.spectral_gate).expect("Invalid preset");
+            let mut left_gate = SpectralGate::new_with_preset(sample_rate, args.spectral_gate)
+                .expect("Invalid preset");
+            let mut right_gate = SpectralGate::new_with_preset(sample_rate, args.spectral_gate)
+                .expect("Invalid preset");
             left_gate.init_noise_floor(&result.noise_floor);
             right_gate.init_noise_floor(&result.noise_floor);
             samples[0] = left_gate.process(&samples[0]);
             samples[1] = right_gate.process(&samples[1]);
             println!("    Max GR: {:.1}dB", left_gate.get_max_gain_reduction_db());
         } else {
-            let mut gate =
-                SpectralGate::new_with_preset(sample_rate, args.spectral_gate).expect("Invalid preset");
+            let mut gate = SpectralGate::new_with_preset(sample_rate, args.spectral_gate)
+                .expect("Invalid preset");
             gate.init_noise_floor(&result.noise_floor);
             samples[0] = gate.process(&samples[0]);
             println!("    Max GR: {:.1}dB", gate.get_max_gain_reduction_db());
@@ -530,13 +592,19 @@ fn main() -> Result<()> {
                 right_attenuator.init_with_profile(peak_profile);
                 samples[0] = left_attenuator.process(&samples[0]);
                 samples[1] = right_attenuator.process(&samples[1]);
-                println!("    Max attenuation: {:.1}dB", left_attenuator.get_max_attenuation_db());
+                println!(
+                    "    Max attenuation: {:.1}dB",
+                    left_attenuator.get_max_attenuation_db()
+                );
             } else {
                 let mut attenuator = PeakAttenuator::new(sample_rate);
                 attenuator.set_max_attenuation_db(args.depeak_max_db);
                 attenuator.init_with_profile(peak_profile);
                 samples[0] = attenuator.process(&samples[0]);
-                println!("    Max attenuation: {:.1}dB", attenuator.get_max_attenuation_db());
+                println!(
+                    "    Max attenuation: {:.1}dB",
+                    attenuator.get_max_attenuation_db()
+                );
             }
         }
     }
@@ -567,9 +635,8 @@ fn main() -> Result<()> {
     // Compressor (FET or Peak)
     if comp_enabled {
         if use_fet {
-            let mut fetcomp =
-                StereoFetCompressor::new_with_preset(sample_rate as f32, comp_preset)
-                    .expect("Invalid fetcomp preset");
+            let mut fetcomp = StereoFetCompressor::new_with_preset(sample_rate as f32, comp_preset)
+                .expect("Invalid fetcomp preset");
             println!(
                 "  FetComp: preset {} ({})",
                 comp_preset,
@@ -584,9 +651,8 @@ fn main() -> Result<()> {
             println!("    Max GR: {:.1}dB", fetcomp.get_gain_reduction_db());
         } else {
             // Peak compressor with preset
-            let mut peakcomp =
-                StereoVcaPeakComp::new_with_preset(sample_rate as f32, comp_preset)
-                    .expect("Invalid peakcomp preset");
+            let mut peakcomp = StereoVcaPeakComp::new_with_preset(sample_rate as f32, comp_preset)
+                .expect("Invalid peakcomp preset");
             // Still run analysis to set auto threshold if needed
             let profile = peakcomp.configure(&samples).clone();
             println!(
@@ -739,16 +805,12 @@ fn main() -> Result<()> {
 
     // TapeGlue
     if tape_enabled {
-        let sat_preset =
-            get_saturation_preset(tape_preset).expect("Invalid saturation preset");
+        let sat_preset = get_saturation_preset(tape_preset).expect("Invalid saturation preset");
         let mut tape_left = TapeGlue::new(sample_rate as f64);
         let mut tape_right = TapeGlue::new(sample_rate as f64);
         tape_left.set_warmth(sat_preset.tape_warmth);
         tape_right.set_warmth(sat_preset.tape_warmth);
-        println!(
-            "  TapeGlue: warmth {:.0}%",
-            sat_preset.tape_warmth * 100.0
-        );
+        println!("  TapeGlue: warmth {:.0}%", sat_preset.tape_warmth * 100.0);
         if is_stereo {
             for sample in samples[0].iter_mut() {
                 *sample = tape_left.process(*sample);
@@ -789,10 +851,18 @@ fn main() -> Result<()> {
             radio.process(&mut samples[0]);
         }
 
-        println!("  f0: {:.1} Hz (sibilance: {:.0}%)", radio.get_detected_f0(), radio.get_sibilance_level() * 100.0);
+        println!(
+            "  f0: {:.1} Hz (sibilance: {:.0}%)",
+            radio.get_detected_f0(),
+            radio.get_sibilance_level() * 100.0
+        );
         println!("  CPP: {:.1} dB (harmonicity)", radio.get_cpp());
         if let Some(delay) = radio.get_echo_delay_ms() {
-            println!("  Echo: {:.0}ms delay ({:.0}% strength)", delay, radio.get_echo_strength() * 100.0);
+            println!(
+                "  Echo: {:.0}ms delay ({:.0}% strength)",
+                delay,
+                radio.get_echo_strength() * 100.0
+            );
         }
         println!("  HPF: {:.0} Hz", radio.get_hpf_freq());
         println!(
@@ -957,10 +1027,7 @@ fn resolve_compressor_setting(
 
 /// Resolve output setting from CLI args and chain preset
 /// Returns (enabled, lufs_target)
-fn resolve_output_setting(
-    cli_enabled: bool,
-    chain_setting: Option<&OutputSetting>,
-) -> (bool, f32) {
+fn resolve_output_setting(cli_enabled: bool, chain_setting: Option<&OutputSetting>) -> (bool, f32) {
     // CLI disable flag always wins
     if !cli_enabled {
         return (false, -16.0);

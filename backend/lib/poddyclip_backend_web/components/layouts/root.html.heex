@@ -3,6 +3,23 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Clean up your podcast audio with Munchy Cow. Remove room echo, background noise, and that weird hum. Get podcast-ready audio in minutes." />
+    <meta name="theme-color" content="#9333ea" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Munchy Cow - Audio Cleanup for Podcasters" />
+    <meta property="og:description" content="Remove room echo, background noise, and that weird hum. Get podcast-ready audio in minutes." />
+    <meta property="og:image" content="/images/munchy_cow.svg" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Munchy Cow - Audio Cleanup for Podcasters" />
+    <meta name="twitter:description" content="Remove room echo, background noise, and that weird hum. Get podcast-ready audio in minutes." />
+    <meta name="twitter:image" content="/images/munchy_cow.svg" />
+
+    <link rel="icon" type="image/svg+xml" href="/images/munchy_cow_head.svg" />
+    <link rel="apple-touch-icon" href="/images/munchy_cow_head.svg" />
     <meta name="csrf-token" content={get_csrf_token()} />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -23,17 +40,15 @@
   <body class="bg-base-100 min-h-screen">
     <div class="navbar bg-base-200 border-b border-base-300">
       <div class="navbar-start">
-        <.link href={~p"/"} class="btn btn-ghost text-xl group"><span class="inline-block group-hover:animate-wiggle">🐄</span> Munchy Cow</.link>
+        <.link href={~p"/"} class="btn btn-ghost text-xl">Munchy Cow</.link>
       </div>
       <div class="navbar-end gap-2">
         <.link href={~p"/pricing"} class="btn btn-ghost btn-sm">Pricing</.link>
         <%= if @current_scope do %>
           <.link href={~p"/app"} class="btn btn-primary btn-sm">Open App</.link>
-          <div class="dropdown dropdown-end">
-            <div tabindex="0" role="button" class="btn btn-ghost btn-sm btn-circle">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-              </svg>
+          <div class="dropdown dropdown-end ml-2">
+            <div tabindex="0" role="button" class="w-10 h-10 rounded-full bg-base-300 flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all">
+              <img src="/images/munchy_cow_head.svg" alt="" class="w-7 h-7" />
             </div>
             <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box z-50 w-56 p-2 shadow-lg border border-base-300 mt-2">
               <li class="menu-title text-xs text-base-content/50 px-2 py-1">{@current_scope.user.email}</li>

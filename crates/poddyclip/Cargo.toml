@@ -7,7 +7,18 @@ description = "Audio processing library for podcast enhancement"
 [features]
 default = []
 plugin = ["dep:nih_plug"]
+deepfilter = ["dep:df", "dep:ndarray", "dep:anyhow"]
 
 [dependencies]
 rustfft = "6.2"
 nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", optional = true }
+
+# DeepFilterNet dependencies (optional)
+df = { git = "https://github.com/Rikorose/DeepFilterNet", tag = "v0.5.6", package = "deep_filter", features = [
+    "tract",
+    "default-model",
+    "wav-utils",
+    "transforms",
+], optional = true }
+ndarray = { version = "0.15", optional = true }
+anyhow = { version = "1.0", optional = true }

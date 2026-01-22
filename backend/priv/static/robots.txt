@@ -1,5 +1,19 @@
-# See https://www.robotstxt.org/robotstxt.html for documentation on how to use the robots.txt file
-#
-# To ban all spiders from the entire site uncomment the next two lines:
-# User-agent: *
-# Disallow: /
+# Munchy Cow robots.txt
+User-agent: *
+Allow: /
+Allow: /users/register
+Allow: /users/log-in
+
+# Disallow private pages
+Disallow: /users/settings
+Disallow: /users/log-out
+Disallow: /app
+
+# Disallow API
+Disallow: /api/
+
+# Disallow dev tools
+Disallow: /dev/
+
+# Sitemap
+Sitemap: https://munchycow.com/sitemap.xml
