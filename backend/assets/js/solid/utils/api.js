@@ -42,7 +42,8 @@ export const api = {
       filename,
       category: config.category,
       mode: config.mode,
-      strength: config.strength
+      strength: config.strength,
+      ai_clean: config.ai_clean
     });
   },
 

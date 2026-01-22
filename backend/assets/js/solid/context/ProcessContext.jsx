@@ -17,8 +17,8 @@ export function ProcessProvider(props) {
     // Processing configuration - each category stores its own mode + strength
     processingConfig: {
       category: "voice", // "voice" | "mixed"
-      voice: { mode: "natural", strength: 3 },
-      mixed: { mode: "natural", strength: 3 }
+      voice: { mode: "natural", strength: 3, aiClean: false },
+      mixed: { mode: "natural", strength: 3, aiClean: false }
     },
     job: null,
     error: null,
@@ -172,9 +172,15 @@ export function ProcessProvider(props) {
     setStore("processingConfig", cat, "strength", Math.max(1, Math.min(5, strength)));
   }
 
+  function setAiClean(enabled) {
+    const cat = store.processingConfig.category;
+    setStore("processingConfig", cat, "aiClean", enabled);
+  }
+
   // Computed helpers for current config
   const currentMode = () => store.processingConfig[store.processingConfig.category].mode;
   const currentStrength = () => store.processingConfig[store.processingConfig.category].strength;
+  const currentAiClean = () => store.processingConfig[store.processingConfig.category].aiClean;
 
   async function submitJob() {
     if (!store.s3Key || !store.filename) {
@@ -184,10 +190,13 @@ export function ProcessProvider(props) {
 
     try {
       const cat = store.processingConfig.category;
+      const catConfig = store.processingConfig[cat];
       const config = {
         category: cat,
-        mode: store.processingConfig[cat].mode,
-        strength: store.processingConfig[cat].strength
+        mode: catConfig.mode,
+        strength: catConfig.strength,
+        // Only send ai_clean for repair mode where it can be toggled
+        ai_clean: catConfig.mode === "repair" ? catConfig.aiClean : undefined
       };
       const job = await api.createJob(store.s3Key, store.filename, config);
       setStore({ job, error: null });
@@ -240,8 +249,10 @@ export function ProcessProvider(props) {
     setCategory,
     setMode,
     setStrength,
+    setAiClean,
     currentMode,
     currentStrength,
+    currentAiClean,
     submitJob,
     cancelJob,
     clearError,

@@ -247,22 +247,33 @@ Complete chain with all stages:
 3. Declick (optional, offline only)
 4. DeReverb (optional, init with ReverbAnalysis)
 5. Denoise (spectral subtraction)
-6. Spectral Gate (non-stationary noise)
-7. Peak Attenuator (tonal noise removal)
-8. Dynamics:
+6. AI Clean (optional, isolates voice)
+7. Spectral Gate (non-stationary noise)
+8. Peak Attenuator (tonal noise removal)
+9. Dynamics:
    - PeakComp (look-ahead compression)
    - OR FetComp (alternative compressor)
-9. FixEQ (demud + 2-band correction)
-10. DeEsser (sibilance reduction)
-11. Saturation:
+10. FixEQ (demud + 2-band correction)
+11. DeEsser (sibilance reduction)
+12. Saturation:
     - TapeGlue (Jiles-Atherton hysteresis, f64 internal)
     - Channel9 (Neve-style transformer)
-12. Compression (ButterComp)
-13. Enhancement:
+13. Compression (ButterComp)
+14. Enhancement:
     - EnhanceEQ OR RadioVoice (broadcast EQ)
-14. LUFS normalization (-16 LUFS target)
-15. Limiter (true peak -1dB)
+15. LUFS normalization (-16 LUFS target)
+16. Limiter (true peak -1dB)
 ```
+
+## AI Clean
+
+Deep learning noise removal that isolates voice and removes everything else. More thorough than spectral denoising but requires additional processing time.
+
+**API:**
+- `ProcessConfig.ai_denoise: bool` - enable AI cleaning
+- `CreateS3JobRequest.ai_clean: Option<bool>` - override default
+- Default: OFF (user must opt-in)
+- Runs after spectral denoising, before spectral gate
 
 ## Module Organization
 
@@ -277,6 +288,9 @@ crates/poddyclip/src/
 │   ├── analysis.rs  # One-pass FFT analysis
 │   ├── spectral_gate.rs    # Non-stationary noise gate
 │   └── peak_attenuator.rs  # Tonal peak removal
+├── deepfilter/      # AI denoiser (optional, feature-gated)
+│   ├── core.rs      # DeepFilterDenoiser wrapper
+│   └── analysis.rs  # SNR analysis for auto-tuning
 ├── dereverb/        # Spectral de-reverb
 │   ├── core.rs      # DeReverbProcessor
 │   └── common.rs    # Presets, params
@@ -559,4 +573,36 @@ cargo xtask bundle poddyclip-plugin --release
 10. ButterComp
 11. TapeGlue
 12. Limiter
+```
+
+## API Processing
+
+The `poddyclip-api` crate provides HTTP endpoints for audio processing.
+
+**Features:**
+- `deepfilter` (default) - Enables AI denoiser
+
+**ProcessConfig fields (key ones):**
+- `ai_denoise: bool` - Enable DeepFilterNet (default: false, true for Repair mode)
+- `denoiser_preset: u8` - Spectral subtraction level 1-5
+- `dereverb: u8` - DeReverb level 0-5 (0 = off)
+- `spectral_gate: u8` - Gate level 0-5 (0 = off)
+
+**Processing modes (via category/mode/strength):**
+| Mode | AI Clean | DeReverb | Spectral Gate | Saturation |
+|------|----------|----------|---------------|------------|
+| Repair | OFF* | ON | ON | OFF |
+| Natural | OFF | OFF | OFF | Light |
+| Studio | OFF | OFF | OFF | Full |
+
+*AI Clean available as opt-in toggle in Repair mode
+
+**API stages (25 total):**
+```
+0-decoding, 1-filters, 2-input_gain, 3-analyzing_reverb, 4-dereverb,
+5-analyzing_noise, 6-denoise, 7-ai_denoise, 8-spectral_gate,
+9-analyzing_peaks, 10-peak_attenuation, 11-expander, 12-compressor,
+13-analyzing_eq, 14-fixeq, 15-deesser, 16-saturation, 17-buttercomp,
+18-analyzing_enhance, 19-enhanceeq, 20-tape, 21-radio,
+22-analyzing_levels, 23-output, 24-encoding
 ```

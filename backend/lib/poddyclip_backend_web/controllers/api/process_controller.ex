@@ -79,7 +79,8 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
     opts = [
       category: params["category"] || "voice",
       mode: params["mode"] || "natural",
-      strength: params["strength"] || 3
+      strength: params["strength"] || 3,
+      ai_clean: params["ai_clean"]
     ]
 
     case Processing.submit_job_from_s3(s3_key, filename, user.id, opts) do
