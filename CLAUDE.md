@@ -34,7 +34,7 @@ cargo test
 cargo test test_name
 
 # Run CLI
-./target/release/poddyclip input.wav --preset 3
+./target/release/poddyclip input.wav --preset 2
 ```
 
 ## Project Structure
@@ -174,13 +174,13 @@ if is_stereo {
 }
 ```
 
-## Preset-Based Processors (1-5 levels)
+## Preset-Based Processors (1-3 levels)
 
 Used by: Denoiser, SpectralGate, DeReverb
 ```rust
-Processor::new_with_preset(sample_rate, level)  // level: 1-5
-PRESET_NAMES: [&str; 5] = ["Gentle", "Light", "Moderate", "Strong", "Aggressive"]
-get_preset_name(level) -> &str  // Returns "Unknown" for 0
+Processor::new_with_preset(sample_rate, level)  // level: 1-3
+PRESET_NAMES: [&str; 3] = ["Subtle", "Balanced", "Intense"]
+get_preset_name(level) -> &str  // Returns "Unknown" for 0 or >3
 ```
 
 ## STFT Processing Pattern
@@ -584,9 +584,9 @@ The `poddyclip-api` crate provides HTTP endpoints for audio processing.
 
 **ProcessConfig fields (key ones):**
 - `ai_denoise: bool` - Enable DeepFilterNet (default: false, true for Repair mode)
-- `denoiser_preset: u8` - Spectral subtraction level 1-5
-- `dereverb: u8` - DeReverb level 0-5 (0 = off)
-- `spectral_gate: u8` - Gate level 0-5 (0 = off)
+- `denoiser_preset: u8` - Spectral subtraction level 1-3
+- `dereverb: u8` - DeReverb level 0-3 (0 = off)
+- `spectral_gate: u8` - Gate level 0-3 (0 = off)
 
 **Processing modes (via category/mode/strength):**
 | Mode | AI Clean | DeReverb | Spectral Gate | Saturation |

@@ -9,47 +9,37 @@ pub struct SaturationPreset {
     pub tape_warmth: f64,
 }
 
-/// Preset names (1-5)
-pub const SATURATION_PRESET_NAMES: [&str; 5] =
-    ["Gentle", "Light", "Moderate", "Strong", "Aggressive"];
+/// Preset names (1-3)
+pub const SATURATION_PRESET_NAMES: [&str; 3] =
+    ["Subtle", "Balanced", "Intense"];
 
-/// Saturation presets (1-5 scale)
-pub const SATURATION_PRESETS: [SaturationPreset; 5] = [
-    // 1: Gentle - barely colored
+/// Saturation presets (1-3 scale)
+pub const SATURATION_PRESETS: [SaturationPreset; 3] = [
+    // 1: Subtle - barely colored
     SaturationPreset {
         channel9_drive: 0.1,
         tape_warmth: 0.2,
     },
-    // 2: Light
+    // 2: Balanced (default)
     SaturationPreset {
         channel9_drive: 0.15,
         tape_warmth: 0.35,
     },
-    // 3: Moderate (current ~0.2 drive)
+    // 3: Intense - noticeable warmth
     SaturationPreset {
         channel9_drive: 0.2,
         tape_warmth: 0.5,
     },
-    // 4: Strong
-    SaturationPreset {
-        channel9_drive: 0.3,
-        tape_warmth: 0.7,
-    },
-    // 5: Aggressive - obvious warmth
-    SaturationPreset {
-        channel9_drive: 0.4,
-        tape_warmth: 0.9,
-    },
 ];
 
-/// Get preset name by level (1-5), returns "Unknown" for invalid levels
+/// Get preset name by level (1-3), returns "Unknown" for invalid levels
 pub fn get_saturation_preset_name(level: u8) -> &'static str {
     SATURATION_PRESET_NAMES
         .get((level as usize).saturating_sub(1))
         .unwrap_or(&"Unknown")
 }
 
-/// Get saturation preset by level (1-5)
+/// Get saturation preset by level (1-3)
 pub fn get_saturation_preset(level: u8) -> Option<&'static SaturationPreset> {
     SATURATION_PRESETS.get((level as usize).saturating_sub(1))
 }

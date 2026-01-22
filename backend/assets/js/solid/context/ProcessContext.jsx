@@ -17,8 +17,8 @@ export function ProcessProvider(props) {
     // Processing configuration - each category stores its own mode + strength
     processingConfig: {
       category: "voice", // "voice" | "mixed"
-      voice: { mode: "natural", strength: 3, aiClean: false },
-      mixed: { mode: "natural", strength: 3, aiClean: false }
+      voice: { mode: "natural", strength: 2, aiClean: false },
+      mixed: { mode: "natural", strength: 2, aiClean: false }
     },
     job: null,
     error: null,
@@ -169,7 +169,7 @@ export function ProcessProvider(props) {
 
   function setStrength(strength) {
     const cat = store.processingConfig.category;
-    setStore("processingConfig", cat, "strength", Math.max(1, Math.min(5, strength)));
+    setStore("processingConfig", cat, "strength", Math.max(1, Math.min(3, strength)));
   }
 
   function setAiClean(enabled) {

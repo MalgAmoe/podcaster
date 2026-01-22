@@ -43,11 +43,9 @@ use poddyclip::traits::{Stereo, StereoProcessor};
 #[command(name = "poddyclip")]
 #[command(about = "Spectral Subtraction Denoiser", long_about = None)]
 #[command(after_help = r#"Preset Modes:
-  1 = Gentle     - Minimal processing, preserves everything
-  2 = Light      - Subtle noise reduction
-  3 = Moderate   - Balanced (default)
-  4 = Strong     - Noticeable noise reduction
-  5 = Aggressive - Maximum removal, may affect speech quality"#)]
+  1 = Subtle   - Minimal processing, preserves everything
+  2 = Balanced - Subtle noise reduction (default)
+  3 = Intense  - Noticeable noise reduction"#)]
 struct Args {
     /// Input audio file (WAV, MP3, etc.)
     input: Option<PathBuf>,
@@ -56,8 +54,8 @@ struct Args {
     #[arg(short, long)]
     output: Option<PathBuf>,
 
-    /// Denoising strength 1-5
-    #[arg(short, long, default_value_t = DEFAULT_PRESET, value_parser = clap::value_parser!(u8).range(1..=5))]
+    /// Denoising strength 1-3
+    #[arg(short, long, default_value_t = DEFAULT_PRESET, value_parser = clap::value_parser!(u8).range(1..=3))]
     preset: u8,
 
     /// High-pass filter slope: 12 or 24 dB/octave (filters applied before denoising)
@@ -84,8 +82,8 @@ struct Args {
     #[arg(long, default_value_t = 1.0)]
     radio_amount: f32,
 
-    /// De-reverb strength 1-5 (0 = disabled)
-    #[arg(long, default_value_t = 0, value_parser = clap::value_parser!(u8).range(0..=5))]
+    /// De-reverb strength 1-3 (0 = disabled)
+    #[arg(long, default_value_t = 0, value_parser = clap::value_parser!(u8).range(0..=3))]
     dereverb: u8,
 
     /// Use AI (DeepFilterNet) denoiser for voice (auto-tuned based on SNR)
@@ -93,8 +91,8 @@ struct Args {
     #[arg(long)]
     ai_denoise: bool,
 
-    /// Spectral gate strength 1-5 (0 = off) - handles intermittent noise
-    #[arg(long, default_value_t = 0, value_parser = clap::value_parser!(u8).range(0..=5))]
+    /// Spectral gate strength 1-3 (0 = off) - handles intermittent noise
+    #[arg(long, default_value_t = 0, value_parser = clap::value_parser!(u8).range(0..=3))]
     spectral_gate: u8,
 
     /// Enable tonal peak attenuation (hum, whine removal)
@@ -145,30 +143,30 @@ struct Args {
     disable_limiter: bool,
 
     // =========================================================================
-    // PROCESSOR PRESETS - fine-tune individual processors (1-5 scale)
+    // PROCESSOR PRESETS - fine-tune individual processors (1-3 scale)
     // =========================================================================
-    /// Expander preset 1-5 (1=Gentle, 3=Moderate, 5=Aggressive)
-    #[arg(long, default_value_t = 3, value_parser = clap::value_parser!(u8).range(1..=5))]
+    /// Expander preset 1-3 (1=Subtle, 2=Balanced, 3=Intense)
+    #[arg(long, default_value_t = 2, value_parser = clap::value_parser!(u8).range(1..=3))]
     expander_preset: u8,
 
-    /// FET compressor preset 1-5 (used with --fet)
-    #[arg(long, default_value_t = 3, value_parser = clap::value_parser!(u8).range(1..=5))]
+    /// FET compressor preset 1-3 (used with --fet)
+    #[arg(long, default_value_t = 2, value_parser = clap::value_parser!(u8).range(1..=3))]
     fetcomp_preset: u8,
 
-    /// Peak compressor preset 1-5 (default compressor)
-    #[arg(long, default_value_t = 3, value_parser = clap::value_parser!(u8).range(1..=5))]
+    /// Peak compressor preset 1-3 (default compressor)
+    #[arg(long, default_value_t = 2, value_parser = clap::value_parser!(u8).range(1..=3))]
     peakcomp_preset: u8,
 
-    /// Saturation preset 1-5 (Channel9 + TapeGlue)
-    #[arg(long, default_value_t = 3, value_parser = clap::value_parser!(u8).range(1..=5))]
+    /// Saturation preset 1-3 (Channel9 + TapeGlue)
+    #[arg(long, default_value_t = 2, value_parser = clap::value_parser!(u8).range(1..=3))]
     saturation_preset: u8,
 
-    /// EQ preset 1-5 (EnhanceEQ gains)
-    #[arg(long, default_value_t = 3, value_parser = clap::value_parser!(u8).range(1..=5))]
+    /// EQ preset 1-3 (EnhanceEQ gains)
+    #[arg(long, default_value_t = 2, value_parser = clap::value_parser!(u8).range(1..=3))]
     eq_preset: u8,
 
-    /// ButterComp preset 1-5
-    #[arg(long, default_value_t = 3, value_parser = clap::value_parser!(u8).range(1..=5))]
+    /// ButterComp preset 1-3
+    #[arg(long, default_value_t = 2, value_parser = clap::value_parser!(u8).range(1..=3))]
     buttercomp_preset: u8,
 
     // =========================================================================
@@ -954,17 +952,17 @@ fn resolve_processor_setting(
 
     // Check chain preset
     match chain_setting {
-        Some(ProcessorSetting::Disabled) => (false, 3),
+        Some(ProcessorSetting::Disabled) => (false, 2),
         Some(ProcessorSetting::Preset(p)) => {
             // CLI preset wins if explicitly set (not default)
-            if cli_preset != 3 {
+            if cli_preset != 2 {
                 (true, cli_preset)
             } else {
                 (true, *p)
             }
         }
         Some(ProcessorSetting::Default) | None => {
-            // Use CLI preset (or default 3)
+            // Use CLI preset (or default 2)
             (true, cli_preset)
         }
     }
@@ -981,11 +979,11 @@ fn resolve_compressor_setting(
 ) -> (bool, bool, u8) {
     // CLI disable flag always wins
     if !cli_enabled {
-        return (false, false, 3);
+        return (false, false, 2);
     }
 
     match chain_setting {
-        Some(chain::CompressorSetting { enabled: false, .. }) => (false, false, 3),
+        Some(chain::CompressorSetting { enabled: false, .. }) => (false, false, 2),
         Some(chain::CompressorSetting {
             comp_type,
             preset,
@@ -1000,12 +998,12 @@ fn resolve_compressor_setting(
 
             // CLI preset overrides chain if explicitly set
             let final_preset = if use_fet {
-                if cli_fet_preset != 3 {
+                if cli_fet_preset != 2 {
                     cli_fet_preset
                 } else {
                     *preset
                 }
-            } else if cli_peak_preset != 3 {
+            } else if cli_peak_preset != 2 {
                 cli_peak_preset
             } else {
                 *preset

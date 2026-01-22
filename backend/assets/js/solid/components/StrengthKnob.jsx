@@ -1,7 +1,7 @@
 import { For } from "solid-js";
 import { useProcess } from "../context/ProcessContext";
 
-const STRENGTH_LABELS = ["Gentle", "Light", "Moderate", "Strong", "Aggressive"];
+const STRENGTH_LABELS = ["Subtle", "Balanced", "Intense"];
 
 export function StrengthKnob() {
   const { currentStrength, setStrength } = useProcess();
@@ -10,7 +10,7 @@ export function StrengthKnob() {
     <div class="form-control text-center">
       <p class="font-medium mb-3">Strength: {STRENGTH_LABELS[currentStrength() - 1]}</p>
       <div class="flex justify-center gap-2">
-        <For each={[1, 2, 3, 4, 5]}>
+        <For each={[1, 2, 3]}>
           {(level) => (
             <button
               type="button"

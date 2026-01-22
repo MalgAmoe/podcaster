@@ -49,12 +49,12 @@ pub struct FetCompPreset {
     pub output_drive: f32,
 }
 
-/// Preset names (1-5)
-pub const FETCOMP_PRESET_NAMES: [&str; 5] = ["Gentle", "Light", "Moderate", "Strong", "Aggressive"];
+/// Preset names (1-3)
+pub const FETCOMP_PRESET_NAMES: [&str; 3] = ["Subtle", "Balanced", "Intense"];
 
-/// FetComp presets (1-5 scale) - 1176-style character
-pub const FETCOMP_PRESETS: [FetCompPreset; 5] = [
-    // 1: Gentle - light leveling, minimal color
+/// FetComp presets (1-3 scale) - 1176-style character
+pub const FETCOMP_PRESETS: [FetCompPreset; 3] = [
+    // 1: Subtle - light leveling, minimal color
     FetCompPreset {
         threshold_db: -10.0,
         ratio: 2.0,
@@ -63,7 +63,7 @@ pub const FETCOMP_PRESETS: [FetCompPreset; 5] = [
         input_drive: 0.0,
         output_drive: 0.0,
     },
-    // 2: Light - subtle warmth
+    // 2: Balanced - subtle warmth (default)
     FetCompPreset {
         threshold_db: -12.0,
         ratio: 3.0,
@@ -72,7 +72,7 @@ pub const FETCOMP_PRESETS: [FetCompPreset; 5] = [
         input_drive: 0.1,
         output_drive: 0.0,
     },
-    // 3: Moderate (default)
+    // 3: Intense - punchy, colored
     FetCompPreset {
         threshold_db: -14.0,
         ratio: 4.0,
@@ -81,27 +81,9 @@ pub const FETCOMP_PRESETS: [FetCompPreset; 5] = [
         input_drive: 0.15,
         output_drive: 0.1,
     },
-    // 4: Strong - punchy, colored
-    FetCompPreset {
-        threshold_db: -16.0,
-        ratio: 6.0,
-        attack_ms: 0.5,
-        release_ms: 80.0,
-        input_drive: 0.25,
-        output_drive: 0.15,
-    },
-    // 5: Aggressive - heavy squash, saturated
-    FetCompPreset {
-        threshold_db: -18.0,
-        ratio: 8.0,
-        attack_ms: 0.2,
-        release_ms: 60.0,
-        input_drive: 0.4,
-        output_drive: 0.25,
-    },
 ];
 
-/// Get preset name by level (1-5), returns "Unknown" for invalid levels
+/// Get preset name by level (1-3), returns "Unknown" for invalid levels
 pub fn get_fetcomp_preset_name(level: u8) -> &'static str {
     FETCOMP_PRESET_NAMES
         .get((level as usize).saturating_sub(1))

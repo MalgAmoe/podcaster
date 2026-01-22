@@ -107,7 +107,7 @@ impl Default for ProcessConfig {
             output_format: OutputFormat::Mp3,
             mp3_bitrate: 192,
             chain: None,
-            denoiser_preset: 3,
+            denoiser_preset: 2,
             dereverb: 0,
             spectral_gate: 0,
             depeak: false,
@@ -116,21 +116,21 @@ impl Default for ProcessConfig {
             hp_slope: 24,
             declick: false,
             expander_enabled: true,
-            expander_preset: 3,
+            expander_preset: 2,
             compressor_enabled: true,
             compressor_type: CompressorType::Peak,
-            compressor_preset: 3,
+            compressor_preset: 2,
             fixeq_enabled: true,
             fixeq_preset: 1,
             deesser_enabled: true,
             enhanceeq_enabled: true,
-            enhanceeq_preset: 3,
+            enhanceeq_preset: 2,
             saturation_enabled: true,
-            saturation_preset: 3,
+            saturation_preset: 2,
             tape_enabled: true,
-            tape_preset: 3,
+            tape_preset: 2,
             buttercomp_enabled: true,
-            buttercomp_preset: 3,
+            buttercomp_preset: 2,
             output_enabled: true,
             lufs_target: -16.0,
             radio: false,
@@ -157,7 +157,7 @@ impl ProcessConfig {
             Some("studio") => ProcessingMode::Studio,
             _ => ProcessingMode::Natural,
         };
-        let strength = strength.unwrap_or(3).clamp(1, 5);
+        let strength = strength.unwrap_or(2).clamp(1, 3);
 
         Self::build_config(category, mode, strength)
     }
@@ -184,7 +184,7 @@ impl ProcessConfig {
         match mode {
             ProcessingMode::Repair => {
                 // Heavy cleanup, minimal coloring
-                c.denoiser_preset = (strength + 1).min(5);
+                c.denoiser_preset = strength;
                 c.dereverb = strength;
                 c.spectral_gate = strength;
                 c.declick = true;
@@ -221,22 +221,22 @@ impl ProcessConfig {
                 c.depeak = false;
 
                 c.expander_enabled = true;
-                c.expander_preset = ((strength + 1) / 2).max(1);
+                c.expander_preset = strength;
 
                 c.compressor_enabled = true;
                 c.compressor_type = CompressorType::Peak;
                 c.compressor_preset = strength;
 
                 c.fixeq_enabled = true;
-                c.fixeq_preset = ((strength + 1) / 2).max(1);
+                c.fixeq_preset = strength;
                 c.deesser_enabled = true;
 
-                // Light saturation at higher strengths
-                c.saturation_enabled = strength >= 3;
-                c.saturation_preset = ((strength + 1) / 2).max(1);
+                // Light saturation at higher strengths (enabled at 2 and 3)
+                c.saturation_enabled = strength >= 2;
+                c.saturation_preset = strength;
                 c.tape_enabled = false;
-                c.buttercomp_enabled = strength >= 3;
-                c.buttercomp_preset = ((strength + 1) / 2).max(1);
+                c.buttercomp_enabled = strength >= 2;
+                c.buttercomp_preset = strength;
 
                 c.enhanceeq_enabled = true;
                 c.enhanceeq_preset = strength;
@@ -247,7 +247,7 @@ impl ProcessConfig {
             }
             ProcessingMode::Studio => {
                 // Full polish, rich sound
-                c.denoiser_preset = ((strength + 1) / 2).max(1); // Light denoising
+                c.denoiser_preset = strength;
                 c.dereverb = 0;
                 c.spectral_gate = 0;
                 c.declick = false;

@@ -24,12 +24,12 @@ pub struct PeakCompPreset {
     pub lookahead_ms: f32,
 }
 
-/// Preset names (1-5)
-pub const PEAKCOMP_PRESET_NAMES: [&str; 5] = ["Gentle", "Light", "Moderate", "Strong", "Aggressive"];
+/// Preset names (1-3)
+pub const PEAKCOMP_PRESET_NAMES: [&str; 3] = ["Subtle", "Balanced", "Intense"];
 
-/// PeakComp presets (1-5 scale) - transparent VCA-style peak catching
-pub const PEAKCOMP_PRESETS: [PeakCompPreset; 5] = [
-    // 1: Gentle - only catch the loudest peaks
+/// PeakComp presets (1-3 scale) - transparent VCA-style peak catching
+pub const PEAKCOMP_PRESETS: [PeakCompPreset; 3] = [
+    // 1: Subtle - only catch the loudest peaks
     PeakCompPreset {
         threshold_db: -6.0,
         ratio: 4.0,
@@ -38,7 +38,7 @@ pub const PEAKCOMP_PRESETS: [PeakCompPreset; 5] = [
         knee_db: 6.0,
         lookahead_ms: 5.0,
     },
-    // 2: Light - moderate peak control
+    // 2: Balanced - moderate peak control (default)
     PeakCompPreset {
         threshold_db: -9.0,
         ratio: 6.0,
@@ -47,7 +47,7 @@ pub const PEAKCOMP_PRESETS: [PeakCompPreset; 5] = [
         knee_db: 5.0,
         lookahead_ms: 5.0,
     },
-    // 3: Moderate (default)
+    // 3: Intense - tighter peak control
     PeakCompPreset {
         threshold_db: -12.0,
         ratio: 8.0,
@@ -56,27 +56,9 @@ pub const PEAKCOMP_PRESETS: [PeakCompPreset; 5] = [
         knee_db: 4.0,
         lookahead_ms: 5.0,
     },
-    // 4: Strong - tighter peak control
-    PeakCompPreset {
-        threshold_db: -15.0,
-        ratio: 10.0,
-        attack_ms: 0.3,
-        release_ms: 80.0,
-        knee_db: 3.0,
-        lookahead_ms: 5.0,
-    },
-    // 5: Aggressive - brick wall peaks
-    PeakCompPreset {
-        threshold_db: -18.0,
-        ratio: 12.0,
-        attack_ms: 0.1,
-        release_ms: 60.0,
-        knee_db: 2.0,
-        lookahead_ms: 5.0,
-    },
 ];
 
-/// Get preset name by level (1-5), returns "Unknown" for invalid levels
+/// Get preset name by level (1-3), returns "Unknown" for invalid levels
 pub fn get_peakcomp_preset_name(level: u8) -> &'static str {
     PEAKCOMP_PRESET_NAMES
         .get((level as usize).saturating_sub(1))

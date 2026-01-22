@@ -260,11 +260,13 @@ mod tests {
 
     #[test]
     fn test_preset_creation() {
-        for level in 1..=5 {
+        for level in 1..=3 {
             let proc = DeReverbProcessor::new_with_preset(48000, level);
             assert!(proc.is_some());
         }
         let invalid = DeReverbProcessor::new_with_preset(48000, 0);
+        assert!(invalid.is_none());
+        let invalid = DeReverbProcessor::new_with_preset(48000, 4);
         assert!(invalid.is_none());
     }
 
