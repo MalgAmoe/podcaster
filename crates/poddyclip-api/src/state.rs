@@ -7,6 +7,8 @@ use crate::models::{Job, JobStatus};
 use crate::storage::Storage;
 use crate::webhook::WebhookClient;
 
+const DEFAULT_MAX_FILE_SIZE_MB: usize = 500;
+
 #[derive(Clone)]
 pub struct AppState {
     pub jobs: Arc<DashMap<Uuid, Job>>,
@@ -28,7 +30,7 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            max_file_size_mb: 100,
+            max_file_size_mb: DEFAULT_MAX_FILE_SIZE_MB,
             max_concurrent_jobs: 4,
             job_timeout_seconds: 600,
             result_retention_seconds: 3600,
@@ -45,7 +47,7 @@ impl AppConfig {
             max_file_size_mb: std::env::var("MAX_FILE_SIZE_MB")
                 .ok()
                 .and_then(|s| s.parse().ok())
-                .unwrap_or(100),
+                .unwrap_or(DEFAULT_MAX_FILE_SIZE_MB),
             max_concurrent_jobs: std::env::var("MAX_CONCURRENT_JOBS")
                 .ok()
                 .and_then(|s| s.parse().ok())
