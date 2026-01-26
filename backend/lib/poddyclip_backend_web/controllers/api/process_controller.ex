@@ -4,6 +4,7 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   """
   use PoddyclipBackendWeb, :controller
 
+  alias PoddyclipBackend.Billing
   alias PoddyclipBackend.Processing
   alias PoddyclipBackend.Processing.Client
   alias PoddyclipBackend.Storage
@@ -70,46 +71,76 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   @doc """
   POST /api/jobs - Create a processing job.
 
-  Request: {"s3_key": "...", "filename": "...", "category": "voice", "mode": "natural", "strength": 3}
+  Request: {"s3_key": "...", "filename": "...", "category": "voice", "mode": "natural", "strength": 3, "duration_seconds": 300}
   Response: {"id": 123, "status": "queued", "filename": "..."}
+
+  The duration_seconds parameter is used to estimate minutes needed. If not provided,
+  defaults to 1 minute as a conservative estimate.
   """
   def create_job(conn, %{"s3_key" => s3_key, "filename" => filename} = params) do
     user = conn.assigns.current_user
 
-    opts = [
-      category: params["category"] || "voice",
-      mode: params["mode"] || "natural",
-      strength: params["strength"] || 3,
-      ai_clean: params["ai_clean"]
-    ]
+    # Check if cancelled subscription has expired
+    {:ok, user} = Billing.check_subscription_expiry(user)
 
-    case Processing.submit_job_from_s3(s3_key, filename, user.id, opts) do
-      {:ok, job} ->
-        json(conn, %{
-          id: job.id,
-          status: Atom.to_string(job.status),
-          filename: job.filename
+    # Estimate minutes from duration (rounded up)
+    duration_seconds = params["duration_seconds"] || 60
+    estimated_minutes = ceil(duration_seconds / 60)
+
+    # Check if user has enough minutes
+    case Billing.deduct_minutes(user, estimated_minutes) do
+      {:ok, _updated_user} ->
+        # Proceed with job creation
+        opts = [
+          category: params["category"] || "voice",
+          mode: params["mode"] || "natural",
+          strength: params["strength"] || 3,
+          ai_clean: params["ai_clean"],
+          estimated_minutes: estimated_minutes
+        ]
+
+        case Processing.submit_job_from_s3(s3_key, filename, user.id, opts) do
+          {:ok, job} ->
+            json(conn, %{
+              id: job.id,
+              status: Atom.to_string(job.status),
+              filename: job.filename
+            })
+
+          {:error, {:http_error, status, %{"error" => %{"message" => msg}}}} ->
+            # Refund minutes on failure
+            Billing.refund_minutes(user, estimated_minutes)
+            conn
+            |> put_status(status)
+            |> json(%{error: msg})
+
+          {:error, {:http_error, status, body}} when is_binary(body) ->
+            Billing.refund_minutes(user, estimated_minutes)
+            conn
+            |> put_status(status)
+            |> json(%{error: body})
+
+          {:error, reason} when is_binary(reason) ->
+            Billing.refund_minutes(user, estimated_minutes)
+            conn
+            |> put_status(422)
+            |> json(%{error: reason})
+
+          {:error, reason} ->
+            Billing.refund_minutes(user, estimated_minutes)
+            conn
+            |> put_status(500)
+            |> json(%{error: "Failed to start processing: #{inspect(reason)}"})
+        end
+
+      {:error, :insufficient_minutes} ->
+        conn
+        |> put_status(:payment_required)
+        |> json(%{
+          error: "insufficient_minutes",
+          minutes_available: user.minutes_available,
+          minutes_needed: estimated_minutes
         })
-
-      {:error, {:http_error, status, %{"error" => %{"message" => msg}}}} ->
-        conn
-        |> put_status(status)
-        |> json(%{error: msg})
-
-      {:error, {:http_error, status, body}} when is_binary(body) ->
-        conn
-        |> put_status(status)
-        |> json(%{error: body})
-
-      {:error, reason} when is_binary(reason) ->
-        conn
-        |> put_status(422)
-        |> json(%{error: reason})
-
-      {:error, reason} ->
-        conn
-        |> put_status(500)
-        |> json(%{error: "Failed to start processing: #{inspect(reason)}"})
     end
   end
 
@@ -220,12 +251,45 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   end
 
   @doc """
-  GET /api/user - Get current user info.
+  GET /api/user - Get current user info including billing.
 
-  Response: {"email": "user@example.com", "id": 123}
+  Response: {
+    "id": 123,
+    "email": "user@example.com",
+    "plan": {"name": "free", "display_name": "Free", "minutes": 15},
+    "minutes_available": 12,
+    "subscription_status": "none"
+  }
   """
   def current_user(conn, _params) do
     user = conn.assigns.current_user
-    json(conn, %{email: user.email, id: user.id})
+
+    # Check if cancelled subscription has expired and downgrade if needed
+    {:ok, user} = Billing.check_subscription_expiry(user)
+    user = PoddyclipBackend.Repo.preload(user, :plan)
+
+    plan_info =
+      if user.plan do
+        %{
+          name: user.plan.name,
+          display_name: user.plan.display_name,
+          minutes: user.plan.minutes
+        }
+      else
+        # Fallback for users without a plan (shouldn't happen but be safe)
+        %{
+          name: "free",
+          display_name: "Free",
+          minutes: 15
+        }
+      end
+
+    json(conn, %{
+      id: user.id,
+      email: user.email,
+      plan: plan_info,
+      minutes_available: user.minutes_available,
+      subscription_status: user.subscription_status
+    })
   end
 end

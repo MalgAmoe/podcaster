@@ -80,6 +80,10 @@ config :poddyclip_backend, :cleanup,
   job_retention_days: 7,
   stale_job_hours: 2
 
+# Admin routes - disabled by default (compile-time setting)
+# Set ADMIN_ENABLED=true at BUILD time to include admin routes in the release
+config :poddyclip_backend, admin_enabled: System.get_env("ADMIN_ENABLED") == "true"
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

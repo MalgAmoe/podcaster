@@ -5,6 +5,8 @@ defmodule PoddyclipBackend.Processing do
   """
 
   alias PoddyclipBackend.Processing.{Job, Client}
+  alias PoddyclipBackend.Billing
+  alias PoddyclipBackend.Accounts
   alias PoddyclipBackend.Repo
   import Ecto.Query
 
@@ -29,7 +31,8 @@ defmodule PoddyclipBackend.Processing do
         status: :queued,
         input_s3_key: input_s3_key,
         chain: opts[:chain],
-        user_id: user_id
+        user_id: user_id,
+        estimated_minutes: opts[:estimated_minutes]
       })
       |> Repo.insert!()
 
@@ -122,6 +125,8 @@ defmodule PoddyclipBackend.Processing do
   @doc """
   Update job status from webhook.
   Called by the Rust API when job status changes.
+
+  When a job fails, refunds the estimated minutes to the user.
   """
   def update_job_status(job_id, params) do
     case get_job(job_id) do
@@ -129,8 +134,11 @@ defmodule PoddyclipBackend.Processing do
         {:error, :not_found}
 
       job ->
+        new_status = parse_status(params["status"])
+        old_status = job.status
+
         changes = %{
-          status: parse_status(params["status"]),
+          status: new_status,
           progress: params["progress"] || %{},
           error: params["error"],
           download_url: params["download_url"],
@@ -142,10 +150,26 @@ defmodule PoddyclipBackend.Processing do
           |> Job.changeset(changes)
           |> Repo.update!()
 
+        # Refund minutes if job failed (and wasn't already failed)
+        if new_status == :failed and old_status != :failed do
+          refund_job_minutes(updated_job)
+        end
+
         broadcast_update(updated_job)
         {:ok, updated_job}
     end
   end
+
+  # Refund estimated minutes to user when job fails or is cancelled
+  defp refund_job_minutes(%Job{estimated_minutes: nil}), do: :ok
+  defp refund_job_minutes(%Job{estimated_minutes: minutes, user_id: user_id}) when minutes > 0 do
+    case Accounts.get_user!(user_id) do
+      user -> Billing.refund_minutes(user, minutes)
+    end
+  rescue
+    Ecto.NoResultsError -> :ok
+  end
+  defp refund_job_minutes(_), do: :ok
 
   defp parse_status("queued"), do: :queued
   defp parse_status("processing"), do: :processing
@@ -172,6 +196,7 @@ defmodule PoddyclipBackend.Processing do
   Cancel a job if possible.
   Marks the job as failed and attempts to delete from Rust API.
   For already-failed jobs, deletes them from the database (cleanup).
+  Refunds estimated minutes when cancelling an active job.
   """
   def cancel_job(job_id) do
     case get_job(job_id) do
@@ -180,6 +205,7 @@ defmodule PoddyclipBackend.Processing do
 
       %{status: status} = job when status in [:failed, :completed] ->
         # Already finished, just delete from database (cleanup)
+        # No refund needed - failed jobs already refunded, completed jobs used the time
         Repo.delete(job)
 
       job ->
@@ -187,6 +213,9 @@ defmodule PoddyclipBackend.Processing do
         if job.rust_job_id do
           Client.delete_job(job.rust_job_id)
         end
+
+        # Refund minutes before marking as failed
+        refund_job_minutes(job)
 
         # Mark as failed
         job

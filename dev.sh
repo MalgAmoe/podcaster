@@ -29,8 +29,8 @@ case "${1:-}" in
         cargo run --release -p poddyclip-api
         ;;
     web)
-        echo -e "${GREEN}Starting Phoenix...${NC}"
-        cd backend && mix phx.server
+        echo -e "${GREEN}Starting Phoenix (with admin dashboard)...${NC}"
+        cd backend && ADMIN_ENABLED=true ADMIN_PASSWORD=dev mix phx.server
         ;;
     stop)
         echo -e "${YELLOW}Stopping all services...${NC}"

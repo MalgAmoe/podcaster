@@ -77,6 +77,30 @@ if webhook_secret = System.get_env("WEBHOOK_SECRET") do
   config :poddyclip_backend, :webhook_secret, webhook_secret
 end
 
+# Polar billing configuration
+if polar_webhook_secret = System.get_env("POLAR_WEBHOOK_SECRET") do
+  config :poddyclip_backend, :polar_webhook_secret, polar_webhook_secret
+end
+
+# Admin auth credentials (only used if admin routes were compiled in)
+# ADMIN_ENABLED is a compile-time setting, but we still check it here
+# to avoid errors when admin routes aren't available
+if Application.compile_env(:poddyclip_backend, :admin_enabled) do
+  admin_username = System.get_env("ADMIN_USERNAME", "admin")
+  admin_password = System.get_env("ADMIN_PASSWORD")
+
+  if config_env() == :prod and is_nil(admin_password) do
+    raise """
+    environment variable ADMIN_PASSWORD is missing.
+    This is required for admin routes in production.
+    """
+  end
+
+  config :poddyclip_backend,
+    admin_username: admin_username,
+    admin_password: admin_password || "dev"
+end
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

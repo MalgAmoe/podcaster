@@ -9,6 +9,14 @@ defmodule PoddyclipBackend.Accounts.User do
     field :confirmed_at, :utc_datetime
     field :authenticated_at, :utc_datetime, virtual: true
 
+    # Billing fields
+    belongs_to :plan, PoddyclipBackend.Billing.Plan
+    field :minutes_available, :integer, default: 15
+    field :subscription_status, :string, default: "none"
+    field :polar_customer_id, :string
+    field :polar_subscription_id, :string
+    field :current_period_ends_at, :utc_datetime
+
     timestamps(type: :utc_datetime)
   end
 

@@ -36,7 +36,6 @@ defmodule PoddyclipBackendWeb.Layouts do
   def app(assigns) do
     ~H"""
     <header class="navbar px-4 sm:px-6 lg:px-8">
-      <div class="flex-1">Do we need a header??maybe not?</div>
     </header>
 
     <main class="px-4 py-20 sm:px-6 lg:px-8">

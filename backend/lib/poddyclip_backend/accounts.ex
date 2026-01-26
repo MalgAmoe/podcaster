@@ -65,6 +65,8 @@ defmodule PoddyclipBackend.Accounts do
   @doc """
   Registers a user.
 
+  New users are assigned the free plan with 15 minutes.
+
   ## Examples
 
       iex> register_user(%{field: value})
@@ -75,8 +77,13 @@ defmodule PoddyclipBackend.Accounts do
 
   """
   def register_user(attrs) do
+    # Get or create the free plan
+    free_plan = PoddyclipBackend.Billing.get_or_create_free_plan()
+
     %User{}
     |> User.email_changeset(attrs)
+    |> Ecto.Changeset.put_change(:plan_id, free_plan.id)
+    |> Ecto.Changeset.put_change(:minutes_available, free_plan.minutes)
     |> Repo.insert()
   end
 
