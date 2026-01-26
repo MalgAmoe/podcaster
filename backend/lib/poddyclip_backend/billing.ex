@@ -18,6 +18,7 @@ defmodule PoddyclipBackend.Billing do
   alias PoddyclipBackend.Repo
   alias PoddyclipBackend.Accounts.User
   alias PoddyclipBackend.Billing.{Plan, ProcessedWebhook}
+  require Logger
 
   # ----- Plans -----
 
@@ -116,10 +117,27 @@ defmodule PoddyclipBackend.Billing do
   """
   def deduct_minutes(%User{minutes_available: available} = user, amount) when amount > 0 do
     if available >= amount do
-      user
-      |> Ecto.Changeset.change(minutes_available: available - amount)
-      |> Repo.update()
+      case user
+           |> Ecto.Changeset.change(minutes_available: available - amount)
+           |> Repo.update() do
+        {:ok, updated_user} ->
+          Logger.info("Minutes deducted",
+            user_id: user.id,
+            amount: amount,
+            previous: available,
+            remaining: updated_user.minutes_available
+          )
+          {:ok, updated_user}
+
+        error ->
+          error
+      end
     else
+      Logger.warning("Insufficient minutes for deduction",
+        user_id: user.id,
+        requested: amount,
+        available: available
+      )
       {:error, :insufficient_minutes}
     end
   end
@@ -135,9 +153,21 @@ defmodule PoddyclipBackend.Billing do
       {:ok, %User{minutes_available: 20}}
   """
   def refund_minutes(%User{minutes_available: available} = user, amount) when amount > 0 do
-    user
-    |> Ecto.Changeset.change(minutes_available: available + amount)
-    |> Repo.update()
+    case user
+         |> Ecto.Changeset.change(minutes_available: available + amount)
+         |> Repo.update() do
+      {:ok, updated_user} ->
+        Logger.info("Minutes refunded",
+          user_id: user.id,
+          amount: amount,
+          previous: available,
+          new_balance: updated_user.minutes_available
+        )
+        {:ok, updated_user}
+
+      error ->
+        error
+    end
   end
 
   @doc """
@@ -223,9 +253,24 @@ defmodule PoddyclipBackend.Billing do
   - `:minutes_available` - Available minutes (set when upgrading)
   """
   def update_subscription(%User{} = user, attrs) do
-    user
-    |> Ecto.Changeset.change(attrs)
-    |> Repo.update()
+    case user
+         |> Ecto.Changeset.change(attrs)
+         |> Repo.update() do
+      {:ok, updated_user} ->
+        # Log subscription status changes
+        if Map.has_key?(attrs, :subscription_status) do
+          Logger.info("Subscription updated",
+            user_id: user.id,
+            prev_status: user.subscription_status,
+            new_status: attrs[:subscription_status],
+            plan_id: attrs[:plan_id] || user.plan_id
+          )
+        end
+        {:ok, updated_user}
+
+      error ->
+        error
+    end
   end
 
   @doc """

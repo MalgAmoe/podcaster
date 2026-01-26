@@ -2,7 +2,7 @@
 
 use reqwest::Client;
 use serde::Serialize;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use crate::models::{Job, JobProgress, JobStatus};
 
@@ -59,23 +59,44 @@ impl WebhookClient {
         match request.send().await {
             Ok(response) => {
                 if response.status().is_success() {
-                    info!(
-                        "Webhook sent for job {} (phoenix_id={}): status={}",
-                        job.id, phoenix_job_id, payload.status
-                    );
+                    // Only log at info level for terminal states, debug for progress updates
+                    match payload.status.as_str() {
+                        "completed" | "failed" => {
+                            info!(
+                                job_id = %job.id,
+                                user_id = job.user_id.unwrap_or(-1),
+                                phoenix_id = phoenix_job_id,
+                                status = %payload.status,
+                                "Webhook sent"
+                            );
+                        }
+                        _ => {
+                            debug!(
+                                job_id = %job.id,
+                                user_id = job.user_id.unwrap_or(-1),
+                                phoenix_id = phoenix_job_id,
+                                status = %payload.status,
+                                "Webhook sent"
+                            );
+                        }
+                    }
                 } else {
                     error!(
-                        "Webhook failed for job {} (phoenix_id={}): HTTP {}",
-                        job.id,
-                        phoenix_job_id,
-                        response.status()
+                        job_id = %job.id,
+                        user_id = job.user_id.unwrap_or(-1),
+                        phoenix_id = phoenix_job_id,
+                        http_status = %response.status(),
+                        "Webhook failed"
                     );
                 }
             }
             Err(e) => {
                 error!(
-                    "Webhook request failed for job {} (phoenix_id={}): {}",
-                    job.id, phoenix_job_id, e
+                    job_id = %job.id,
+                    user_id = job.user_id.unwrap_or(-1),
+                    phoenix_id = phoenix_job_id,
+                    error = %e,
+                    "Webhook request failed"
                 );
             }
         }

@@ -12,6 +12,8 @@ defmodule PoddyclipBackend.Application do
       PoddyclipBackend.Repo,
       {DNSCluster, query: Application.get_env(:poddyclip_backend, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: PoddyclipBackend.PubSub},
+      # Log shipper for OpenObserve (must start before logger backend uses it)
+      PoddyclipBackend.LogShipper,
       # Oban job queue
       {Oban, Application.fetch_env!(:poddyclip_backend, Oban)},
       # Start to serve requests, typically the last entry

@@ -52,7 +52,19 @@ config :tailwind,
 # Configure Elixir's Logger
 config :logger, :default_formatter,
   format: "$time $metadata[$level] $message\n",
-  metadata: [:request_id]
+  metadata: [:request_id, :job_id, :user_id]
+
+# Filter sensitive parameters from Phoenix logs
+config :phoenix, :filter_parameters, [
+  "password",
+  "secret",
+  "token",
+  "api_key",
+  "webhook_secret",
+  "download_url",
+  "X-Amz-Signature",
+  "X-Amz-Credential"
+]
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason

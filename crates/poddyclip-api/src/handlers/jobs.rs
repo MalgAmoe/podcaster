@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Instant;
 
 use axum::{
     extract::{Path, State},
@@ -6,7 +7,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use tokio::task;
-use tracing::{error, info};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::audio::{decode_audio, encode_mp3, encode_wav};
@@ -37,7 +38,7 @@ pub async fn delete_job(
     // Delete from S3 if present
     if let (Some(ref s3_key), Some(ref storage)) = (&job.result_s3_key, &state.storage) {
         if let Err(e) = storage.delete(s3_key).await {
-            tracing::warn!("Failed to delete S3 object {}: {}", s3_key, e);
+            warn!("Failed to delete S3 object {}: {}", s3_key, e);
         }
     }
 
@@ -103,7 +104,11 @@ pub async fn create_s3_job(
         .ok_or_else(|| ApiError::Internal("S3 storage not configured".to_string()))?;
 
     // Download input file from S3
-    info!("Downloading input from S3: {}", req.input_s3_key);
+    info!(
+        user_id = req.user_id.unwrap_or(-1),
+        input_key = %req.input_s3_key,
+        "Downloading input from S3"
+    );
     let audio_bytes = storage
         .download(&req.input_s3_key)
         .await
@@ -168,26 +173,31 @@ pub async fn create_s3_job(
     // Create job with webhook info
     let job_id = Uuid::new_v4();
     let job = Job::new(job_id, config.clone(), filename.clone(), audio_bytes.len())
-        .with_webhook(req.phoenix_job_id, req.webhook_url.clone(), req.webhook_secret.clone());
+        .with_webhook(req.user_id, req.phoenix_job_id, req.webhook_url.clone(), req.webhook_secret.clone());
 
     // Get cancellation flag before inserting job (Arc is cloned)
     let cancelled = job.cancelled.clone();
+    let user_id_for_upload = req.user_id;
     state.insert_job(job);
 
     info!(
-        "Created job {} from S3 input '{}' ({} bytes)",
-        job_id, req.input_s3_key, audio_bytes.len()
+        job_id = %job_id,
+        user_id = user_id_for_upload.unwrap_or(-1),
+        input_key = %req.input_s3_key,
+        size_bytes = audio_bytes.len(),
+        "Job created from S3 input"
     );
 
     // Spawn processing task
     let state_clone = state.clone();
     let chains_dir = state.config.chains_dir.clone();
     let job_timeout = state.config.job_timeout_seconds;
-    let user_id_for_upload = req.user_id;
     let filename_for_upload = filename.clone();
     let webhook_client = state.webhook.clone();
 
     task::spawn(async move {
+        let start_time = Instant::now();
+
         // Update status to processing
         state_clone.update_job(&job_id, |j| {
             j.status = JobStatus::Processing;
@@ -220,7 +230,7 @@ pub async fn create_s3_job(
                         return Err(CancelledError);
                     }
 
-                    tracing::debug!("Job {} progress: {} ({}/17)", job_id, stage, index);
+                    debug!("Job {} progress: {} ({}/17)", job_id, stage, index);
                     progress_state.update_job(&job_id, |j| {
                         j.progress.update(stage, index);
                         j.updated_at = now();
@@ -271,11 +281,21 @@ pub async fn create_s3_job(
                         .await
                     {
                         Ok(key) => {
-                            info!("Job {} result uploaded to S3: {}", job_id, key);
+                            info!(
+                                job_id = %job_id,
+                                user_id = user_id,
+                                s3_key = %key,
+                                "Job result uploaded to S3"
+                            );
                             Some(key)
                         }
                         Err(e) => {
-                            error!("Job {} failed to upload to S3: {}. Keeping in memory.", job_id, e);
+                            error!(
+                                job_id = %job_id,
+                                user_id = user_id,
+                                error = %e,
+                                "Job failed to upload to S3, keeping in memory"
+                            );
                             None
                         }
                     }
@@ -304,7 +324,14 @@ pub async fn create_s3_job(
                     j.progress.update("completed", 24);
                     j.updated_at = now();
                 });
-                info!("Job {} completed successfully", job_id);
+
+                let duration_ms = start_time.elapsed().as_millis();
+                info!(
+                    job_id = %job_id,
+                    user_id = user_id_for_upload.unwrap_or(-1),
+                    duration_ms = duration_ms,
+                    "Job completed successfully"
+                );
 
                 // Send webhook for completion
                 if let Some(job) = state_clone.get_job(&job_id) {
@@ -312,7 +339,14 @@ pub async fn create_s3_job(
                 }
             }
             Ok(Ok(Err(e))) => {
-                error!("Job {} failed: {}", job_id, e);
+                let duration_ms = start_time.elapsed().as_millis();
+                error!(
+                    job_id = %job_id,
+                    user_id = user_id_for_upload.unwrap_or(-1),
+                    duration_ms = duration_ms,
+                    error = %e,
+                    "Job failed"
+                );
                 state_clone.update_job(&job_id, |j| {
                     j.status = JobStatus::Failed;
                     j.error = Some(e.to_string());
@@ -325,7 +359,14 @@ pub async fn create_s3_job(
                 }
             }
             Ok(Err(e)) => {
-                error!("Job {} panicked: {}", job_id, e);
+                let duration_ms = start_time.elapsed().as_millis();
+                error!(
+                    job_id = %job_id,
+                    user_id = user_id_for_upload.unwrap_or(-1),
+                    duration_ms = duration_ms,
+                    error = %e,
+                    "Job panicked"
+                );
                 state_clone.update_job(&job_id, |j| {
                     j.status = JobStatus::Failed;
                     j.error = Some("Internal processing error".to_string());
@@ -338,7 +379,14 @@ pub async fn create_s3_job(
                 }
             }
             Err(_) => {
-                error!("Job {} timed out", job_id);
+                let duration_ms = start_time.elapsed().as_millis();
+                error!(
+                    job_id = %job_id,
+                    user_id = user_id_for_upload.unwrap_or(-1),
+                    duration_ms = duration_ms,
+                    timeout_seconds = job_timeout,
+                    "Job timed out"
+                );
                 state_clone.update_job(&job_id, |j| {
                     j.status = JobStatus::Failed;
                     j.error = Some("Processing timed out".to_string());

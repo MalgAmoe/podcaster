@@ -3,6 +3,7 @@ pub mod auth;
 pub mod error;
 pub mod handlers;
 pub mod models;
+pub mod openobserve;
 pub mod processing;
 pub mod state;
 pub mod storage;

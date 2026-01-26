@@ -22,6 +22,9 @@ pub struct Job {
     pub error: Option<String>,
     pub input_filename: String,
     pub input_size_bytes: usize,
+    /// User ID (for logging and S3 paths)
+    #[serde(skip)]
+    pub user_id: Option<i64>,
     /// External job ID from Phoenix (for webhook callbacks)
     #[serde(skip)]
     pub phoenix_job_id: Option<i64>,
@@ -90,6 +93,7 @@ impl Job {
             error: None,
             input_filename,
             input_size_bytes,
+            user_id: None,
             phoenix_job_id: None,
             webhook_url: None,
             webhook_secret: None,
@@ -97,7 +101,8 @@ impl Job {
         }
     }
 
-    pub fn with_webhook(mut self, phoenix_job_id: Option<i64>, webhook_url: Option<String>, webhook_secret: Option<String>) -> Self {
+    pub fn with_webhook(mut self, user_id: Option<i64>, phoenix_job_id: Option<i64>, webhook_url: Option<String>, webhook_secret: Option<String>) -> Self {
+        self.user_id = user_id;
         self.phoenix_job_id = phoenix_job_id;
         self.webhook_url = webhook_url;
         self.webhook_secret = webhook_secret;

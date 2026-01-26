@@ -5,6 +5,7 @@ use s3::Bucket;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+use tracing::debug;
 
 /// S3-compatible storage client for storing processed audio files
 #[derive(Clone)]
@@ -90,7 +91,7 @@ impl Storage {
             .await
             .context("Failed to upload to S3")?;
 
-        tracing::info!("Uploaded {} bytes to s3://{}/{}", data.len(), self.bucket.name(), key);
+        debug!("Uploaded {} bytes to s3://{}/{}", data.len(), self.bucket.name(), key);
 
         Ok(key)
     }
@@ -123,7 +124,7 @@ impl Storage {
             .await
             .context("Failed to delete from S3")?;
 
-        tracing::info!("Deleted s3://{}/{}", self.bucket.name(), key);
+        debug!("Deleted s3://{}/{}", self.bucket.name(), key);
 
         Ok(())
     }
@@ -136,7 +137,7 @@ impl Storage {
             .await
             .context("Failed to download from S3")?;
 
-        tracing::info!(
+        debug!(
             "Downloaded {} bytes from s3://{}/{}",
             response.bytes().len(),
             self.bucket.name(),

@@ -26,6 +26,20 @@ services:
     command: server /data --console-address ":9001"
     restart: unless-stopped
 
+  openobserve:
+    image: openobserve/openobserve:latest
+    container_name: poddyclip-openobserve
+    ports:
+      - "5080:5080"  # Web UI + API
+    environment:
+      ZO_ROOT_USER_EMAIL: admin@poddyclip.local
+      ZO_ROOT_USER_PASSWORD: ${OPENOBSERVE_PASSWORD:-dev}
+      ZO_DATA_DIR: /data
+    volumes:
+      - openobserve-data:/data
+    restart: unless-stopped
+
 volumes:
   postgres-data:
   minio-data:
+  openobserve-data:

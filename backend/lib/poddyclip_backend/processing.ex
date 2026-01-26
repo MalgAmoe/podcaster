@@ -9,6 +9,7 @@ defmodule PoddyclipBackend.Processing do
   alias PoddyclipBackend.Accounts
   alias PoddyclipBackend.Repo
   import Ecto.Query
+  require Logger
 
   @doc """
   Submit a job for processing using an S3 input key.
@@ -36,6 +37,13 @@ defmodule PoddyclipBackend.Processing do
       })
       |> Repo.insert!()
 
+    Logger.info("Job submitted",
+      job_id: job.id,
+      user_id: user_id,
+      filename: filename,
+      chain: opts[:chain]
+    )
+
     # Notify Rust API to start processing (include filename and user_id for output path)
     case Client.start_processing(job.id, input_s3_key, [{:user_id, user_id}, {:filename, filename} | opts]) do
       {:ok, %{"job_id" => rust_job_id}} ->
@@ -44,10 +52,21 @@ defmodule PoddyclipBackend.Processing do
           |> Job.changeset(%{rust_job_id: rust_job_id, status: :processing})
           |> Repo.update!()
 
+        Logger.info("Job processing started",
+          job_id: job.id,
+          user_id: user_id,
+          rust_job_id: rust_job_id
+        )
+
         {:ok, updated_job}
 
       {:error, reason} ->
         # Job stays queued, can be retried later
+        Logger.error("Job submission to API failed",
+          job_id: job.id,
+          user_id: user_id,
+          error: inspect(reason)
+        )
         {:error, reason}
     end
   end
@@ -131,9 +150,13 @@ defmodule PoddyclipBackend.Processing do
   def update_job_status(job_id, params) do
     case get_job(job_id) do
       nil ->
+        Logger.warning("Job status update for unknown job", job_id: job_id)
         {:error, :not_found}
 
       job ->
+        # Set user_id in Logger metadata for all subsequent logs
+        Logger.metadata(user_id: job.user_id)
+
         new_status = parse_status(params["status"])
         old_status = job.status
 
@@ -150,6 +173,11 @@ defmodule PoddyclipBackend.Processing do
           |> Job.changeset(changes)
           |> Repo.update!()
 
+        # Log status transitions
+        if old_status != new_status do
+          log_status_change(updated_job, old_status, new_status, params["error"])
+        end
+
         # Refund minutes if job failed (and wasn't already failed)
         if new_status == :failed and old_status != :failed do
           refund_job_minutes(updated_job)
@@ -158,6 +186,33 @@ defmodule PoddyclipBackend.Processing do
         broadcast_update(updated_job)
         {:ok, updated_job}
     end
+  end
+
+  defp log_status_change(job, old_status, :completed, _error) do
+    Logger.info("Job completed",
+      job_id: job.id,
+      user_id: job.user_id,
+      prev_status: old_status,
+      filename: job.filename
+    )
+  end
+
+  defp log_status_change(job, old_status, :failed, error) do
+    Logger.error("Job failed",
+      job_id: job.id,
+      user_id: job.user_id,
+      prev_status: old_status,
+      error: error
+    )
+  end
+
+  defp log_status_change(job, old_status, new_status, _error) do
+    Logger.debug("Job status updated",
+      job_id: job.id,
+      user_id: job.user_id,
+      prev_status: old_status,
+      new_status: new_status
+    )
   end
 
   # Refund estimated minutes to user when job fails or is cancelled
@@ -206,9 +261,21 @@ defmodule PoddyclipBackend.Processing do
       %{status: status} = job when status in [:failed, :completed] ->
         # Already finished, just delete from database (cleanup)
         # No refund needed - failed jobs already refunded, completed jobs used the time
+        Logger.info("Cleaning up finished job",
+          job_id: job.id,
+          user_id: job.user_id,
+          status: status
+        )
         Repo.delete(job)
 
       job ->
+        Logger.info("Job cancelled by user",
+          job_id: job.id,
+          user_id: job.user_id,
+          prev_status: job.status,
+          estimated_minutes: job.estimated_minutes
+        )
+
         # Try to delete from Rust API (best effort)
         if job.rust_job_id do
           Client.delete_job(job.rust_job_id)

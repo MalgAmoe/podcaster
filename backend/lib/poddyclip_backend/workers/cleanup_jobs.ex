@@ -102,10 +102,13 @@ defmodule PoddyclipBackend.Workers.CleanupJobs do
       if job.input_s3_key do
         case Storage.delete(job.input_s3_key) do
           {:ok, _} ->
-            Logger.debug("Deleted S3 input: #{job.input_s3_key}")
             count + 1
           {:error, reason} ->
-            Logger.warning("Failed to delete S3 input #{job.input_s3_key}: #{inspect(reason)}")
+            Logger.error("Failed to delete S3 input",
+              job_id: job.id,
+              s3_key: job.input_s3_key,
+              error: inspect(reason)
+            )
             count
         end
       else
@@ -116,10 +119,13 @@ defmodule PoddyclipBackend.Workers.CleanupJobs do
     if job.result_s3_key do
       case Storage.delete(job.result_s3_key) do
         {:ok, _} ->
-          Logger.debug("Deleted S3 result: #{job.result_s3_key}")
           count + 1
         {:error, reason} ->
-          Logger.warning("Failed to delete S3 result #{job.result_s3_key}: #{inspect(reason)}")
+          Logger.error("Failed to delete S3 result",
+            job_id: job.id,
+            s3_key: job.result_s3_key,
+            error: inspect(reason)
+          )
           count
       end
     else

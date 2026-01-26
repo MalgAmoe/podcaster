@@ -4,6 +4,7 @@ use std::path::Path;
 
 use anyhow::Result;
 use thiserror::Error;
+use tracing::{debug, info, warn};
 
 #[cfg(feature = "deepfilter")]
 use poddyclip::deepfilter::{analyze_for_deepfilter, DeepFilterDenoiser};
@@ -186,7 +187,7 @@ pub fn process_audio(
     // =========================================================================
     // AI DENOISE (DeepFilterNet) - runs after spectral subtraction
     // =========================================================================
-    tracing::debug!("AI Denoise enabled: {}", effective_config.ai_denoise);
+    debug!("AI Denoise enabled: {}", effective_config.ai_denoise);
 
     #[cfg(feature = "deepfilter")]
     if effective_config.ai_denoise {
@@ -196,7 +197,7 @@ pub fn process_audio(
             Ok(mut denoiser) => {
                 // Analyze for auto-tuning (on already denoised audio)
                 let analysis = analyze_for_deepfilter(&samples[0], sample_rate);
-                tracing::info!(
+                info!(
                     "AI Denoise: SNR {:.1}dB ({})",
                     analysis.estimated_snr,
                     analysis.noise_severity()
@@ -213,14 +214,14 @@ pub fn process_audio(
                 }
             }
             Err(e) => {
-                tracing::warn!("AI Denoise unavailable: {}", e);
+                warn!("AI Denoise unavailable: {}", e);
             }
         }
     }
 
     #[cfg(not(feature = "deepfilter"))]
     if effective_config.ai_denoise {
-        tracing::warn!("AI Denoise requested but deepfilter feature not enabled");
+        warn!("AI Denoise requested but deepfilter feature not enabled");
     }
 
     // =========================================================================

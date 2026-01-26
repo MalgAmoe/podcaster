@@ -13,10 +13,11 @@ use tower_http::{
     limit::RequestBodyLimitLayer,
     trace::TraceLayer,
 };
-use tracing::info;
+use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use poddyclip_api::handlers::{create_s3_job, delete_job, health, list_presets};
+use poddyclip_api::openobserve::{OpenObserveConfig, OpenObserveLayer};
 use poddyclip_api::require_api_key;
 use poddyclip_api::state::{AppConfig, AppState};
 use poddyclip_api::storage::{Storage, StorageConfig};
@@ -26,14 +27,25 @@ async fn main() {
     // Load .env if present
     dotenvy::dotenv().ok();
 
-    // Initialize tracing
+    // Initialize tracing with optional OpenObserve layer
+    let openobserve_config = OpenObserveConfig::from_env();
+    let openobserve_layer = openobserve_config.as_ref().map(|config| {
+        OpenObserveLayer::new(config.clone())
+    });
+
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "poddyclip_api=info,tower_http=info".into()),
         )
         .with(tracing_subscriber::fmt::layer())
+        .with(openobserve_layer)
         .init();
+
+    // Log OpenObserve status after tracing is initialized
+    if let Some(config) = openobserve_config {
+        info!("OpenObserve logging enabled: {}", config.url);
+    }
 
     // Load config from environment
     let config = AppConfig::from_env();
@@ -61,7 +73,7 @@ async fn main() {
                     Some(s)
                 }
                 Err(e) => {
-                    tracing::warn!("Failed to initialize S3 storage: {}. Falling back to in-memory.", e);
+                    warn!("Failed to initialize S3 storage: {}. Falling back to in-memory.", e);
                     None
                 }
             }
@@ -78,7 +90,7 @@ async fn main() {
     if state.config.api_key.is_some() {
         info!("  API key: configured (protected mode)");
     } else {
-        tracing::warn!("  API key: NOT configured (dev mode - all requests allowed)");
+        warn!("  API key: NOT configured (dev mode - all requests allowed)");
     }
 
     // Start cleanup task
@@ -178,7 +190,7 @@ async fn cleanup_task(state: AppState) {
             // Delete from S3 if present
             if let (Some(key), Some(ref storage)) = (s3_key, &state.storage) {
                 if let Err(e) = storage.delete(&key).await {
-                    tracing::warn!("Failed to delete S3 object {} during cleanup: {}", key, e);
+                    warn!("Failed to delete S3 object {} during cleanup: {}", key, e);
                 }
             }
 
