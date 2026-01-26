@@ -310,11 +310,11 @@ defmodule PoddyclipBackendWeb.PolarWebhookController do
         nil
 
       ts when is_integer(ts) ->
-        DateTime.from_unix!(ts)
+        DateTime.from_unix!(ts) |> DateTime.truncate(:second)
 
       ts when is_binary(ts) ->
         case DateTime.from_iso8601(ts) do
-          {:ok, dt, _} -> dt
+          {:ok, dt, _} -> DateTime.truncate(dt, :second)
           _ -> nil
         end
 

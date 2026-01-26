@@ -3,15 +3,25 @@ defmodule PoddyclipBackendWeb.PageController do
 
   # Public pages
   def landing(conn, _params) do
-    conn
-    |> put_layout(false)
-    |> render(:landing)
+    # Redirect logged-in users to the app
+    if conn.assigns[:current_scope] do
+      redirect(conn, to: ~p"/app")
+    else
+      conn
+      |> put_layout(false)
+      |> render(:landing)
+    end
   end
 
   def pricing(conn, _params) do
-    conn
-    |> put_layout(false)
-    |> render(:pricing)
+    # Redirect logged-in users to account page (where they can upgrade)
+    if conn.assigns[:current_scope] do
+      redirect(conn, to: ~p"/account")
+    else
+      conn
+      |> put_layout(false)
+      |> render(:pricing)
+    end
   end
 
   def terms(conn, _params) do

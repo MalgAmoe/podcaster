@@ -39,6 +39,12 @@ end
 config :poddyclip_backend, PoddyclipBackendWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
+# Allow overriding the URL host for email links (useful with tunnels like Cloudflare)
+if phx_host = System.get_env("PHX_HOST") do
+  config :poddyclip_backend, PoddyclipBackendWeb.Endpoint,
+    url: [host: phx_host, scheme: "https", port: 443]
+end
+
 # S3 Configuration (MinIO or AWS S3 compatible)
 # Supports S3_ENDPOINT (full URL) or S3_HOST (just hostname)
 s3_endpoint = System.get_env("S3_ENDPOINT") || System.get_env("S3_HOST")
@@ -81,6 +87,22 @@ end
 if polar_webhook_secret = System.get_env("POLAR_WEBHOOK_SECRET") do
   config :poddyclip_backend, :polar_webhook_secret, polar_webhook_secret
 end
+
+# Polar organization slug (default: munchy-cow)
+if polar_org = System.get_env("POLAR_ORGANIZATION") do
+  config :poddyclip_backend, :polar_organization, polar_org
+end
+
+# Polar host (default: polar.sh, use sandbox.polar.sh for testing)
+if polar_host = System.get_env("POLAR_HOST") do
+  config :poddyclip_backend, :polar_host, polar_host
+end
+
+# Polar checkout link ID (from Polar dashboard checkout links)
+if polar_checkout_link_id = System.get_env("POLAR_CHECKOUT_LINK_ID") do
+  config :poddyclip_backend, :polar_checkout_link_id, polar_checkout_link_id
+end
+
 
 # OpenObserve log shipping (if configured)
 if openobserve_url = System.get_env("OPENOBSERVE_URL") do

@@ -1,8 +1,9 @@
 import { createContext, useContext, createEffect, onMount, onCleanup } from "solid-js";
 import { createStore } from "solid-js/store";
 import { Socket } from "phoenix";
-import { api } from "../utils/api";
+import { api, ApiError } from "../utils/api";
 import { clearAudioCache } from "../components/WaveformPlayer";
+import { getFriendlyJobError } from "../utils/errors";
 
 const ProcessContext = createContext();
 
@@ -21,7 +22,7 @@ export function ProcessProvider(props) {
       mixed: { mode: "natural", strength: 2, aiClean: false }
     },
     job: null,
-    error: null,
+    error: null, // Can be string or { message, code, details } for billing errors
   });
 
   // Channel connection - managed outside reactive system
@@ -201,7 +202,16 @@ export function ProcessProvider(props) {
       const job = await api.createJob(store.s3Key, store.filename, config);
       setStore({ job, error: null });
     } catch (err) {
-      setStore("error", err.message);
+      // Capture full error details for billing errors
+      if (err instanceof ApiError && err.code === "insufficient_minutes") {
+        setStore("error", {
+          message: getFriendlyJobError(err.code),
+          code: err.code,
+          details: err.details
+        });
+      } else {
+        setStore("error", err.message);
+      }
     }
   }
 

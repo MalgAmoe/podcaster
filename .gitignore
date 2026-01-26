@@ -3,3 +3,6 @@
 /sounds_out/*
 *.wav
 *.mp3
+
+.env
+.env.local

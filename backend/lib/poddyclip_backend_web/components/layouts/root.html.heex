@@ -40,23 +40,42 @@
   <body class="bg-base-100 min-h-screen">
     <div class="navbar bg-base-200 border-b border-base-300">
       <div class="navbar-start">
-        <.link href={~p"/"} class="btn btn-ghost text-xl">Munchy Cow</.link>
+        <%= if @current_scope do %>
+          <.link href={~p"/app"} class="btn btn-ghost text-xl">Munchy Cow</.link>
+        <% else %>
+          <.link href={~p"/"} class="btn btn-ghost text-xl">Munchy Cow</.link>
+        <% end %>
       </div>
       <div class="navbar-end gap-2">
-        <.link href={~p"/pricing"} class="btn btn-ghost btn-sm">Pricing</.link>
         <%= if @current_scope do %>
-          <.link href={~p"/app"} class="btn btn-primary btn-sm">Open App</.link>
+          <.link href={~p"/account"} class="btn btn-ghost btn-sm">Account</.link>
           <div class="dropdown dropdown-end ml-2">
             <div tabindex="0" role="button" class="w-10 h-10 rounded-full bg-base-300 flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all">
               <img src="/images/munchy_cow_head.svg" alt="" class="w-7 h-7" />
             </div>
             <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box z-50 w-56 p-2 shadow-lg border border-base-300 mt-2">
-              <li class="menu-title text-xs text-base-content/50 px-2 py-1">{@current_scope.user.email}</li>
+              <li class="menu-title px-2 py-1">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs text-base-content/50 truncate">{@current_scope.user.email}</span>
+                  <%= if @current_scope.user.subscription_status == "active" do %>
+                    <span class="badge badge-primary badge-xs ml-2">Pro</span>
+                  <% else %>
+                    <span class="badge badge-ghost badge-xs ml-2">Free</span>
+                  <% end %>
+                </div>
+              </li>
+              <%= if @current_scope.user.subscription_status != "active" do %>
+                <li class="text-xs text-base-content/50 px-4 py-1">
+                  {@current_scope.user.minutes_available} min remaining
+                </li>
+              <% end %>
+              <li><.link href={~p"/account"}>Account</.link></li>
               <li><.link href={~p"/users/settings"}>Settings</.link></li>
               <li><.link href={~p"/users/log-out"} method="delete">Log out</.link></li>
             </ul>
           </div>
         <% else %>
+          <.link href={~p"/pricing"} class="btn btn-ghost btn-sm">Pricing</.link>
           <.link href={~p"/users/register"} class="btn btn-ghost btn-sm">Register</.link>
           <.link href={~p"/users/log-in"} class="btn btn-primary btn-sm">Log in</.link>
         <% end %>

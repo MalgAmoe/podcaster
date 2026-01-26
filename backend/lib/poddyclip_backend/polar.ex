@@ -73,7 +73,6 @@ defmodule PoddyclipBackend.Polar do
   end
 
   defp verify_signatures(body, webhook_id, timestamp, signatures_str, secret) do
-    # Decode the secret (remove "whsec_" prefix if present)
     secret_bytes = decode_secret(secret)
 
     # Build the signed payload
@@ -105,10 +104,10 @@ defmodule PoddyclipBackend.Polar do
   end
 
   defp decode_secret(secret) do
-    # Remove "whsec_" prefix if present, then base64 decode
+    # Polar SDK does: Buffer.from(secret, "utf-8").toString("base64")
+    # Then Standard Webhooks decodes that base64.
+    # Net result: use the raw UTF-8 bytes of the secret string directly.
     secret
-    |> String.replace_prefix("whsec_", "")
-    |> Base.decode64!()
   end
 
   # Constant-time comparison to prevent timing attacks
@@ -117,4 +116,80 @@ defmodule PoddyclipBackend.Polar do
   end
 
   defp secure_compare(_, _), do: false
+
+  # ----- Checkout & Portal URLs -----
+
+  @doc """
+  Generates a Polar checkout URL for a user to upgrade to a plan.
+
+  The URL includes:
+  - Product ID from the plan
+  - Customer email prefilled
+  - Success URL back to /account
+
+  ## Parameters
+
+  - `user`: The user upgrading
+  - `plan`: The plan with a polar_product_id
+
+  ## Returns
+
+  The checkout URL as a string, or nil if the plan has no polar_product_id.
+  """
+  def checkout_url(user, _plan) do
+    checkout_link_id = Application.get_env(:poddyclip_backend, :polar_checkout_link_id)
+
+    if checkout_link_id do
+      api_host = polar_api_host()
+
+      query = URI.encode_query(%{"customer_email" => user.email})
+
+      "https://#{api_host}/v1/checkout-links/#{checkout_link_id}/redirect?#{query}"
+    else
+      nil
+    end
+  end
+
+  @doc """
+  Generates a Polar customer portal URL for subscription management.
+
+  Users can use this to:
+  - Update payment method
+  - Cancel subscription
+  - View billing history
+
+  ## Parameters
+
+  - `user`: The user (must have polar_customer_id)
+
+  ## Returns
+
+  The portal URL as a string, or nil if user has no polar_customer_id.
+  """
+  def customer_portal_url(user) do
+    customer_id = user.polar_customer_id
+
+    if customer_id do
+      host = polar_host()
+      org = polar_organization()
+      "https://#{host}/#{org}/portal?customer_id=#{customer_id}"
+    else
+      nil
+    end
+  end
+
+  defp polar_host do
+    Application.get_env(:poddyclip_backend, :polar_host, "polar.sh")
+  end
+
+  defp polar_api_host do
+    case polar_host() do
+      "sandbox.polar.sh" -> "sandbox-api.polar.sh"
+      _ -> "api.polar.sh"
+    end
+  end
+
+  defp polar_organization do
+    Application.get_env(:poddyclip_backend, :polar_organization, "munchy-cow")
+  end
 end

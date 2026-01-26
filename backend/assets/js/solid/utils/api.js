@@ -3,6 +3,18 @@ const getCSRFToken = () => {
   return meta ? meta.getAttribute("content") : "";
 };
 
+// Custom error class that preserves full API response details
+export class ApiError extends Error {
+  constructor(data, status) {
+    super(data.error || `HTTP ${status}`);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = data.error;
+    // Preserve extra fields like minutes_available, minutes_needed
+    this.details = data;
+  }
+}
+
 async function request(method, path, body = null) {
   const options = {
     method,
@@ -21,7 +33,7 @@ async function request(method, path, body = null) {
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error || `HTTP ${response.status}`);
+    throw new ApiError(data, response.status);
   }
 
   return data;

@@ -3,6 +3,9 @@
 export function getFriendlyJobError(error) {
   if (!error) return "Unknown error";
 
+  if (error.includes("insufficient_minutes")) {
+    return "Not enough minutes available. Upgrade to Pro for more processing time.";
+  }
   if (error.includes("probe") || error.includes("Unsupported")) {
     return "Audio format not supported. Try converting to WAV or MP3.";
   }
@@ -23,6 +26,12 @@ export function getFriendlyJobError(error) {
   }
 
   return error;
+}
+
+// Check if error is a billing-related error that should show upgrade CTA
+export function isBillingError(error) {
+  if (!error) return false;
+  return error.includes("insufficient_minutes");
 }
 
 export function getUploadError(error) {
