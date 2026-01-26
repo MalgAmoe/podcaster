@@ -82,6 +82,20 @@ if polar_webhook_secret = System.get_env("POLAR_WEBHOOK_SECRET") do
   config :poddyclip_backend, :polar_webhook_secret, polar_webhook_secret
 end
 
+# OpenObserve log shipping (if configured)
+if openobserve_url = System.get_env("OPENOBSERVE_URL") do
+  config :poddyclip_backend, :openobserve,
+    url: openobserve_url,
+    user: System.get_env("OPENOBSERVE_USER", "admin@poddyclip.local"),
+    password: System.get_env("OPENOBSERVE_PASSWORD", "dev"),
+    org: System.get_env("OPENOBSERVE_ORG", "default"),
+    stream: System.get_env("OPENOBSERVE_STREAM", "phoenix")
+
+  # Add OpenObserve logger backend
+  config :logger,
+    backends: [:console, PoddyclipBackend.LogShipper.Backend]
+end
+
 # Admin auth credentials (only used if admin routes were compiled in)
 # ADMIN_ENABLED is a compile-time setting, but we still check it here
 # to avoid errors when admin routes aren't available

@@ -74,7 +74,7 @@ defmodule PoddyclipBackend.Workers.CleanupOrphanedFiles do
         end)
 
       {:error, reason} ->
-        Logger.warning("Failed to list S3 inputs: #{inspect(reason)}")
+        Logger.error("Failed to list S3 inputs", error: inspect(reason))
         0
     end
   end
@@ -89,24 +89,34 @@ defmodule PoddyclipBackend.Workers.CleanupOrphanedFiles do
     # List all result files
     case list_s3_objects("results/") do
       {:ok, objects} ->
-        objects
-        |> Enum.reduce(0, fn key, acc ->
-          if MapSet.member?(result_keys, key) do
-            acc
-          else
-            # Orphaned result file
-            case Storage.delete(key) do
-              {:ok, _} ->
-                Logger.info("Deleted orphaned result: #{key}")
-                acc + 1
-              {:error, _} ->
-                acc
+        deleted_count =
+          objects
+          |> Enum.reduce(0, fn key, acc ->
+            if MapSet.member?(result_keys, key) do
+              acc
+            else
+              # Orphaned result file
+              case Storage.delete(key) do
+                {:ok, _} ->
+                  acc + 1
+                {:error, reason} ->
+                  Logger.error("Failed to delete orphaned result",
+                    s3_key: key,
+                    error: inspect(reason)
+                  )
+                  acc
+              end
             end
-          end
-        end)
+          end)
+
+        if deleted_count > 0 do
+          Logger.info("Deleted orphaned result files", count: deleted_count)
+        end
+
+        deleted_count
 
       {:error, reason} ->
-        Logger.warning("Failed to list S3 results: #{inspect(reason)}")
+        Logger.error("Failed to list S3 results", error: inspect(reason))
         0
     end
   end
@@ -126,21 +136,32 @@ defmodule PoddyclipBackend.Workers.CleanupOrphanedFiles do
     # List all inputs for this user
     case list_s3_objects("inputs/#{user_id}/") do
       {:ok, objects} ->
-        objects
-        |> Enum.reduce(0, fn key, acc ->
-          if key == current_input do
-            acc
-          else
-            # Old input file, delete it
-            case Storage.delete(key) do
-              {:ok, _} ->
-                Logger.info("Deleted old input: #{key}")
-                acc + 1
-              {:error, _} ->
-                acc
+        deleted_count =
+          objects
+          |> Enum.reduce(0, fn key, acc ->
+            if key == current_input do
+              acc
+            else
+              # Old input file, delete it
+              case Storage.delete(key) do
+                {:ok, _} ->
+                  acc + 1
+                {:error, reason} ->
+                  Logger.error("Failed to delete old input",
+                    user_id: user_id,
+                    s3_key: key,
+                    error: inspect(reason)
+                  )
+                  acc
+              end
             end
-          end
-        end)
+          end)
+
+        if deleted_count > 0 do
+          Logger.info("Deleted old input files", user_id: user_id, count: deleted_count)
+        end
+
+        deleted_count
 
       {:error, _} ->
         0
@@ -188,15 +209,25 @@ defmodule PoddyclipBackend.Workers.CleanupOrphanedFiles do
   defp delete_prefix(prefix) do
     case list_s3_objects(prefix) do
       {:ok, keys} ->
-        Enum.reduce(keys, 0, fn key, acc ->
-          case Storage.delete(key) do
-            {:ok, _} ->
-              Logger.info("Deleted orphaned file: #{key}")
-              acc + 1
-            {:error, _} ->
-              acc
-          end
-        end)
+        deleted_count =
+          Enum.reduce(keys, 0, fn key, acc ->
+            case Storage.delete(key) do
+              {:ok, _} ->
+                acc + 1
+              {:error, reason} ->
+                Logger.error("Failed to delete orphaned file",
+                  s3_key: key,
+                  error: inspect(reason)
+                )
+                acc
+            end
+          end)
+
+        if deleted_count > 0 do
+          Logger.info("Deleted orphaned files from prefix", prefix: prefix, count: deleted_count)
+        end
+
+        deleted_count
 
       {:error, _} ->
         0

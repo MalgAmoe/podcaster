@@ -21,7 +21,7 @@ fi
 
 case "${1:-}" in
     infra)
-        echo -e "${GREEN}Starting infrastructure (Postgres + Garage)...${NC}"
+        echo -e "${GREEN}Starting infrastructure (Postgres + MinIO + OpenObserve)...${NC}"
         cd docker && docker compose up
         ;;
     api)
@@ -30,7 +30,7 @@ case "${1:-}" in
         ;;
     web)
         echo -e "${GREEN}Starting Phoenix (with admin dashboard)...${NC}"
-        cd backend && ADMIN_ENABLED=true ADMIN_PASSWORD=dev mix phx.server
+        cd backend && ADMIN_ENABLED=true mix compile --force && ADMIN_ENABLED=true ADMIN_PASSWORD=dev mix phx.server
         ;;
     stop)
         echo -e "${YELLOW}Stopping all services...${NC}"
@@ -41,7 +41,7 @@ case "${1:-}" in
     *)
         echo "Usage: $0 {infra|api|web|stop}"
         echo ""
-        echo "  infra  - Start Postgres + Garage (docker)"
+        echo "  infra  - Start Postgres + MinIO + OpenObserve (docker)"
         echo "  api    - Start Rust API (port 3000)"
         echo "  web    - Start Phoenix (port 4000)"
         echo "  stop   - Stop all services"
@@ -50,5 +50,10 @@ case "${1:-}" in
         echo "  Terminal 1: ./dev.sh infra"
         echo "  Terminal 2: ./dev.sh api"
         echo "  Terminal 3: ./dev.sh web"
+        echo ""
+        echo "Services:"
+        echo "  Postgres:    localhost:5432"
+        echo "  MinIO:       localhost:9000 (S3), localhost:9001 (console)"
+        echo "  OpenObserve: localhost:5080 (login: admin@poddyclip.local / dev)"
         ;;
 esac

@@ -5,6 +5,7 @@ use axum::{
     middleware::Next,
     response::Response,
 };
+use tracing::warn;
 
 use crate::state::AppState;
 
@@ -31,7 +32,7 @@ pub async fn require_api_key(
             Ok(next.run(request).await)
         }
         _ => {
-            tracing::warn!("Unauthorized API request - invalid or missing API key");
+            warn!("Unauthorized API request - invalid or missing API key");
             Err(StatusCode::UNAUTHORIZED)
         }
     }
