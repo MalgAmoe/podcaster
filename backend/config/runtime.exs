@@ -103,6 +103,11 @@ if polar_checkout_link_id = System.get_env("POLAR_CHECKOUT_LINK_ID") do
   config :poddyclip_backend, :polar_checkout_link_id, polar_checkout_link_id
 end
 
+# Polar API access token (for fetching subscription status)
+if polar_access_token = System.get_env("POLAR_ACCESS_TOKEN") do
+  config :poddyclip_backend, :polar_access_token, polar_access_token
+end
+
 
 # OpenObserve log shipping (if configured)
 if openobserve_url = System.get_env("OPENOBSERVE_URL") do

@@ -132,7 +132,8 @@ export const api = {
       category: config.category,
       mode: config.mode,
       strength: config.strength,
-      ai_clean: config.ai_clean
+      ai_clean: config.ai_clean,
+      duration_seconds: config.duration_seconds
     });
   },
 

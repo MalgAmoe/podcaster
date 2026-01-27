@@ -314,4 +314,137 @@ defmodule PoddyclipBackend.Billing do
     |> ProcessedWebhook.changeset(%{event_id: event_id, event_type: event_type})
     |> Repo.insert()
   end
+
+  # ----- Subscription Sync -----
+
+  @doc """
+  Syncs a user's subscription status from Polar API.
+
+  Fetches the current subscription state from Polar and updates the user's
+  local subscription status, plan, and period dates.
+
+  Returns `{:ok, user}` with the updated user, or `{:error, reason}` on failure.
+  """
+  def sync_subscription_from_polar(%User{polar_customer_id: nil} = user) do
+    # No Polar customer ID, nothing to sync
+    {:ok, user}
+  end
+
+  def sync_subscription_from_polar(%User{polar_customer_id: customer_id} = user) do
+    alias PoddyclipBackend.Polar
+
+    case Polar.get_customer_subscriptions(customer_id) do
+      {:ok, subscriptions} ->
+        # Find active subscription (if any)
+        active_sub = Enum.find(subscriptions, &(&1["status"] == "active"))
+
+        case active_sub do
+          nil ->
+            # No active subscription - check if cancelled or none
+            cancelled_sub = Enum.find(subscriptions, &(&1["status"] == "canceled"))
+
+            if cancelled_sub do
+              # Subscription was cancelled
+              sync_cancelled_subscription(user, cancelled_sub)
+            else
+              # No subscription at all - downgrade to free
+              sync_no_subscription(user)
+            end
+
+          sub ->
+            # Has active subscription - sync it
+            sync_active_subscription(user, sub)
+        end
+
+      {:error, :no_access_token} ->
+        Logger.warning("Cannot sync subscription: POLAR_ACCESS_TOKEN not configured",
+          user_id: user.id
+        )
+        {:error, :no_access_token}
+
+      {:error, reason} ->
+        Logger.error("Failed to fetch subscriptions from Polar",
+          user_id: user.id,
+          customer_id: customer_id,
+          error: inspect(reason)
+        )
+        {:error, reason}
+    end
+  end
+
+  defp sync_active_subscription(user, sub) do
+    pro_plan = get_plan_by_name("pro")
+    period_end = parse_polar_datetime(sub["current_period_end"])
+
+    attrs = %{
+      subscription_status: "active",
+      polar_subscription_id: sub["id"],
+      current_period_ends_at: period_end,
+      plan_id: pro_plan && pro_plan.id
+    }
+
+    # If upgrading from free/none, also set minutes
+    attrs =
+      if user.subscription_status != "active" && pro_plan do
+        Map.put(attrs, :minutes_available, pro_plan.minutes)
+      else
+        attrs
+      end
+
+    Logger.info("Synced active subscription from Polar",
+      user_id: user.id,
+      subscription_id: sub["id"],
+      period_end: period_end
+    )
+
+    update_subscription(user, attrs)
+  end
+
+  defp sync_cancelled_subscription(user, sub) do
+    period_end = parse_polar_datetime(sub["current_period_end"]) || parse_polar_datetime(sub["ended_at"])
+
+    attrs = %{
+      subscription_status: "cancelled",
+      polar_subscription_id: sub["id"],
+      current_period_ends_at: period_end
+    }
+
+    Logger.info("Synced cancelled subscription from Polar",
+      user_id: user.id,
+      subscription_id: sub["id"],
+      period_end: period_end
+    )
+
+    update_subscription(user, attrs)
+  end
+
+  defp sync_no_subscription(user) do
+    free_plan = get_or_create_free_plan()
+
+    # Only downgrade if currently has a paid status
+    if user.subscription_status in ["active", "cancelled"] do
+      Logger.info("No active Polar subscription, downgrading to free",
+        user_id: user.id,
+        prev_status: user.subscription_status
+      )
+
+      update_subscription(user, %{
+        subscription_status: "none",
+        polar_subscription_id: nil,
+        current_period_ends_at: nil,
+        plan_id: free_plan.id,
+        minutes_available: free_plan.minutes
+      })
+    else
+      {:ok, user}
+    end
+  end
+
+  defp parse_polar_datetime(nil), do: nil
+  defp parse_polar_datetime(datetime_str) when is_binary(datetime_str) do
+    case DateTime.from_iso8601(datetime_str) do
+      {:ok, dt, _offset} -> DateTime.truncate(dt, :second)
+      _ -> nil
+    end
+  end
 end

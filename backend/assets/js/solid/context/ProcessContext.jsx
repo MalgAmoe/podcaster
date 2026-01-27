@@ -288,7 +288,9 @@ export function ProcessProvider(props) {
         mode: catConfig.mode,
         strength: catConfig.strength,
         // Only send ai_clean for voice category where it can be toggled
-        ai_clean: cat === "voice" ? catConfig.aiClean : undefined
+        ai_clean: cat === "voice" ? catConfig.aiClean : undefined,
+        // Send duration for billing (convert minutes to seconds, default to 60s if not detected)
+        duration_seconds: store.estimatedMinutes ? store.estimatedMinutes * 60 : 60
       };
       const job = await api.createJob(store.s3Key, store.filename, config);
       setStore({ job });

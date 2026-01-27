@@ -192,4 +192,102 @@ defmodule PoddyclipBackend.Polar do
   defp polar_organization do
     Application.get_env(:poddyclip_backend, :polar_organization, "munchy-cow")
   end
+
+  defp polar_access_token do
+    Application.get_env(:poddyclip_backend, :polar_access_token)
+  end
+
+  # ----- API Client -----
+
+  @doc """
+  Fetches subscriptions for a customer from Polar API.
+
+  Returns `{:ok, subscriptions}` with a list of subscription objects,
+  or `{:error, reason}` on failure.
+  """
+  def get_customer_subscriptions(customer_id) when is_binary(customer_id) do
+    case polar_access_token() do
+      nil ->
+        {:error, :no_access_token}
+
+      token ->
+        url = "https://#{polar_api_host()}/v1/subscriptions?customer_id=#{customer_id}"
+        api_get(url, token)
+    end
+  end
+
+  @doc """
+  Fetches a single subscription by ID from Polar API.
+
+  Returns `{:ok, subscription}` or `{:error, reason}`.
+  """
+  def get_subscription(subscription_id) when is_binary(subscription_id) do
+    case polar_access_token() do
+      nil ->
+        {:error, :no_access_token}
+
+      token ->
+        url = "https://#{polar_api_host()}/v1/subscriptions/#{subscription_id}"
+        api_get(url, token)
+    end
+  end
+
+  @doc """
+  Fetches all active subscriptions from Polar API.
+
+  Returns `{:ok, subscriptions}` with a list of active subscription objects.
+  """
+  def list_active_subscriptions do
+    case polar_access_token() do
+      nil ->
+        {:error, :no_access_token}
+
+      token ->
+        url = "https://#{polar_api_host()}/v1/subscriptions?active=true&limit=100"
+        api_get(url, token)
+    end
+  end
+
+  @doc """
+  Fetches a customer by ID from Polar API.
+
+  Returns `{:ok, customer}` with customer data including email.
+  """
+  def get_customer(customer_id) when is_binary(customer_id) do
+    case polar_access_token() do
+      nil ->
+        {:error, :no_access_token}
+
+      token ->
+        url = "https://#{polar_api_host()}/v1/customers/#{customer_id}"
+        api_get(url, token)
+    end
+  end
+
+  # Internal HTTP GET helper
+  defp api_get(url, token) do
+    # Ensure inets is started
+    :inets.start()
+    :ssl.start()
+
+    headers = [
+      {~c"Authorization", String.to_charlist("Bearer #{token}")},
+      {~c"Accept", ~c"application/json"}
+    ]
+
+    case :httpc.request(:get, {String.to_charlist(url), headers}, [], []) do
+      {:ok, {{_, 200, _}, _, body}} ->
+        case Jason.decode(to_string(body)) do
+          {:ok, %{"items" => items}} -> {:ok, items}
+          {:ok, data} -> {:ok, data}
+          error -> error
+        end
+
+      {:ok, {{_, status, _}, _, body}} ->
+        {:error, {:http_error, status, to_string(body)}}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
 end
