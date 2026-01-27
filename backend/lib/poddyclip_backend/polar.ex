@@ -104,10 +104,11 @@ defmodule PoddyclipBackend.Polar do
   end
 
   defp decode_secret(secret) do
-    # Polar SDK does: Buffer.from(secret, "utf-8").toString("base64")
-    # Then Standard Webhooks decodes that base64.
-    # Net result: use the raw UTF-8 bytes of the secret string directly.
+    # Standard Webhooks expects the secret to be base64-encoded.
+    # Strip "whsec_" prefix if present, then base64 decode.
     secret
+    |> String.replace_prefix("whsec_", "")
+    |> Base.decode64!()
   end
 
   # Constant-time comparison to prevent timing attacks

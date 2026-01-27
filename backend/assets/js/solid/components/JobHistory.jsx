@@ -7,8 +7,13 @@ export function JobHistory() {
     () => isOpen(),
     async (open) => {
       if (!open) return [];
-      const data = await api.getJobHistory();
-      return data.jobs || [];
+      try {
+        const data = await api.getJobHistory();
+        return data.jobs || [];
+      } catch (err) {
+        if (import.meta.env.DEV) console.error("Failed to load job history:", err);
+        return [];
+      }
     }
   );
 

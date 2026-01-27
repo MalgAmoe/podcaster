@@ -5,10 +5,14 @@ defmodule PoddyclipBackendWeb.ErrorHTMLTest do
   import Phoenix.Template, only: [render_to_string: 4]
 
   test "renders 404.html" do
-    assert render_to_string(PoddyclipBackendWeb.ErrorHTML, "404", "html", []) == "Not Found"
+    result = render_to_string(PoddyclipBackendWeb.ErrorHTML, "404", "html", [])
+    assert result =~ "404"
+    assert result =~ "couldn't find"
   end
 
   test "renders 500.html" do
-    assert render_to_string(PoddyclipBackendWeb.ErrorHTML, "500", "html", []) == "Internal Server Error"
+    result = render_to_string(PoddyclipBackendWeb.ErrorHTML, "500", "html", [])
+    assert result =~ "500"
+    assert result =~ "tummy ache"
   end
 end

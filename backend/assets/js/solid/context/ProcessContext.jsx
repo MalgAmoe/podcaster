@@ -57,7 +57,7 @@ export function ProcessProvider(props) {
         });
       }
     } catch (err) {
-      console.error("Failed to initialize:", err);
+      if (import.meta.env.DEV) console.error("Failed to initialize:", err);
     } finally {
       setStore("initializing", false);
     }
@@ -150,7 +150,7 @@ export function ProcessProvider(props) {
 
       channel = socket.channel(`job:${jobId}`, {});
       channel.join()
-        .receive("error", (e) => console.error("Join failed", e));
+        .receive("error", (e) => { if (import.meta.env.DEV) console.error("Join failed", e); });
 
       channel.on("job_updated", (payload) => {
         // Merge to preserve fields like original_url that server doesn't send
@@ -168,7 +168,7 @@ export function ProcessProvider(props) {
       audioContext.close();
       return Math.ceil(audioBuffer.duration / 60); // minutes, rounded up
     } catch (err) {
-      console.error("Failed to detect audio duration:", err);
+      if (import.meta.env.DEV) console.error("Failed to detect audio duration:", err);
       return null;
     }
   }
@@ -321,7 +321,7 @@ export function ProcessProvider(props) {
       try {
         await api.cancelJob(store.job.id);
       } catch (err) {
-        console.error("Failed to cancel:", err);
+        if (import.meta.env.DEV) console.error("Failed to cancel:", err);
       }
     }
     reset();

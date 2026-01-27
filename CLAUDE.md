@@ -2,7 +2,9 @@
 
 !!!! IMPORTANT
 
-YOU MUST USE memo TO SAVE INFO BECAUSE COMPACTING MAKE YOU LOOSE IMPORTANT CONTEXT
+YOU MUST USE memo TO SAVE INFO BECAUSE COMPACTING MAKE YOU LOOSE IMPORTANT CONTEXT.
+
+When we see test failing we need to understand why, and fix the situation!
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 

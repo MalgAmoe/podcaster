@@ -64,7 +64,7 @@ async function request(method, path, body = null) {
         // Server returned non-JSON (likely an error page)
         const text = await response.text();
         data = { error: `Server error (${response.status})` };
-        console.error("Non-JSON response:", text.slice(0, 200));
+        if (import.meta.env.DEV) console.error("Non-JSON response:", text.slice(0, 200));
       }
 
       if (!response.ok) {

@@ -33,6 +33,7 @@ export function WaveformPlayer(props) {
 
   let canvasRef;
   let audioRef;
+  let waveformImageData = null; // Cached waveform for playhead redraw optimization
   const [localPlaying, setLocalPlaying] = createSignal(false);
   const [localTime, setLocalTime] = createSignal(0);
   const [duration, setDuration] = createSignal(0);
@@ -130,7 +131,7 @@ export function WaveformPlayer(props) {
       if (err.name === "AbortError") {
         return;
       }
-      console.error("Failed to decode audio:", err);
+      if (import.meta.env.DEV) console.error("Failed to decode audio:", err);
       setLoading(false);
       setError("Unable to play audio");
     }
@@ -187,15 +188,21 @@ export function WaveformPlayer(props) {
       const y2 = ((1 + max) / 2) * height;
       ctx.fillRect(i, y1, 1, Math.max(1, y2 - y1));
     }
+
+    // Cache waveform for efficient playhead redraws
+    waveformImageData = ctx.getImageData(0, 0, width, height);
   }
 
   function drawPlayhead() {
-    const buffer = audioBuffer();
-    if (!canvasRef || !buffer) return;
-
-    drawWaveform(buffer);
+    if (!canvasRef || !duration()) return;
 
     const ctx = canvasRef.getContext("2d");
+
+    // Restore cached waveform instead of redrawing (much faster)
+    if (waveformImageData) {
+      ctx.putImageData(waveformImageData, 0, 0);
+    }
+
     const x = (currentTime() / duration()) * canvasRef.width;
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(x - 1, 0, 2, canvasRef.height);

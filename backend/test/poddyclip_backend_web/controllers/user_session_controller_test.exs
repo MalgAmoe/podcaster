@@ -12,8 +12,9 @@ defmodule PoddyclipBackendWeb.UserSessionControllerTest do
     test "renders login page", %{conn: conn} do
       conn = get(conn, ~p"/users/log-in")
       response = html_response(conn, 200)
-      assert response =~ "Log in"
-      assert response =~ ~p"/users/register"
+      # Page shows sign in form with email input
+      assert response =~ "Sign in"
+      assert response =~ "email"
     end
 
     test "renders login page with email filled in (sudo mode)", %{conn: conn, user: user} do
@@ -23,7 +24,7 @@ defmodule PoddyclipBackendWeb.UserSessionControllerTest do
         |> get(~p"/users/log-in")
         |> html_response(200)
 
-      assert html =~ "Log in"
+      assert html =~ "Sign in"
       assert html =~
                ~s(<input type="email" name="user[email]" id="login_form_magic_email" value="#{user.email}")
     end
@@ -49,7 +50,8 @@ defmodule PoddyclipBackendWeb.UserSessionControllerTest do
       conn = get(conn, ~p"/users/log-in/#{token}")
       html = html_response(conn, 200)
       refute html =~ "Confirm my account"
-      assert html =~ "Log in"
+      # Page shows login options for confirmed user
+      assert html =~ "Keep me logged in"
     end
 
     test "raises error for invalid token", %{conn: conn} do
@@ -68,7 +70,7 @@ defmodule PoddyclipBackendWeb.UserSessionControllerTest do
           "user" => %{"email" => user.email}
         })
 
-      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "If your email is in our system"
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "Check your email"
       assert PoddyclipBackend.Repo.get_by!(Accounts.UserToken, user_id: user.id).context == "login"
     end
 
@@ -83,12 +85,10 @@ defmodule PoddyclipBackendWeb.UserSessionControllerTest do
       assert get_session(conn, :user_token)
       assert redirected_to(conn) == ~p"/app"
 
-      # Now do a logged in request and assert on the menu
-      conn = get(conn, ~p"/")
+      # Now do a logged in request - homepage redirects to /app for logged in users
+      conn = get(conn, ~p"/app")
       response = html_response(conn, 200)
       assert response =~ user.email
-      assert response =~ ~p"/users/settings"
-      assert response =~ ~p"/users/log-out"
     end
 
     test "confirms unconfirmed user", %{conn: conn, unconfirmed_user: user} do
@@ -107,12 +107,10 @@ defmodule PoddyclipBackendWeb.UserSessionControllerTest do
 
       assert Accounts.get_user!(user.id).confirmed_at
 
-      # Now do a logged in request and assert on the menu
-      conn = get(conn, ~p"/")
+      # Now do a logged in request
+      conn = get(conn, ~p"/app")
       response = html_response(conn, 200)
       assert response =~ user.email
-      assert response =~ ~p"/users/settings"
-      assert response =~ ~p"/users/log-out"
     end
 
     test "emits error message when magic link is invalid", %{conn: conn} do

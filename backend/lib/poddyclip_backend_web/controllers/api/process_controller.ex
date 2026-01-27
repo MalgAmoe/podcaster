@@ -7,6 +7,7 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   alias PoddyclipBackend.Billing
   alias PoddyclipBackend.Processing
   alias PoddyclipBackend.Processing.Client
+  alias PoddyclipBackend.Processing.Job
   alias PoddyclipBackend.Repo
   alias PoddyclipBackend.Storage
   alias Ecto.Multi
@@ -166,35 +167,22 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   Response: {"ok": true}
   """
   def cancel_job(conn, %{"id" => id}) do
-    user = conn.assigns.current_user
+    with_authorized_job(conn, id, fn job ->
+      case Processing.cancel_job(job.id) do
+        {:ok, _} ->
+          json(conn, %{ok: true})
 
-    case Processing.get_job(id) do
-      nil ->
-        conn
-        |> put_status(404)
-        |> json(%{error: "Job not found"})
+        {:error, :not_found} ->
+          conn
+          |> put_status(404)
+          |> json(%{error: "Job not found"})
 
-      job when job.user_id != user.id ->
-        conn
-        |> put_status(403)
-        |> json(%{error: "Not authorized to cancel this job"})
-
-      job ->
-        case Processing.cancel_job(job.id) do
-          {:ok, _} ->
-            json(conn, %{ok: true})
-
-          {:error, :not_found} ->
-            conn
-            |> put_status(404)
-            |> json(%{error: "Job not found"})
-
-          {:error, reason} ->
-            conn
-            |> put_status(500)
-            |> json(%{error: "Failed to cancel job: #{inspect(reason)}"})
-        end
-    end
+        {:error, reason} ->
+          conn
+          |> put_status(500)
+          |> json(%{error: "Failed to cancel job: #{inspect(reason)}"})
+      end
+    end)
   end
 
   @doc """
@@ -205,9 +193,29 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   Response: {"ok": true}
   """
   def dismiss_job(conn, %{"id" => id}) do
+    with_authorized_job(conn, id, fn job ->
+      case Processing.dismiss_job(job.id) do
+        {:ok, _} ->
+          json(conn, %{ok: true})
+
+        {:error, :not_found} ->
+          conn
+          |> put_status(404)
+          |> json(%{error: "Job not found"})
+
+        {:error, reason} ->
+          conn
+          |> put_status(500)
+          |> json(%{error: "Failed to dismiss job: #{inspect(reason)}"})
+      end
+    end)
+  end
+
+  # Private helper to authorize job access and execute callback
+  defp with_authorized_job(conn, job_id, fun) do
     user = conn.assigns.current_user
 
-    case Processing.get_job(id) do
+    case Processing.get_job(job_id) do
       nil ->
         conn
         |> put_status(404)
@@ -216,23 +224,10 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
       job when job.user_id != user.id ->
         conn
         |> put_status(403)
-        |> json(%{error: "Forbidden"})
+        |> json(%{error: "Not authorized"})
 
       job ->
-        case Processing.dismiss_job(job.id) do
-          {:ok, _} ->
-            json(conn, %{ok: true})
-
-          {:error, :not_found} ->
-            conn
-            |> put_status(404)
-            |> json(%{error: "Job not found"})
-
-          {:error, reason} ->
-            conn
-            |> put_status(500)
-            |> json(%{error: "Failed to dismiss job: #{inspect(reason)}"})
-        end
+        fun.(job)
     end
   end
 
@@ -280,15 +275,8 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   end
 
   defp job_to_json(job) do
-    %{
-      id: job.id,
-      status: Atom.to_string(job.status),
-      progress: job.progress || %{},
-      filename: job.filename,
-      download_url: job.download_url,
-      original_url: presign_key(job.input_s3_key),
-      error: job.error
-    }
+    Job.to_map(job)
+    |> Map.put(:original_url, presign_key(job.input_s3_key))
   end
 
   defp presign_key(nil), do: nil

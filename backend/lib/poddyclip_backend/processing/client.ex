@@ -31,7 +31,7 @@ defmodule PoddyclipBackend.Processing.Client do
   Check if the poddyclip-api service is healthy.
   """
   def health do
-    case Req.get("#{base_url()}/health") do
+    case Req.get("#{base_url()}/health", receive_timeout: 5_000) do
       {:ok, %{status: 200, body: body}} ->
         {:ok, body}
 
@@ -47,7 +47,7 @@ defmodule PoddyclipBackend.Processing.Client do
   List available processing presets.
   """
   def list_presets do
-    case Req.get("#{base_url()}/presets") do
+    case Req.get("#{base_url()}/presets", receive_timeout: 10_000) do
       {:ok, %{status: 200, body: body}} ->
         {:ok, body}
 
@@ -113,7 +113,10 @@ defmodule PoddyclipBackend.Processing.Client do
   Delete a job.
   """
   def delete_job(job_id) do
-    case Req.delete("#{base_url()}/jobs/#{job_id}", headers: auth_headers()) do
+    case Req.delete("#{base_url()}/jobs/#{job_id}",
+           headers: auth_headers(),
+           receive_timeout: 10_000
+         ) do
       {:ok, %{status: 200, body: body}} ->
         {:ok, body}
 

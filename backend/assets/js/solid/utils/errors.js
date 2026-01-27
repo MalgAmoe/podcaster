@@ -27,22 +27,3 @@ export function getFriendlyJobError(error) {
 
   return error;
 }
-
-// Check if error is a billing-related error that should show upgrade CTA
-export function isBillingError(error) {
-  if (!error) return false;
-  return error.includes("insufficient_minutes");
-}
-
-export function getUploadError(error) {
-  switch (error) {
-    case "too_large":
-      return "File is too large (max 500MB)";
-    case "not_accepted":
-      return "File type not accepted";
-    case "too_many_files":
-      return "Too many files";
-    default:
-      return `Error: ${error}`;
-  }
-}

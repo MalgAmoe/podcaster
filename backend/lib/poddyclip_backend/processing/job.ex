@@ -29,4 +29,19 @@ defmodule PoddyclipBackend.Processing.Job do
     |> cast(attrs, [:rust_job_id, :filename, :status, :progress, :error, :download_url, :result_s3_key, :user_id, :input_s3_key, :chain, :estimated_minutes, :dismissed])
     |> validate_required([:filename, :status, :user_id])
   end
+
+  @doc """
+  Convert a job to a map suitable for JSON serialization.
+  Used by both ProcessController and JobChannel.
+  """
+  def to_map(job) do
+    %{
+      id: job.id,
+      status: Atom.to_string(job.status),
+      progress: job.progress || %{},
+      filename: job.filename,
+      download_url: job.download_url,
+      error: job.error
+    }
+  end
 end

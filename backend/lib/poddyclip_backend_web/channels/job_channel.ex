@@ -2,6 +2,7 @@ defmodule PoddyclipBackendWeb.JobChannel do
   use Phoenix.Channel
 
   alias PoddyclipBackend.Processing
+  alias PoddyclipBackend.Processing.Job
   alias PoddyclipBackend.Storage
 
   @doc """
@@ -36,15 +37,8 @@ defmodule PoddyclipBackendWeb.JobChannel do
   end
 
   defp serialize_job(job) do
-    %{
-      id: job.id,
-      status: Atom.to_string(job.status),
-      progress: job.progress || %{},
-      error: job.error,
-      download_url: job.download_url,
-      original_url: presign_key(job.input_s3_key),
-      filename: job.filename
-    }
+    Job.to_map(job)
+    |> Map.put(:original_url, presign_key(job.input_s3_key))
   end
 
   defp presign_key(nil), do: nil
