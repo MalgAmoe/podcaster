@@ -139,4 +139,12 @@ export const api = {
   async cancelJob(jobId) {
     return request("DELETE", `/api/jobs/${jobId}`);
   },
+
+  async dismissJob(jobId) {
+    return request("POST", `/api/jobs/${jobId}/dismiss`);
+  },
+
+  async getJobHistory() {
+    return request("GET", "/api/jobs/history");
+  },
 };

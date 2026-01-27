@@ -319,6 +319,7 @@ export function WaveformPlayer(props) {
           onClick={togglePlay}
           disabled={loading() || error()}
           class="btn btn-circle btn-sm btn-primary"
+          aria-label={isPlaying() ? "Pause" : "Play"}
         >
           <Show when={isPlaying()} fallback={
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">

@@ -96,6 +96,21 @@ defmodule PoddyclipBackend.Processing do
   end
 
   @doc """
+  List completed jobs for a user from the last 7 days.
+  Used for job history / "Past Munchings" feature.
+  """
+  def list_completed_jobs_for_user(user_id) do
+    cutoff = DateTime.utc_now() |> DateTime.add(-7, :day)
+
+    Job
+    |> where([j], j.user_id == ^user_id)
+    |> where([j], j.status == :completed)
+    |> where([j], j.inserted_at > ^cutoff)
+    |> order_by([j], desc: j.inserted_at)
+    |> Repo.all()
+  end
+
+  @doc """
   List active (non-completed, non-failed) jobs for a user.
   """
   def list_active_jobs_for_user(user_id) do
@@ -109,7 +124,7 @@ defmodule PoddyclipBackend.Processing do
   @doc """
   Get the user's current active job for recovery on page reload.
 
-  Returns the most recent job that is either:
+  Returns the most recent non-dismissed job that is either:
   - Still processing (queued or processing status), OR
   - Completed/failed within the last 24 hours
 
@@ -120,10 +135,27 @@ defmodule PoddyclipBackend.Processing do
 
     Job
     |> where([j], j.user_id == ^user_id)
+    |> where([j], j.dismissed == false)
     |> where([j], j.status in [:queued, :processing] or j.updated_at > ^cutoff)
     |> order_by([j], desc: j.updated_at)
     |> limit(1)
     |> Repo.one()
+  end
+
+  @doc """
+  Dismiss a completed job so it doesn't show on page reload.
+  The job remains in the database for job history.
+  """
+  def dismiss_job(job_id) do
+    case get_job(job_id) do
+      nil ->
+        {:error, :not_found}
+
+      job ->
+        job
+        |> Job.changeset(%{dismissed: true})
+        |> Repo.update()
+    end
   end
 
   @doc """

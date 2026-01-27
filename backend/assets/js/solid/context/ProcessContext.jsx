@@ -18,6 +18,8 @@ export function ProcessProvider(props) {
     filename: null,
     uploadProgress: 0,
     uploadState: "idle", // idle, uploading, ready, error
+    estimatedMinutes: null, // Detected audio duration in minutes
+    submitting: false, // Prevents double-submit
     // Processing configuration - each category stores its own mode + strength
     processingConfig: {
       category: "voice", // "voice" | "mixed"
@@ -45,6 +47,7 @@ export function ProcessProvider(props) {
   onMount(async () => {
     try {
       // Check for existing job (reload recovery)
+      // Server excludes dismissed jobs, so we just restore if one exists
       const { job } = await api.getCurrentJob();
       if (job) {
         setStore({
@@ -156,6 +159,20 @@ export function ProcessProvider(props) {
     }
   });
 
+  // Get audio duration using Web Audio API
+  async function getAudioDuration(file) {
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const arrayBuffer = await file.arrayBuffer();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      audioContext.close();
+      return Math.ceil(audioBuffer.duration / 60); // minutes, rounded up
+    } catch (err) {
+      console.error("Failed to detect audio duration:", err);
+      return null;
+    }
+  }
+
   async function uploadFile(file) {
     // Prevent concurrent uploads
     if (store.uploadState === "uploading") return;
@@ -171,6 +188,7 @@ export function ProcessProvider(props) {
       filename: file.name,
       uploadState: "uploading",
       uploadProgress: 0,
+      estimatedMinutes: null,
     });
 
     try {
@@ -211,6 +229,13 @@ export function ProcessProvider(props) {
       });
 
       setStore({ s3Key: key, uploadState: "ready" });
+
+      // Detect audio duration in background (don't block upload completion)
+      getAudioDuration(file).then((minutes) => {
+        if (minutes !== null) {
+          setStore("estimatedMinutes", minutes);
+        }
+      });
     } catch (err) {
       // Don't show error for aborted uploads
       if (err.message !== "Upload cancelled") {
@@ -251,6 +276,10 @@ export function ProcessProvider(props) {
       return;
     }
 
+    // Prevent double-submit
+    if (store.submitting) return;
+    setStore("submitting", true);
+
     try {
       const cat = store.processingConfig.category;
       const catConfig = store.processingConfig[cat];
@@ -280,6 +309,8 @@ export function ProcessProvider(props) {
       } else {
         notify({ type: "error", message: err.message, persistent: true });
       }
+      // Reset submitting on error so user can retry
+      setStore("submitting", false);
     }
   }
 
@@ -298,12 +329,22 @@ export function ProcessProvider(props) {
     // Clear audio buffer cache to free memory
     clearAudioCache();
 
-    // Delete job from server first (cleanup)
     if (store.job?.id) {
-      try {
-        await api.cancelJob(store.job.id);
-      } catch (err) {
-        // Ignore - job might already be gone
+      if (store.job.status === "completed") {
+        // Mark completed jobs as dismissed server-side so they don't restore on reload
+        // Job remains in DB for job history
+        try {
+          await api.dismissJob(store.job.id);
+        } catch (err) {
+          // Ignore - job might already be gone
+        }
+      } else {
+        // Cancel in-progress or failed jobs
+        try {
+          await api.cancelJob(store.job.id);
+        } catch (err) {
+          // Ignore - job might already be gone
+        }
       }
     }
     setStore({
@@ -312,6 +353,8 @@ export function ProcessProvider(props) {
       filename: null,
       uploadProgress: 0,
       uploadState: "idle",
+      estimatedMinutes: null,
+      submitting: false,
       job: null,
     });
   }

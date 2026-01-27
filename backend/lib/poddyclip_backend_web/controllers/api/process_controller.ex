@@ -198,6 +198,45 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   end
 
   @doc """
+  POST /api/jobs/:id/dismiss - Mark a completed job as dismissed.
+
+  Dismissed jobs won't show on page reload but remain in job history.
+
+  Response: {"ok": true}
+  """
+  def dismiss_job(conn, %{"id" => id}) do
+    user = conn.assigns.current_user
+
+    case Processing.get_job(id) do
+      nil ->
+        conn
+        |> put_status(404)
+        |> json(%{error: "Job not found"})
+
+      job when job.user_id != user.id ->
+        conn
+        |> put_status(403)
+        |> json(%{error: "Forbidden"})
+
+      job ->
+        case Processing.dismiss_job(job.id) do
+          {:ok, _} ->
+            json(conn, %{ok: true})
+
+          {:error, :not_found} ->
+            conn
+            |> put_status(404)
+            |> json(%{error: "Job not found"})
+
+          {:error, reason} ->
+            conn
+            |> put_status(500)
+            |> json(%{error: "Failed to dismiss job: #{inspect(reason)}"})
+        end
+    end
+  end
+
+  @doc """
   GET /api/jobs/current - Get the user's current active job (for reload recovery).
 
   Returns the most recent job that is either still processing or
@@ -258,6 +297,40 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
       {:ok, url} -> url
       _ -> nil
     end
+  end
+
+  defp presign_download_with_filename(nil, _filename), do: nil
+  defp presign_download_with_filename(key, filename) do
+    case Storage.presign_download(key, filename: filename) do
+      {:ok, url} -> url
+      _ -> nil
+    end
+  end
+
+  @doc """
+  GET /api/jobs/history - Get user's completed jobs from last 7 days.
+
+  Response: {"jobs": [{"id": 123, "filename": "...", "created_at": "...", "download_url": "..."}]}
+  """
+  def job_history(conn, _params) do
+    user = conn.assigns.current_user
+    jobs = Processing.list_completed_jobs_for_user(user.id)
+
+    valid_jobs =
+      jobs
+      |> Enum.filter(fn job ->
+        job.result_s3_key && Storage.exists?(job.result_s3_key)
+      end)
+      |> Enum.map(fn job ->
+        %{
+          id: job.id,
+          filename: job.filename,
+          created_at: job.inserted_at,
+          download_url: presign_download_with_filename(job.result_s3_key, job.filename)
+        }
+      end)
+
+    json(conn, %{jobs: valid_jobs})
   end
 
   @doc """

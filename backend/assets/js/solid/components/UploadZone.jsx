@@ -63,9 +63,14 @@ export function UploadZone() {
             accept="audio/*,.flac,.wav,.mp3,.m4a,.aac,.ogg,.opus"
             onChange={(e) => handleFile(e.target.files[0])}
             class="hidden"
+            id="audio-file-input"
           />
           <div
+            role="button"
+            aria-label="Upload audio file. Click or drop a file here."
+            tabIndex="0"
             onClick={() => fileInput.click()}
+            onKeyDown={(e) => e.key === "Enter" && fileInput.click()}
             onDrop={handleDrop}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -106,6 +111,9 @@ export function UploadZone() {
           <p class="font-medium truncate">{store.filename}</p>
           <Show when={store.uploadState === "ready"}>
             <p class="text-sm text-primary">Ready to munch!</p>
+            <Show when={store.estimatedMinutes}>
+              <p class="text-xs text-base-content/50">~{store.estimatedMinutes} min</p>
+            </Show>
           </Show>
           <Show when={store.uploadState === "uploading" && store.uploadProgress >= 100}>
             <p class="text-sm text-base-content/60">Finalizing...</p>
@@ -117,7 +125,7 @@ export function UploadZone() {
             </div>
           </Show>
         </div>
-        <button type="button" onClick={reset} class="btn btn-ghost btn-sm btn-circle">
+        <button type="button" onClick={reset} class="btn btn-ghost btn-sm btn-circle" aria-label="Remove file">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>

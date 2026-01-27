@@ -41,6 +41,7 @@ case "${1:-}" in
     reset-db)
         echo -e "${YELLOW}Resetting database...${NC}"
         cd backend
+        mix compile --force
         echo -e "${RED}Dropping database...${NC}"
         mix ecto.drop
         echo -e "${GREEN}Creating database...${NC}"

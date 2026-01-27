@@ -75,8 +75,10 @@ defmodule PoddyclipBackendWeb.Router do
     get "/presets", ProcessController, :presets
     post "/presign-upload", ProcessController, :presign_upload
     get "/jobs/current", ProcessController, :current_job
+    get "/jobs/history", ProcessController, :job_history
     post "/jobs", ProcessController, :create_job
     delete "/jobs/:id", ProcessController, :cancel_job
+    post "/jobs/:id/dismiss", ProcessController, :dismiss_job
     get "/user", ProcessController, :current_user
   end
 

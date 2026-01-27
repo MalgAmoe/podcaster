@@ -16,6 +16,8 @@ defmodule PoddyclipBackend.Application do
       PoddyclipBackend.LogShipper,
       # Oban job queue
       {Oban, Application.fetch_env!(:poddyclip_backend, Oban)},
+      # Subscription expiry checker
+      PoddyclipBackend.Workers.SubscriptionExpiryWorker,
       # Start to serve requests, typically the last entry
       PoddyclipBackendWeb.Endpoint
     ]
