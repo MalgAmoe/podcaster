@@ -25,6 +25,8 @@ pub struct AppConfig {
     pub chains_dir: PathBuf,
     pub port: u16,
     pub api_key: Option<String>,
+    /// Comma-separated list of allowed CORS origins. Empty = allow any (dev mode).
+    pub cors_origins: Option<String>,
 }
 
 impl Default for AppConfig {
@@ -37,6 +39,7 @@ impl Default for AppConfig {
             chains_dir: PathBuf::from("chains"),
             port: 3000,
             api_key: None,
+            cors_origins: None, // None = allow any (dev mode)
         }
     }
 }
@@ -68,6 +71,7 @@ impl AppConfig {
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(3000),
             api_key: std::env::var("API_KEY").ok().filter(|s| !s.is_empty()),
+            cors_origins: std::env::var("CORS_ORIGINS").ok().filter(|s| !s.is_empty()),
         }
     }
 }

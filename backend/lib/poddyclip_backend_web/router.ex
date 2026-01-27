@@ -132,8 +132,8 @@ defmodule PoddyclipBackendWeb.Router do
   scope "/", PoddyclipBackendWeb do
     pipe_through [:browser, :redirect_if_user_is_authenticated]
 
-    get "/users/register", UserRegistrationController, :new
-    post "/users/register", UserRegistrationController, :create
+    # Redirect old register URLs to sign-in (consolidated flow)
+    get "/users/register", UserSessionController, :redirect_to_login
   end
 
   scope "/", PoddyclipBackendWeb do

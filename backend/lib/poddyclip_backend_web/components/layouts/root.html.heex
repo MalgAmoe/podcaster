@@ -58,9 +58,9 @@
                 <div class="flex items-center justify-between">
                   <span class="text-xs text-base-content/50 truncate">{@current_scope.user.email}</span>
                   <%= if @current_scope.user.subscription_status == "active" do %>
-                    <span class="badge badge-primary badge-xs ml-2">Pro</span>
+                    <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-primary text-primary-content ml-2">Pro</span>
                   <% else %>
-                    <span class="badge badge-ghost badge-xs ml-2">Free</span>
+                    <span class="px-2 py-0.5 text-[10px] font-medium rounded-full bg-base-300 text-base-content/70 ml-2">Free</span>
                   <% end %>
                 </div>
               </li>
@@ -76,8 +76,7 @@
           </div>
         <% else %>
           <.link href={~p"/pricing"} class="btn btn-ghost btn-sm">Pricing</.link>
-          <.link href={~p"/users/register"} class="btn btn-ghost btn-sm">Register</.link>
-          <.link href={~p"/users/log-in"} class="btn btn-primary btn-sm">Log in</.link>
+          <.link href={~p"/users/log-in"} class="btn btn-primary btn-sm">Sign in</.link>
         <% end %>
       </div>
     </div>

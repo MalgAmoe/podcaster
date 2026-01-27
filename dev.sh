@@ -38,13 +38,32 @@ case "${1:-}" in
         pkill -f "beam.smp.*poddyclip" 2>/dev/null || true
         cd docker && docker compose down
         ;;
+    reset-db)
+        echo -e "${YELLOW}Resetting database...${NC}"
+        cd backend
+        echo -e "${RED}Dropping database...${NC}"
+        mix ecto.drop
+        echo -e "${GREEN}Creating database...${NC}"
+        mix ecto.create
+        echo -e "${GREEN}Running migrations...${NC}"
+        mix ecto.migrate
+        echo -e "${GREEN}Running seeds...${NC}"
+        mix run priv/repo/seeds.exs
+        echo -e "${GREEN}Database reset complete!${NC}"
+        ;;
+    seed)
+        echo -e "${GREEN}Running seeds...${NC}"
+        cd backend && mix run priv/repo/seeds.exs
+        ;;
     *)
-        echo "Usage: $0 {infra|api|web|stop}"
+        echo "Usage: $0 {infra|api|web|stop|reset-db|seed}"
         echo ""
-        echo "  infra  - Start Postgres + MinIO + OpenObserve (docker)"
-        echo "  api    - Start Rust API (port 3000)"
-        echo "  web    - Start Phoenix (port 4000)"
-        echo "  stop   - Stop all services"
+        echo "  infra    - Start Postgres + MinIO + OpenObserve (docker)"
+        echo "  api      - Start Rust API (port 3000)"
+        echo "  web      - Start Phoenix (port 4000)"
+        echo "  stop     - Stop all services"
+        echo "  reset-db - Drop, recreate, migrate, and seed database"
+        echo "  seed     - Run seeds only (create/update plans)"
         echo ""
         echo "Run in 3 terminals:"
         echo "  Terminal 1: ./dev.sh infra"

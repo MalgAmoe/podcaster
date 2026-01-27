@@ -11,6 +11,11 @@ defmodule PoddyclipBackendWeb.UserSessionController do
     render(conn, :new, form: form)
   end
 
+  # Redirect old register URLs to unified sign-in
+  def redirect_to_login(conn, _params) do
+    redirect(conn, to: ~p"/users/log-in")
+  end
+
   # magic link login
   def create(conn, %{"user" => %{"token" => token} = user_params} = params) do
     info =
@@ -32,21 +37,28 @@ defmodule PoddyclipBackendWeb.UserSessionController do
     end
   end
 
-  # magic link request
+  # magic link request - auto-creates user if not found
   def create(conn, %{"user" => %{"email" => email}}) do
-    if user = Accounts.get_user_by_email(email) do
+    user = Accounts.get_user_by_email(email) || create_user_for_email(email)
+
+    if user do
       Accounts.deliver_login_instructions(
         user,
         &url(~p"/users/log-in/#{&1}")
       )
     end
 
-    info =
-      "If your email is in our system, you will receive instructions for logging in shortly."
-
+    # Same message whether new or existing (prevents email enumeration)
     conn
-    |> put_flash(:info, info)
+    |> put_flash(:info, "Check your email for a sign-in link.")
     |> redirect(to: ~p"/users/log-in")
+  end
+
+  defp create_user_for_email(email) do
+    case Accounts.register_user(%{email: email}) do
+      {:ok, user} -> user
+      {:error, _changeset} -> nil
+    end
   end
 
   def confirm(conn, %{"token" => token}) do

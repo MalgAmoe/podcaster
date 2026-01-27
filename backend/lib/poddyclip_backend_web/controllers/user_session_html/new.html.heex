@@ -2,16 +2,12 @@
   <div class="mx-auto max-w-sm space-y-4">
     <div class="text-center">
       <.header>
-        <p>Log in</p>
+        <p>Sign in</p>
         <:subtitle>
           <%= if @current_scope do %>
             You need to reauthenticate to perform sensitive actions on your account.
           <% else %>
-            Don't have an account? <.link
-              navigate={~p"/users/register"}
-              class="font-semibold text-brand hover:underline"
-              phx-no-format
-            >Sign up</.link> for an account now.
+            Enter your email to sign in or create an account.
           <% end %>
         </:subtitle>
       </.header>
@@ -38,7 +34,7 @@
         phx-mounted={JS.focus()}
       />
       <.button class="btn btn-primary w-full">
-        Send magic link <span aria-hidden="true">→</span>
+        Continue with email <span aria-hidden="true">→</span>
       </.button>
     </.form>
   </div>

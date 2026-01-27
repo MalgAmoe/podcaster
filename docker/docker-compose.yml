@@ -21,6 +21,7 @@ services:
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_SERVER_URL: https://s3.editvariant.com
     volumes:
       - minio-data:/data
     command: server /data --console-address ":9001"

@@ -37,8 +37,23 @@ defmodule PoddyclipBackendWeb.UserAuth do
 
     conn
     |> create_or_extend_session(user, params)
-    |> redirect(to: user_return_to || signed_in_path(conn))
+    |> redirect(to: safe_redirect_path(user_return_to) || signed_in_path(conn))
   end
+
+  # Validate redirect path to prevent open redirect attacks.
+  # Only allows relative paths starting with / (not // or external URLs).
+  defp safe_redirect_path(nil), do: nil
+  defp safe_redirect_path(path) when is_binary(path) do
+    cond do
+      # Must start with single / (not // which is protocol-relative)
+      String.starts_with?(path, "/") and not String.starts_with?(path, "//") ->
+        # Ensure no scheme (e.g., /foo://bar)
+        if String.contains?(path, "://"), do: nil, else: path
+      true ->
+        nil
+    end
+  end
+  defp safe_redirect_path(_), do: nil
 
   @doc """
   Logs the user out.

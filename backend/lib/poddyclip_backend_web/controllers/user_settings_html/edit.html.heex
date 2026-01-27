@@ -1,16 +1,49 @@
 <Layouts.app flash={@flash} current_scope={@current_scope}>
-  <div class="text-center">
+  <div class="max-w-md mx-auto py-8">
     <.header>
       Account Settings
-      <:subtitle>Manage your account email address</:subtitle>
+      <:subtitle>Manage your account</:subtitle>
     </.header>
+
+    <!-- Email Section -->
+    <div class="mt-8 p-6 rounded-2xl bg-base-200 border border-base-300">
+      <h2 class="text-lg font-semibold mb-4">Email Address</h2>
+      <p class="text-sm text-base-content/60 mb-4">
+        We'll send a confirmation link to your new email address.
+      </p>
+
+      <.form :let={f} for={@email_changeset} action={~p"/users/settings"} id="update_email">
+        <input type="hidden" name="action" value="update_email" />
+
+        <div class="form-control w-full">
+          <label class="label">
+            <span class="label-text text-base-content/70">Email</span>
+          </label>
+          <input
+            type="email"
+            name={f[:email].name}
+            id={f[:email].id}
+            value={Phoenix.HTML.Form.normalize_value("email", f[:email].value)}
+            class="input input-bordered w-full bg-base-100"
+            autocomplete="email"
+            required
+          />
+          <%= if f[:email].errors != [] do %>
+            <label class="label">
+              <span class="label-text-alt text-error">
+                <%= for {msg, _} <- f[:email].errors do %><%= msg %><% end %>
+              </span>
+            </label>
+          <% end %>
+        </div>
+
+        <div class="mt-4">
+          <button type="submit" class="btn btn-primary" phx-disable-with="Sending...">
+            Update email
+          </button>
+        </div>
+      </.form>
+    </div>
+
   </div>
-
-  <.form :let={f} for={@email_changeset} action={~p"/users/settings"} id="update_email">
-    <input type="hidden" name="action" value="update_email" />
-
-    <.input field={f[:email]} type="email" label="Email" autocomplete="email" required />
-
-    <.button variant="primary" phx-disable-with="Changing...">Change Email</.button>
-  </.form>
 </Layouts.app>

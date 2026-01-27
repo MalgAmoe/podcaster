@@ -8,8 +8,9 @@ use axum::{
 };
 use tokio::net::TcpListener;
 use tokio::signal;
+use axum::http::HeaderValue;
 use tower_http::{
-    cors::{Any, CorsLayer},
+    cors::{AllowOrigin, Any, CorsLayer},
     limit::RequestBodyLimitLayer,
     trace::TraceLayer,
 };
@@ -110,16 +111,41 @@ async fn main() {
         .route("/health", get(health))
         .route("/presets", get(list_presets));
 
+    // Configure CORS based on CORS_ORIGINS env var
+    // - Not set or empty: allow any origin (dev mode)
+    // - Comma-separated list: allow only those origins (production)
+    let cors_layer = if let Some(ref origins) = state.config.cors_origins {
+        let allowed: Vec<HeaderValue> = origins
+            .split(',')
+            .filter_map(|s| s.trim().parse().ok())
+            .collect();
+
+        if allowed.is_empty() {
+            warn!("CORS_ORIGINS set but no valid origins parsed, allowing any");
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(Any)
+                .allow_headers(Any)
+        } else {
+            info!("CORS restricted to: {}", origins);
+            CorsLayer::new()
+                .allow_origin(AllowOrigin::list(allowed))
+                .allow_methods(Any)
+                .allow_headers(Any)
+        }
+    } else {
+        warn!("CORS_ORIGINS not set, allowing any origin (dev mode)");
+        CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any)
+    };
+
     // Build router
     let app = public_routes
         .merge(protected_routes)
         .layer(RequestBodyLimitLayer::new(max_body_size))
-        .layer(
-            CorsLayer::new()
-                .allow_origin(Any)
-                .allow_methods(Any)
-                .allow_headers(Any),
-        )
+        .layer(cors_layer)
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
