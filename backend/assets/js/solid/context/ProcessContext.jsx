@@ -4,10 +4,13 @@ import { Socket } from "phoenix";
 import { api, ApiError } from "../utils/api";
 import { clearAudioCache } from "../components/WaveformPlayer";
 import { getFriendlyJobError } from "../utils/errors";
+import { useNotifications } from "./NotificationContext";
 
 const ProcessContext = createContext();
 
 export function ProcessProvider(props) {
+  const { notify } = useNotifications();
+
   const [store, setStore] = createStore({
     initializing: true, // Loading initial state
     file: null,
@@ -22,12 +25,18 @@ export function ProcessProvider(props) {
       mixed: { mode: "natural", strength: 2, aiClean: false }
     },
     job: null,
-    error: null, // Can be string or { message, code, details } for billing errors
   });
 
   // Channel connection - managed outside reactive system
   let socket = null;
   let channel = null;
+
+  // WebSocket reconnection state
+  let reconnectAttempts = 0;
+  let wasConnected = false;
+  let connectionLostNotificationId = null;
+  const MAX_RECONNECT_ATTEMPTS = 3;
+  const INITIAL_RECONNECT_DELAY = 1000; // 1s, 2s, 4s with exponential backoff
 
   // Upload abort controller - prevents race conditions and orphaned uploads
   let uploadXhr = null;
@@ -76,11 +85,64 @@ export function ProcessProvider(props) {
       socket = null;
     }
 
+    // Reset reconnection state when job changes
+    reconnectAttempts = 0;
+    wasConnected = false;
+    if (connectionLostNotificationId) {
+      connectionLostNotificationId = null;
+    }
+
     // Connect if we have a job and token
     if (jobId && window.userToken) {
       socket = new Socket("/socket", {
-        params: { token: window.userToken }
+        params: { token: window.userToken },
+        reconnectAfterMs: (tries) => {
+          // Exponential backoff: 1s, 2s, 4s
+          return Math.min(INITIAL_RECONNECT_DELAY * Math.pow(2, tries - 1), 10000);
+        }
       });
+
+      // Track socket connection state
+      socket.onOpen(() => {
+        if (wasConnected && reconnectAttempts > 0) {
+          // Successfully reconnected
+          if (connectionLostNotificationId) {
+            // We'll let the auto-dismiss handle it, but show success
+          }
+          notify({ type: "success", message: "Connection restored" });
+        }
+        wasConnected = true;
+        reconnectAttempts = 0;
+        connectionLostNotificationId = null;
+      });
+
+      socket.onClose(() => {
+        if (wasConnected) {
+          reconnectAttempts++;
+
+          if (reconnectAttempts === 1) {
+            // First disconnect - show warning
+            connectionLostNotificationId = notify({
+              type: "warning",
+              message: "Connection lost. Reconnecting..."
+            });
+          }
+
+          if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            // Max retries exceeded - show persistent error
+            notify({
+              type: "error",
+              message: "Unable to connect. Please refresh the page.",
+              persistent: true
+            });
+          }
+        }
+      });
+
+      socket.onError(() => {
+        // Socket errors are followed by close, so we handle in onClose
+      });
+
       socket.connect();
 
       channel = socket.channel(`job:${jobId}`, {});
@@ -109,7 +171,6 @@ export function ProcessProvider(props) {
       filename: file.name,
       uploadState: "uploading",
       uploadProgress: 0,
-      error: null,
     });
 
     try {
@@ -153,7 +214,8 @@ export function ProcessProvider(props) {
     } catch (err) {
       // Don't show error for aborted uploads
       if (err.message !== "Upload cancelled") {
-        setStore({ error: err.message, uploadState: "error" });
+        setStore({ uploadState: "error" });
+        notify({ type: "error", message: err.message });
       }
     }
   }
@@ -185,7 +247,7 @@ export function ProcessProvider(props) {
 
   async function submitJob() {
     if (!store.s3Key || !store.filename) {
-      setStore("error", "Please upload a file first");
+      notify({ type: "error", message: "Please upload a file first" });
       return;
     }
 
@@ -200,17 +262,23 @@ export function ProcessProvider(props) {
         ai_clean: cat === "voice" ? catConfig.aiClean : undefined
       };
       const job = await api.createJob(store.s3Key, store.filename, config);
-      setStore({ job, error: null });
+      setStore({ job });
     } catch (err) {
-      // Capture full error details for billing errors
+      // Billing errors get persistent notification with upgrade action
       if (err instanceof ApiError && err.code === "insufficient_minutes") {
-        setStore("error", {
-          message: getFriendlyJobError(err.code),
-          code: err.code,
-          details: err.details
+        const details = err.details;
+        let message = getFriendlyJobError(err.code);
+        if (details?.minutes_available !== undefined && details?.minutes_needed !== undefined) {
+          message += ` You need ${details.minutes_needed} minutes but only have ${details.minutes_available} available.`;
+        }
+        notify({
+          type: "error",
+          message,
+          persistent: true,
+          action: { label: "Upgrade", onClick: () => window.location.href = "/account" }
         });
       } else {
-        setStore("error", err.message);
+        notify({ type: "error", message: err.message, persistent: true });
       }
     }
   }
@@ -224,10 +292,6 @@ export function ProcessProvider(props) {
       }
     }
     reset();
-  }
-
-  function clearError() {
-    setStore("error", null);
   }
 
   async function reset() {
@@ -249,7 +313,6 @@ export function ProcessProvider(props) {
       uploadProgress: 0,
       uploadState: "idle",
       job: null,
-      error: null,
     });
   }
 
@@ -265,7 +328,6 @@ export function ProcessProvider(props) {
     currentAiClean,
     submitJob,
     cancelJob,
-    clearError,
     reset,
   };
 

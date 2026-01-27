@@ -1,10 +1,14 @@
 import { createSignal, Show } from "solid-js";
 import { useProcess } from "../context/ProcessContext";
+import { useNotifications } from "../context/NotificationContext";
 
 export function UploadZone() {
   const { store, uploadFile, reset } = useProcess();
+  const { notify } = useNotifications();
   let fileInput;
   const [isDragging, setIsDragging] = createSignal(false);
+
+  const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
 
   async function handleFile(file) {
     if (!file) return;
@@ -13,7 +17,21 @@ export function UploadZone() {
     const ext = file.name.toLowerCase().slice(file.name.lastIndexOf("."));
     const isAudio = file.type.startsWith("audio/") || validExtensions.includes(ext);
 
-    if (!isAudio || file.size > 500 * 1024 * 1024) return;
+    if (!isAudio) {
+      notify({
+        type: "error",
+        message: "Please select an audio file (WAV, MP3, FLAC, etc.)"
+      });
+      return;
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      notify({
+        type: "error",
+        message: "File too large. Maximum size is 500MB."
+      });
+      return;
+    }
 
     await uploadFile(file);
   }

@@ -38,6 +38,7 @@ export function WaveformPlayer(props) {
   const [duration, setDuration] = createSignal(0);
   const [audioBuffer, setAudioBuffer] = createSignal(null);
   const [loading, setLoading] = createSignal(true);
+  const [error, setError] = createSignal(null);
 
   // Use props if provided, otherwise local state
   const isPlaying = () => props.isPlaying !== undefined ? props.isPlaying : localPlaying();
@@ -48,10 +49,9 @@ export function WaveformPlayer(props) {
   let pendingPlay = false;
   let lastUrl = null;
 
-  // Load audio when URL changes (only track URL, not other props)
-  createEffect(async () => {
-    const url = props.audioUrl;
-    if (!url || url === lastUrl) return;
+  // Load audio from URL
+  async function loadAudio(url) {
+    if (!url) return;
 
     // Capture current state without creating dependencies
     pendingSeek = untrack(() => currentTime());
@@ -65,6 +65,7 @@ export function WaveformPlayer(props) {
       setAudioBuffer(cached);
       setDuration(cached.duration);
       setLoading(false);
+      setError(null);
       // For cached audio, seek immediately after a microtask (DOM update)
       queueMicrotask(() => {
         if (audioRef && pendingSeek !== null) {
@@ -81,9 +82,13 @@ export function WaveformPlayer(props) {
 
     setLoading(true);
     setAudioBuffer(null);
+    setError(null);
 
     try {
       const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch audio: ${response.status}`);
+      }
       const arrayBuffer = await response.arrayBuffer();
       const audioContext = getAudioContext();
       const buffer = await audioContext.decodeAudioData(arrayBuffer);
@@ -97,7 +102,23 @@ export function WaveformPlayer(props) {
     } catch (err) {
       console.error("Failed to decode audio:", err);
       setLoading(false);
+      setError("Unable to play audio");
     }
+  }
+
+  function retryLoad() {
+    const url = props.audioUrl;
+    if (url) {
+      lastUrl = null; // Reset to allow reload
+      loadAudio(url);
+    }
+  }
+
+  // Load audio when URL changes (only track URL, not other props)
+  createEffect(() => {
+    const url = props.audioUrl;
+    if (!url || url === lastUrl) return;
+    loadAudio(url);
   });
 
   // Handle audio ready - restore position and play state after URL change
@@ -239,7 +260,20 @@ export function WaveformPlayer(props) {
         </div>
       </Show>
 
-      <Show when={!loading()}>
+      <Show when={error()}>
+        <div class="w-full h-20 rounded-lg bg-base-300 flex flex-col items-center justify-center gap-2">
+          <span class="text-sm text-error">{error()}</span>
+          <button
+            type="button"
+            onClick={retryLoad}
+            class="btn btn-xs btn-ghost"
+          >
+            Try again
+          </button>
+        </div>
+      </Show>
+
+      <Show when={!loading() && !error()}>
         <canvas
           ref={el => canvasRef = el}
           width={400}
@@ -253,7 +287,7 @@ export function WaveformPlayer(props) {
         <button
           type="button"
           onClick={togglePlay}
-          disabled={loading()}
+          disabled={loading() || error()}
           class="btn btn-circle btn-sm btn-primary"
         >
           <Show when={isPlaying()} fallback={

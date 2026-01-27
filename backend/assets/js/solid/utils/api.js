@@ -15,6 +15,26 @@ export class ApiError extends Error {
   }
 }
 
+// Retry configuration
+const MAX_RETRIES = 3;
+const INITIAL_DELAY_MS = 1000;
+
+// Exponential backoff delay: 1s, 2s, 4s
+function getRetryDelay(attempt) {
+  return INITIAL_DELAY_MS * Math.pow(2, attempt);
+}
+
+// Check if error is retryable (5xx or network error)
+function isRetryable(response, isNetworkError) {
+  if (isNetworkError) return true;
+  if (!response) return false;
+  return response.status >= 500 && response.status < 600;
+}
+
+async function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function request(method, path, body = null) {
   const options = {
     method,
@@ -29,14 +49,71 @@ async function request(method, path, body = null) {
     options.body = JSON.stringify(body);
   }
 
-  const response = await fetch(path, options);
-  const data = await response.json();
+  let lastError = null;
 
-  if (!response.ok) {
-    throw new ApiError(data, response.status);
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const response = await fetch(path, options);
+
+      // Try to parse JSON, but handle non-JSON responses gracefully
+      let data;
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        // Server returned non-JSON (likely an error page)
+        const text = await response.text();
+        data = { error: `Server error (${response.status})` };
+        console.error("Non-JSON response:", text.slice(0, 200));
+      }
+
+      if (!response.ok) {
+        // Don't retry 4xx errors - they're client errors
+        if (response.status >= 400 && response.status < 500) {
+          throw new ApiError(data, response.status);
+        }
+
+        // Retry 5xx errors
+        if (isRetryable(response, false)) {
+          lastError = new ApiError(data, response.status);
+          if (attempt < MAX_RETRIES - 1) {
+            await sleep(getRetryDelay(attempt));
+            continue;
+          }
+          throw lastError;
+        }
+
+        throw new ApiError(data, response.status);
+      }
+
+      return data;
+    } catch (err) {
+      // Network errors (fetch throws)
+      if (err.name === "TypeError" || err.message === "Failed to fetch") {
+        lastError = new Error("Network error. Please check your connection.");
+        if (attempt < MAX_RETRIES - 1) {
+          await sleep(getRetryDelay(attempt));
+          continue;
+        }
+        throw lastError;
+      }
+
+      // JSON parse errors - server returned malformed response
+      if (err.name === "SyntaxError") {
+        lastError = new Error("Server returned an invalid response. Please try again.");
+        if (attempt < MAX_RETRIES - 1) {
+          await sleep(getRetryDelay(attempt));
+          continue;
+        }
+        throw lastError;
+      }
+
+      // Re-throw ApiError (already handled above for retry logic)
+      throw err;
+    }
   }
 
-  return data;
+  throw lastError || new Error("Request failed after retries");
 }
 
 export const api = {

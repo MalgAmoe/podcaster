@@ -5,7 +5,6 @@ import { ProcessingConfig } from "./ProcessingConfig";
 import { JobProgress } from "./JobProgress";
 import { JobComplete } from "./JobComplete";
 import { JobFailed } from "./JobFailed";
-import { ErrorAlert } from "./ErrorAlert";
 import { StepsIndicator, getCurrentStep } from "./StepsIndicator";
 
 export function ProcessPage() {
@@ -21,8 +20,6 @@ export function ProcessPage() {
               <p class="text-base-content/60 mt-4">Loading...</p>
             </div>
           }>
-            <ErrorAlert message={store.error} />
-
             <Show when={store.job} fallback={
               <div class="space-y-6">
                 <UploadZone />
