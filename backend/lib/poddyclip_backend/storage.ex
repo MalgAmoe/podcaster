@@ -71,11 +71,33 @@ defmodule PoddyclipBackend.Storage do
   @doc """
   Generate the S3 key for a user's input file.
   Uses a fixed name per user (single slot) with the file extension preserved.
+  Sanitizes filename to prevent path traversal attacks.
   """
   def input_key(user_id, filename) do
-    ext = Path.extname(filename)
+    safe_name = sanitize_filename(filename)
+    ext = Path.extname(safe_name)
     "inputs/#{user_id}/input#{ext}"
   end
+
+  @doc """
+  Sanitize a filename to prevent path traversal and other attacks.
+  - Removes directory components (../, ./, etc.)
+  - Only allows alphanumeric, dots, hyphens, and underscores
+  - Limits length to 255 characters
+  """
+  def sanitize_filename(filename) when is_binary(filename) do
+    filename
+    |> Path.basename()                           # Remove any directory components
+    |> String.replace(~r/\.\./, "")              # Remove .. sequences
+    |> String.replace(~r/[^\w.\-]/, "_")         # Only allow safe characters
+    |> String.slice(0, 255)                      # Limit length
+    |> case do
+      "" -> "unnamed"                            # Fallback if empty
+      name -> name
+    end
+  end
+
+  def sanitize_filename(_), do: "unnamed"
 
   @doc """
   Delete all input files for a user.

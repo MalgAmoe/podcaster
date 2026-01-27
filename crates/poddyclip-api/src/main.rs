@@ -125,13 +125,20 @@ async fn main() {
 
     // Start server with graceful shutdown
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    let listener = TcpListener::bind(addr).await.unwrap();
+    let listener = TcpListener::bind(addr).await.unwrap_or_else(|e| {
+        panic!(
+            "Failed to bind to {}: {}. Check if the port is already in use or you have permission to bind.",
+            addr, e
+        )
+    });
     info!("Listening on http://{}", addr);
 
-    axum::serve(listener, app)
+    if let Err(e) = axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
-        .unwrap();
+    {
+        panic!("Server error: {}. The server encountered a fatal error and must exit.", e);
+    }
 
     info!("Server shut down gracefully");
 }

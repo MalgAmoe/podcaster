@@ -7,7 +7,9 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   alias PoddyclipBackend.Billing
   alias PoddyclipBackend.Processing
   alias PoddyclipBackend.Processing.Client
+  alias PoddyclipBackend.Repo
   alias PoddyclipBackend.Storage
+  alias Ecto.Multi
 
   @doc """
   GET /api/presets - List available processing presets.
@@ -87,53 +89,36 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
     duration_seconds = params["duration_seconds"] || 60
     estimated_minutes = ceil(duration_seconds / 60)
 
-    # Check if user has enough minutes
-    case Billing.deduct_minutes(user, estimated_minutes) do
-      {:ok, _updated_user} ->
-        # Proceed with job creation
-        opts = [
-          category: params["category"] || "voice",
-          mode: params["mode"] || "natural",
-          strength: params["strength"] || 3,
-          ai_clean: params["ai_clean"],
-          estimated_minutes: estimated_minutes
-        ]
+    # Build job options
+    opts = [
+      category: params["category"] || "voice",
+      mode: params["mode"] || "natural",
+      strength: params["strength"] || 3,
+      ai_clean: params["ai_clean"],
+      estimated_minutes: estimated_minutes
+    ]
 
-        case Processing.submit_job_from_s3(s3_key, filename, user.id, opts) do
-          {:ok, job} ->
-            json(conn, %{
-              id: job.id,
-              status: Atom.to_string(job.status),
-              filename: job.filename
-            })
+    # Use Ecto.Multi to ensure atomicity: minutes are only deducted if job creation succeeds.
+    # If job submission fails, the transaction rolls back and minutes are not lost.
+    result =
+      Multi.new()
+      |> Multi.run(:deduct_minutes, fn _repo, _changes ->
+        Billing.deduct_minutes(user, estimated_minutes)
+      end)
+      |> Multi.run(:submit_job, fn _repo, _changes ->
+        Processing.submit_job_from_s3(s3_key, filename, user.id, opts)
+      end)
+      |> Repo.transaction()
 
-          {:error, {:http_error, status, %{"error" => %{"message" => msg}}}} ->
-            # Refund minutes on failure
-            Billing.refund_minutes(user, estimated_minutes)
-            conn
-            |> put_status(status)
-            |> json(%{error: msg})
+    case result do
+      {:ok, %{submit_job: job}} ->
+        json(conn, %{
+          id: job.id,
+          status: Atom.to_string(job.status),
+          filename: job.filename
+        })
 
-          {:error, {:http_error, status, body}} when is_binary(body) ->
-            Billing.refund_minutes(user, estimated_minutes)
-            conn
-            |> put_status(status)
-            |> json(%{error: body})
-
-          {:error, reason} when is_binary(reason) ->
-            Billing.refund_minutes(user, estimated_minutes)
-            conn
-            |> put_status(422)
-            |> json(%{error: reason})
-
-          {:error, reason} ->
-            Billing.refund_minutes(user, estimated_minutes)
-            conn
-            |> put_status(500)
-            |> json(%{error: "Failed to start processing: #{inspect(reason)}"})
-        end
-
-      {:error, :insufficient_minutes} ->
+      {:error, :deduct_minutes, :insufficient_minutes, _changes} ->
         conn
         |> put_status(:payment_required)
         |> json(%{
@@ -141,6 +126,31 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
           minutes_available: user.minutes_available,
           minutes_needed: estimated_minutes
         })
+
+      {:error, :submit_job, {:http_error, status, %{"error" => %{"message" => msg}}}, _changes} ->
+        conn
+        |> put_status(status)
+        |> json(%{error: msg})
+
+      {:error, :submit_job, {:http_error, status, body}, _changes} when is_binary(body) ->
+        conn
+        |> put_status(status)
+        |> json(%{error: body})
+
+      {:error, :submit_job, reason, _changes} when is_binary(reason) ->
+        conn
+        |> put_status(422)
+        |> json(%{error: reason})
+
+      {:error, :submit_job, reason, _changes} ->
+        conn
+        |> put_status(500)
+        |> json(%{error: "Failed to start processing: #{inspect(reason)}"})
+
+      {:error, _step, reason, _changes} ->
+        conn
+        |> put_status(500)
+        |> json(%{error: "Failed to process request: #{inspect(reason)}"})
     end
   end
 

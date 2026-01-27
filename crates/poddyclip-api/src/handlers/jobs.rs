@@ -1,5 +1,6 @@
+use std::net::IpAddr;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use axum::{
     extract::{Path, State},
@@ -8,6 +9,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use tokio::task;
 use tracing::{debug, error, info, warn};
+use url::Url;
 use uuid::Uuid;
 
 use crate::audio::{decode_audio, encode_mp3, encode_wav};
@@ -15,6 +17,12 @@ use crate::error::ApiError;
 use crate::models::{Job, JobStatus, OutputFormat, ProcessConfig, ProcessResponse};
 use crate::processing::{process_audio, CancelledError};
 use crate::state::AppState;
+use crate::storage::Storage;
+
+/// Maximum retry attempts for S3 uploads
+const S3_UPLOAD_MAX_RETRIES: u32 = 3;
+/// Initial retry delay for S3 uploads (doubles each attempt)
+const S3_UPLOAD_INITIAL_DELAY_MS: u64 = 1000;
 
 #[derive(Serialize)]
 pub struct DeleteResponse {
@@ -170,6 +178,16 @@ pub async fn create_s3_job(
         config.ai_denoise = ai_clean;
     }
 
+    // Validate webhook URL if provided (SSRF prevention)
+    if let Some(ref webhook_url) = req.webhook_url {
+        if let Err(reason) = validate_webhook_url(webhook_url) {
+            return Err(ApiError::InvalidRequest(format!(
+                "Invalid webhook URL: {}",
+                reason
+            )));
+        }
+    }
+
     // Create job with webhook info
     let job_id = Uuid::new_v4();
     let job = Job::new(job_id, config.clone(), filename.clone(), audio_bytes.len())
@@ -272,33 +290,20 @@ pub async fn create_s3_job(
 
         match result {
             Ok(Ok(Ok((output_bytes, content_type)))) => {
-                // Upload to S3 if storage is configured and user_id is present
+                // Upload to S3 with retry if storage is configured and user_id is present
                 let s3_key = if let (Some(ref storage), Some(user_id)) = (&state_clone.storage, user_id_for_upload) {
                     let extension = if content_type == "audio/mpeg" { ".mp3" } else { ".wav" };
 
-                    match storage
-                        .upload_result(user_id, &output_bytes, &content_type, &filename_for_upload, extension)
-                        .await
-                    {
-                        Ok(key) => {
-                            info!(
-                                job_id = %job_id,
-                                user_id = user_id,
-                                s3_key = %key,
-                                "Job result uploaded to S3"
-                            );
-                            Some(key)
-                        }
-                        Err(e) => {
-                            error!(
-                                job_id = %job_id,
-                                user_id = user_id,
-                                error = %e,
-                                "Job failed to upload to S3, keeping in memory"
-                            );
-                            None
-                        }
-                    }
+                    upload_with_retry(
+                        storage,
+                        user_id,
+                        &output_bytes,
+                        &content_type,
+                        &filename_for_upload,
+                        extension,
+                        job_id,
+                    )
+                    .await
                 } else if state_clone.storage.is_some() && user_id_for_upload.is_none() {
                     error!("Job {} has no user_id, cannot upload to S3", job_id);
                     None
@@ -413,4 +418,124 @@ fn now() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs()
+}
+
+/// Validate webhook URL to prevent SSRF attacks.
+///
+/// Security model:
+/// - Internal URLs (localhost, private IPs): Allow HTTP (trusted internal network)
+/// - External URLs: Require HTTPS (untrusted)
+/// - Always block dangerous endpoints (cloud metadata, etc.)
+fn validate_webhook_url(url_str: &str) -> Result<(), &'static str> {
+    let parsed = Url::parse(url_str).map_err(|_| "Invalid webhook URL")?;
+
+    // Only allow http or https schemes
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return Err("Webhook URL must use HTTP or HTTPS");
+    }
+
+    // Check host
+    let host = parsed.host_str().ok_or("Webhook URL must have a host")?;
+    let host_lower = host.to_lowercase();
+
+    // Always block cloud metadata endpoints (SSRF to steal credentials)
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        if is_metadata_ip(&ip) {
+            return Err("Webhook URL cannot point to cloud metadata endpoints");
+        }
+    }
+
+    // Check if this is an internal/trusted URL
+    let is_internal = host_lower == "localhost"
+        || host_lower == "127.0.0.1"
+        || host_lower == "::1"
+        || host_lower.ends_with(".local")
+        || host_lower.ends_with(".localhost")
+        || host.parse::<IpAddr>().map(|ip| is_private_ip(&ip)).unwrap_or(false);
+
+    // External URLs must use HTTPS
+    if !is_internal && parsed.scheme() != "https" {
+        return Err("External webhook URLs must use HTTPS");
+    }
+
+    Ok(())
+}
+
+/// Check if an IP address is in a private/internal range (trusted for HTTP)
+fn is_private_ip(ip: &IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ipv4) => {
+            ipv4.is_loopback()          // 127.0.0.0/8
+                || ipv4.is_private()    // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+                || ipv4.is_link_local() // 169.254.0.0/16 (except metadata)
+        }
+        IpAddr::V6(ipv6) => {
+            ipv6.is_loopback()
+        }
+    }
+}
+
+/// Check if an IP is a cloud metadata endpoint (always block - credential theft risk)
+fn is_metadata_ip(ip: &IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ipv4) => {
+            // AWS/GCP/Azure metadata endpoint
+            ipv4.octets() == [169, 254, 169, 254]
+        }
+        IpAddr::V6(_) => false,
+    }
+}
+
+/// Upload to S3 with exponential backoff retry
+async fn upload_with_retry(
+    storage: &Storage,
+    user_id: i64,
+    data: &[u8],
+    content_type: &str,
+    filename: &str,
+    extension: &str,
+    job_id: Uuid,
+) -> Option<String> {
+    let mut delay_ms = S3_UPLOAD_INITIAL_DELAY_MS;
+
+    for attempt in 1..=S3_UPLOAD_MAX_RETRIES {
+        match storage
+            .upload_result(user_id, data, content_type, filename, extension)
+            .await
+        {
+            Ok(key) => {
+                info!(
+                    job_id = %job_id,
+                    user_id = user_id,
+                    s3_key = %key,
+                    attempt = attempt,
+                    "Job result uploaded to S3"
+                );
+                return Some(key);
+            }
+            Err(e) => {
+                if attempt < S3_UPLOAD_MAX_RETRIES {
+                    warn!(
+                        job_id = %job_id,
+                        user_id = user_id,
+                        error = %e,
+                        attempt = attempt,
+                        retry_in_ms = delay_ms,
+                        "S3 upload failed, retrying"
+                    );
+                    tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                    delay_ms *= 2;
+                } else {
+                    error!(
+                        job_id = %job_id,
+                        user_id = user_id,
+                        error = %e,
+                        attempts = S3_UPLOAD_MAX_RETRIES,
+                        "S3 upload failed after all retries, keeping in memory"
+                    );
+                }
+            }
+        }
+    }
+    None
 }

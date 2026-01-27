@@ -1,4 +1,4 @@
-import { createSignal, createEffect, Show, untrack } from "solid-js";
+import { createSignal, createEffect, Show, untrack, onCleanup } from "solid-js";
 
 // Module-level cache for decoded AudioBuffers with LRU eviction
 const MAX_CACHE_ENTRIES = 5;
@@ -48,10 +48,25 @@ export function WaveformPlayer(props) {
   let pendingSeek = null;
   let pendingPlay = false;
   let lastUrl = null;
+  let abortController = null;
+
+  // Cleanup: abort any in-flight fetch when component unmounts
+  onCleanup(() => {
+    if (abortController) {
+      abortController.abort();
+    }
+  });
 
   // Load audio from URL
   async function loadAudio(url) {
     if (!url) return;
+
+    // Cancel any in-progress fetch to prevent race conditions
+    if (abortController) {
+      abortController.abort();
+    }
+    abortController = new AbortController();
+    const currentAbortController = abortController;
 
     // Capture current state without creating dependencies
     pendingSeek = untrack(() => currentTime());
@@ -85,13 +100,24 @@ export function WaveformPlayer(props) {
     setError(null);
 
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { signal: currentAbortController.signal });
       if (!response.ok) {
         throw new Error(`Failed to fetch audio: ${response.status}`);
       }
       const arrayBuffer = await response.arrayBuffer();
+
+      // Check if this fetch was aborted while reading body
+      if (currentAbortController.signal.aborted) {
+        return;
+      }
+
       const audioContext = getAudioContext();
       const buffer = await audioContext.decodeAudioData(arrayBuffer);
+
+      // Check again after decode (another async operation)
+      if (currentAbortController.signal.aborted) {
+        return;
+      }
 
       // Cache the decoded buffer using cacheKey if provided (LRU eviction)
       cacheBuffer(key, buffer);
@@ -100,6 +126,10 @@ export function WaveformPlayer(props) {
       setDuration(buffer.duration);
       setLoading(false);
     } catch (err) {
+      // Ignore abort errors - they're intentional
+      if (err.name === "AbortError") {
+        return;
+      }
       console.error("Failed to decode audio:", err);
       setLoading(false);
       setError("Unable to play audio");
