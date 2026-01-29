@@ -11,9 +11,7 @@ services:
       - PODDYCLIP_API_URL=http://rust-api:3000
       - WEBHOOK_BASE_URL=http://phoenix:4000
     ports:
-      - target: 4000
-        published: 4000
-        mode: host
+      - "127.0.0.1:4000:4000"
     depends_on:
       - rust-api
     healthcheck:
@@ -22,20 +20,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-    deploy:
-      replicas: 1
-      update_config:
-        parallelism: 1
-        delay: 10s
-        order: start-first
-        failure_action: rollback
-      rollback_config:
-        parallelism: 1
-        delay: 10s
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 0
+    restart: unless-stopped
 
   rust-api:
     image: malgamoe/stuff:api
@@ -48,26 +33,11 @@ services:
       - PORT=3000
       - RUST_LOG=info
     ports:
-      - target: 3000
-        published: 3000
-        mode: host
+      - "127.0.0.1:3000:3000"
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
-    deploy:
-      replicas: 1
-      update_config:
-        parallelism: 1
-        delay: 10s
-        order: start-first
-        failure_action: rollback
-      rollback_config:
-        parallelism: 1
-        delay: 10s
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 0
+    restart: unless-stopped
