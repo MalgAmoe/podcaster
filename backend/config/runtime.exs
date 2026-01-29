@@ -73,6 +73,11 @@ else
   config :poddyclip_backend, :s3, enabled: false
 end
 
+# Poddyclip API service URL (Rust processing service)
+if api_url = System.get_env("PODDYCLIP_API_URL") do
+  config :poddyclip_backend, :poddyclip_api_url, api_url
+end
+
 # API key for authenticating with the Rust poddyclip-api service
 if api_key = System.get_env("API_KEY") do
   config :poddyclip_backend, :api_key, api_key
