@@ -301,4 +301,82 @@ defmodule PoddyclipBackend.Accounts do
       end
     end)
   end
+
+  ## Notification Preferences
+
+  @doc """
+  Returns an `%Ecto.Changeset{}` for changing notification preferences.
+  """
+  def change_notification_preferences(user, attrs \\ %{}) do
+    User.notification_preferences_changeset(user, attrs)
+  end
+
+  @doc """
+  Updates the user's notification preferences.
+
+  ## Examples
+
+      iex> update_notification_preferences(user, %{"job_complete" => false})
+      {:ok, %User{}}
+
+  """
+  def update_notification_preferences(user, new_prefs) when is_map(new_prefs) do
+    # Merge with existing preferences
+    current_prefs = user.notification_preferences || %{}
+    merged_prefs = Map.merge(current_prefs, new_prefs)
+
+    user
+    |> User.notification_preferences_changeset(%{notification_preferences: merged_prefs})
+    |> Repo.update()
+  end
+
+  @doc """
+  Records that a low minutes notification was sent.
+  Prevents spam by tracking last notification time.
+  """
+  def record_low_minutes_notification(user) do
+    user
+    |> Ecto.Changeset.change(%{last_low_minutes_notification_at: DateTime.utc_now(:second)})
+    |> Repo.update()
+  end
+
+  @doc """
+  Checks if we should send a low minutes notification.
+  Returns false if one was sent in the current billing period.
+  """
+  def should_send_low_minutes_notification?(user) do
+    case user.last_low_minutes_notification_at do
+      nil ->
+        true
+
+      last_sent ->
+        # Only send once per billing period
+        # If subscription has a period end, use that; otherwise, use 30 days
+        period_start =
+          case user.current_period_ends_at do
+            nil -> DateTime.add(DateTime.utc_now(), -30, :day)
+            period_end -> DateTime.add(period_end, -30, :day)
+          end
+
+        DateTime.before?(last_sent, period_start)
+    end
+  end
+
+  @doc """
+  Records that an expiry notification was sent.
+  """
+  def record_expiry_notification(user) do
+    user
+    |> Ecto.Changeset.change(%{expiry_notification_sent_at: DateTime.utc_now(:second)})
+    |> Repo.update()
+  end
+
+  @doc """
+  Clears the expiry notification flag (e.g., when subscription is reactivated).
+  """
+  def clear_expiry_notification(user) do
+    user
+    |> Ecto.Changeset.change(%{expiry_notification_sent_at: nil})
+    |> Repo.update()
+  end
 end

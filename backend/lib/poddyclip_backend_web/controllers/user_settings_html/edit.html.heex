@@ -45,5 +45,82 @@
       </.form>
     </div>
 
+    <!-- Notification Preferences Section -->
+    <div class="mt-8 p-6 rounded-2xl bg-base-200 border border-base-300">
+      <h2 class="text-lg font-semibold mb-4">Email Notifications</h2>
+      <p class="text-sm text-base-content/60 mb-4">
+        Choose which emails you'd like to receive.
+      </p>
+
+      <form action={~p"/users/settings"} method="post" id="update_notifications">
+        <input type="hidden" name="_csrf_token" value={Phoenix.Controller.get_csrf_token()} />
+        <input type="hidden" name="action" value="update_notifications" />
+
+        <div class="space-y-4">
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              name="notifications[job_complete]"
+              value="true"
+              checked={@notification_preferences["job_complete"]}
+              class="checkbox checkbox-primary"
+            />
+            <div>
+              <span class="text-base-content">Email me when my audio is ready</span>
+              <p class="text-xs text-base-content/60">Get notified when processing completes</p>
+            </div>
+          </label>
+
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              name="notifications[job_failed]"
+              value="true"
+              checked={@notification_preferences["job_failed"]}
+              class="checkbox checkbox-primary"
+            />
+            <div>
+              <span class="text-base-content">Email me if processing fails</span>
+              <p class="text-xs text-base-content/60">Get notified if something goes wrong</p>
+            </div>
+          </label>
+
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              name="notifications[low_minutes]"
+              value="true"
+              checked={@notification_preferences["low_minutes"]}
+              class="checkbox checkbox-primary"
+            />
+            <div>
+              <span class="text-base-content">Warn me when I'm running low on minutes</span>
+              <p class="text-xs text-base-content/60">Get notified at 80% usage</p>
+            </div>
+          </label>
+
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              name="notifications[subscription_expiry]"
+              value="true"
+              checked={@notification_preferences["subscription_expiry"]}
+              class="checkbox checkbox-primary"
+            />
+            <div>
+              <span class="text-base-content">Remind me before my subscription ends</span>
+              <p class="text-xs text-base-content/60">Get a reminder 7 days before expiry</p>
+            </div>
+          </label>
+        </div>
+
+        <div class="mt-6">
+          <button type="submit" class="btn btn-primary">
+            Save preferences
+          </button>
+        </div>
+      </form>
+    </div>
+
   </div>
 </Layouts.app>

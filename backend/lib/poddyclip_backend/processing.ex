@@ -7,6 +7,7 @@ defmodule PoddyclipBackend.Processing do
   alias PoddyclipBackend.Processing.{Job, Client}
   alias PoddyclipBackend.Billing
   alias PoddyclipBackend.Accounts
+  alias PoddyclipBackend.Accounts.{User, UserNotifier}
   alias PoddyclipBackend.Repo
   import Ecto.Query
   require Logger
@@ -216,6 +217,12 @@ defmodule PoddyclipBackend.Processing do
         end
 
         broadcast_update(updated_job)
+
+        # Send email notifications for completed/failed jobs
+        if new_status in [:completed, :failed] and old_status != new_status do
+          send_job_notification(updated_job, new_status)
+        end
+
         {:ok, updated_job}
     end
   end
@@ -263,6 +270,36 @@ defmodule PoddyclipBackend.Processing do
   defp parse_status("completed"), do: :completed
   defp parse_status("failed"), do: :failed
   defp parse_status(_), do: :processing
+
+  # Send email notification for job completion/failure
+  defp send_job_notification(job, status) do
+    try do
+      user = Accounts.get_user!(job.user_id)
+
+      case status do
+        :completed ->
+          if User.notification_enabled?(user, :job_complete) do
+            UserNotifier.deliver_job_complete(user, job)
+            Logger.info("Job complete email sent", job_id: job.id, user_id: user.id)
+          end
+
+        :failed ->
+          if User.notification_enabled?(user, :job_failed) do
+            UserNotifier.deliver_job_failed(user, job)
+            Logger.info("Job failed email sent", job_id: job.id, user_id: user.id)
+          end
+
+        _ ->
+          :ok
+      end
+    rescue
+      e ->
+        Logger.error("Failed to send job notification email",
+          job_id: job.id,
+          error: Exception.message(e)
+        )
+    end
+  end
 
   defp broadcast_update(job) do
     Phoenix.PubSub.broadcast(PoddyclipBackend.PubSub, "job:#{job.id}", {:job_updated, job})

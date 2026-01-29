@@ -16,7 +16,8 @@ defmodule PoddyclipBackend.Billing do
 
   import Ecto.Query, warn: false
   alias PoddyclipBackend.Repo
-  alias PoddyclipBackend.Accounts.User
+  alias PoddyclipBackend.Accounts
+  alias PoddyclipBackend.Accounts.{User, UserNotifier}
   alias PoddyclipBackend.Billing.{Plan, ProcessedWebhook}
   require Logger
 
@@ -127,6 +128,10 @@ defmodule PoddyclipBackend.Billing do
             previous: available,
             remaining: updated_user.minutes_available
           )
+
+          # Check if crossing 80% threshold and send notification
+          maybe_send_low_minutes_notification(updated_user, available, amount)
+
           {:ok, updated_user}
 
         error ->
@@ -445,6 +450,50 @@ defmodule PoddyclipBackend.Billing do
     case DateTime.from_iso8601(datetime_str) do
       {:ok, dt, _offset} -> DateTime.truncate(dt, :second)
       _ -> nil
+    end
+  end
+
+  # ----- Low Minutes Notifications -----
+
+  @low_minutes_threshold 0.80
+
+  defp maybe_send_low_minutes_notification(user, previous_minutes, _deducted_amount) do
+    # Get user's plan to calculate percentage
+    user = Repo.preload(user, :plan)
+    plan_minutes = (user.plan && user.plan.minutes) || 15
+
+    # Calculate usage percentages before and after deduction
+    previous_used_pct = (plan_minutes - previous_minutes) / plan_minutes
+    current_used_pct = (plan_minutes - user.minutes_available) / plan_minutes
+
+    # Check if we just crossed the 80% threshold
+    if previous_used_pct < @low_minutes_threshold and current_used_pct >= @low_minutes_threshold do
+      send_low_minutes_notification(user, plan_minutes)
+    end
+  end
+
+  defp send_low_minutes_notification(user, plan_minutes) do
+    # Check user preferences and spam prevention
+    if User.notification_enabled?(user, :low_minutes) and
+       Accounts.should_send_low_minutes_notification?(user) do
+      percent_used = round((plan_minutes - user.minutes_available) / plan_minutes * 100)
+
+      try do
+        UserNotifier.deliver_low_minutes(user, user.minutes_available, percent_used)
+        Accounts.record_low_minutes_notification(user)
+
+        Logger.info("Low minutes notification sent",
+          user_id: user.id,
+          minutes_remaining: user.minutes_available,
+          percent_used: percent_used
+        )
+      rescue
+        e ->
+          Logger.error("Failed to send low minutes notification",
+            user_id: user.id,
+            error: Exception.message(e)
+          )
+      end
     end
   end
 end

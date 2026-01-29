@@ -1,0 +1,40 @@
+# Build stage
+FROM rust:1.83-bookworm AS build
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy workspace files
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
+
+# Build release binary with deepfilter
+RUN cargo build --release -p poddyclip-api --features deepfilter
+
+# Runtime stage
+FROM debian:bookworm-slim AS runtime
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy binary
+COPY --from=build /app/target/release/poddyclip-api /app/poddyclip-api
+
+# Copy chain presets
+COPY chains /app/chains
+
+ENV CHAINS_DIR=/app/chains
+ENV RUST_LOG=info
+
+EXPOSE 3000
+
+CMD ["/app/poddyclip-api"]

@@ -17,6 +17,16 @@ defmodule PoddyclipBackend.Accounts.User do
     field :polar_subscription_id, :string
     field :current_period_ends_at, :utc_datetime
 
+    # Notification preferences
+    field :notification_preferences, :map, default: %{
+      "job_complete" => true,
+      "job_failed" => true,
+      "low_minutes" => true,
+      "subscription_expiry" => true
+    }
+    field :last_low_minutes_notification_at, :utc_datetime
+    field :expiry_notification_sent_at, :utc_datetime
+
     timestamps(type: :utc_datetime)
   end
 
@@ -136,5 +146,51 @@ defmodule PoddyclipBackend.Accounts.User do
   def valid_password?(_, _) do
     Bcrypt.no_user_verify()
     false
+  end
+
+  @doc """
+  A changeset for updating notification preferences.
+  """
+  def notification_preferences_changeset(user, attrs) do
+    user
+    |> cast(attrs, [:notification_preferences])
+    |> validate_notification_preferences()
+  end
+
+  defp validate_notification_preferences(changeset) do
+    case get_change(changeset, :notification_preferences) do
+      nil ->
+        changeset
+
+      prefs when is_map(prefs) ->
+        valid_keys = MapSet.new(["job_complete", "job_failed", "low_minutes", "subscription_expiry"])
+        pref_keys = MapSet.new(Map.keys(prefs))
+
+        if MapSet.subset?(pref_keys, valid_keys) do
+          # Ensure all values are booleans
+          if Enum.all?(Map.values(prefs), &is_boolean/1) do
+            changeset
+          else
+            add_error(changeset, :notification_preferences, "all values must be booleans")
+          end
+        else
+          add_error(changeset, :notification_preferences, "contains invalid keys")
+        end
+
+      _ ->
+        add_error(changeset, :notification_preferences, "must be a map")
+    end
+  end
+
+  @doc """
+  Returns whether the user has a specific notification enabled.
+  """
+  def notification_enabled?(user, type) when is_atom(type) do
+    notification_enabled?(user, Atom.to_string(type))
+  end
+
+  def notification_enabled?(user, type) when is_binary(type) do
+    prefs = user.notification_preferences || %{}
+    Map.get(prefs, type, true)
   end
 end

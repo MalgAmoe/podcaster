@@ -18,6 +18,8 @@ defmodule PoddyclipBackend.Application do
       {Oban, Application.fetch_env!(:poddyclip_backend, Oban)},
       # Subscription expiry checker
       PoddyclipBackend.Workers.SubscriptionExpiryWorker,
+      # Expiry notification sender (7 days before subscription ends)
+      PoddyclipBackend.Workers.ExpiryNotificationWorker,
       # Start to serve requests, typically the last entry
       PoddyclipBackendWeb.Endpoint
     ]

@@ -7,6 +7,7 @@ defmodule PoddyclipBackendWeb.UserSettingsController do
 
   plug :require_sudo_mode
   plug :assign_email_changeset
+  plug :assign_notification_preferences
 
   def edit(conn, _params) do
     render(conn, :edit)
@@ -36,6 +37,31 @@ defmodule PoddyclipBackendWeb.UserSettingsController do
     end
   end
 
+  def update(conn, %{"action" => "update_notifications"} = params) do
+    user = conn.assigns.current_scope.user
+    notification_params = params["notifications"] || %{}
+
+    # Convert checkbox params to boolean map
+    new_prefs = %{
+      "job_complete" => notification_params["job_complete"] == "true",
+      "job_failed" => notification_params["job_failed"] == "true",
+      "low_minutes" => notification_params["low_minutes"] == "true",
+      "subscription_expiry" => notification_params["subscription_expiry"] == "true"
+    }
+
+    case Accounts.update_notification_preferences(user, new_prefs) do
+      {:ok, _user} ->
+        conn
+        |> put_flash(:info, "Notification preferences updated.")
+        |> redirect(to: ~p"/users/settings")
+
+      {:error, _changeset} ->
+        conn
+        |> put_flash(:error, "Failed to update notification preferences.")
+        |> redirect(to: ~p"/users/settings")
+    end
+  end
+
   def confirm_email(conn, %{"token" => token}) do
     case Accounts.update_user_email(conn.assigns.current_scope.user, token) do
       {:ok, _user} ->
@@ -53,5 +79,16 @@ defmodule PoddyclipBackendWeb.UserSettingsController do
   defp assign_email_changeset(conn, _opts) do
     user = conn.assigns.current_scope.user
     assign(conn, :email_changeset, Accounts.change_user_email(user))
+  end
+
+  defp assign_notification_preferences(conn, _opts) do
+    user = conn.assigns.current_scope.user
+    prefs = user.notification_preferences || %{
+      "job_complete" => true,
+      "job_failed" => true,
+      "low_minutes" => true,
+      "subscription_expiry" => true
+    }
+    assign(conn, :notification_preferences, prefs)
   end
 end

@@ -1,0 +1,26 @@
+services:
+  phoenix:
+    build:
+      context: ./backend
+    env_file: .env.prod
+    environment:
+      - PHX_SERVER=true
+      - PORT=4000
+      - PODDYCLIP_API_URL=http://rust-api:3000
+    ports:
+      - "127.0.0.1:4000:4000"
+    depends_on:
+      - rust-api
+    restart: unless-stopped
+
+  rust-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    env_file: .env.prod
+    environment:
+      - PORT=3000
+      - RUST_LOG=info
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped

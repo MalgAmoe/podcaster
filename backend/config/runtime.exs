@@ -143,6 +143,23 @@ if Application.compile_env(:poddyclip_backend, :admin_enabled) do
 end
 
 if config_env() == :prod do
+  # Email via Resend
+  resend_api_key = System.get_env("RESEND_API_KEY")
+
+  if resend_api_key do
+    config :poddyclip_backend, PoddyclipBackend.Mailer,
+      adapter: Swoosh.Adapters.Resend,
+      api_key: resend_api_key
+
+    # Use Hackney as the HTTP client for Swoosh in production
+    config :swoosh, :api_client, Swoosh.ApiClient.Hackney
+
+    # Configure from email (must be verified in Resend)
+    config :poddyclip_backend, :email_from,
+      name: System.get_env("EMAIL_FROM_NAME", "Munchy Cow"),
+      address: System.get_env("EMAIL_FROM_ADDRESS", "noreply@munchycow.com")
+  end
+
   database_url =
     System.get_env("DATABASE_URL") ||
       raise """
