@@ -1,0 +1,11 @@
+# Configure Traefik to forward X-Forwarded-Proto header from Cloudflare
+# This fixes HTTPS redirect loops when Cloudflare terminates SSL
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    additionalArguments:
+      - "--entryPoints.web.forwardedHeaders.insecure"
