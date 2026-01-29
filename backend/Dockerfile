@@ -31,7 +31,6 @@ COPY priv priv
 COPY assets assets
 COPY lib lib
 
-RUN cd assets && npm run deploy
 RUN mix assets.deploy
 
 # Compile and build release
