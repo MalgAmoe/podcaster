@@ -78,6 +78,11 @@ if api_url = System.get_env("PODDYCLIP_API_URL") do
   config :poddyclip_backend, :poddyclip_api_url, api_url
 end
 
+# Webhook base URL (how Rust API calls back to Phoenix)
+if webhook_url = System.get_env("WEBHOOK_BASE_URL") do
+  config :poddyclip_backend, :webhook_base_url, webhook_url
+end
+
 # API key for authenticating with the Rust poddyclip-api service
 if api_key = System.get_env("API_KEY") do
   config :poddyclip_backend, :api_key, api_key

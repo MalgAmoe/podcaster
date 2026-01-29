@@ -446,11 +446,14 @@ fn validate_webhook_url(url_str: &str) -> Result<(), &'static str> {
     }
 
     // Check if this is an internal/trusted URL
+    // Docker/k8s service names don't have dots (e.g., "phoenix", "rust-api")
+    let is_docker_service = !host_lower.contains('.') && host.parse::<IpAddr>().is_err();
     let is_internal = host_lower == "localhost"
         || host_lower == "127.0.0.1"
         || host_lower == "::1"
         || host_lower.ends_with(".local")
         || host_lower.ends_with(".localhost")
+        || is_docker_service
         || host.parse::<IpAddr>().map(|ip| is_private_ip(&ip)).unwrap_or(false);
 
     // External URLs must use HTTPS
