@@ -104,11 +104,11 @@ defmodule PoddyclipBackend.Polar do
   end
 
   defp decode_secret(secret) do
-    # Standard Webhooks expects the secret to be base64-encoded.
-    # Strip "whsec_" prefix if present, then base64 decode.
+    # Standard Webhooks expects the secret to be base64url-encoded.
+    # Strip "whsec_" prefix if present, then base64url decode.
     secret
     |> String.replace_prefix("whsec_", "")
-    |> Base.decode64!()
+    |> Base.url_decode64!(padding: false)
   end
 
   # Constant-time comparison to prevent timing attacks
