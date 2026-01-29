@@ -25,7 +25,7 @@ use poddyclip_api::storage::{Storage, StorageConfig};
 
 #[tokio::main]
 async fn main() {
-    // Load .env if present
+    // Load .env if present check
     dotenvy::dotenv().ok();
 
     // Initialize tracing with optional OpenObserve layer
