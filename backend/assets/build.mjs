@@ -3,6 +3,7 @@ import { solidPlugin } from "esbuild-plugin-solid";
 
 const args = process.argv.slice(2);
 const watch = args.includes("--watch");
+const mixEnv = process.env.MIX_ENV || "dev";
 
 const ctx = await esbuild.context({
   entryPoints: ["js/app.js"],
@@ -14,7 +15,7 @@ const ctx = await esbuild.context({
   define: {
     "process.env.NODE_ENV": watch ? '"development"' : '"production"',
   },
-  nodePaths: ["./node_modules", "../deps", "../_build/dev"],
+  nodePaths: ["./node_modules", "../deps", `../_build/${mixEnv}`],
 });
 
 if (watch) {

@@ -31,11 +31,15 @@ COPY priv priv
 COPY assets assets
 COPY lib lib
 
-RUN mix assets.deploy
-
 # Compile and build release
 COPY config/runtime.exs config/
 RUN mix compile
+
+# Build assets AFTER compile (phoenix-colocated hooks need compiled code)
+RUN mix tailwind poddyclip_backend --minify
+RUN cd assets && node build.mjs
+RUN mix phx.digest
+
 RUN mix release
 
 # Runtime stage
