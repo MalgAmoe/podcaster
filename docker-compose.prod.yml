@@ -1,5 +1,6 @@
 services:
   phoenix:
+    image: malgamoe/stuff:phoenix
     build:
       context: ./backend
       network: host
@@ -13,9 +14,29 @@ services:
       - "127.0.0.1:4000:4000"
     depends_on:
       - rust-api
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "echo > /dev/tcp/localhost/4000 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        failure_action: rollback
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
 
   rust-api:
+    image: malgamoe/stuff:api
     build:
       context: .
       dockerfile: Dockerfile.api
@@ -26,4 +47,23 @@ services:
       - RUST_LOG=info
     ports:
       - "127.0.0.1:3000:3000"
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "echo > /dev/tcp/localhost/3000 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        failure_action: rollback
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3

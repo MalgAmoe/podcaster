@@ -56,15 +56,57 @@ case "${1:-}" in
         echo -e "${GREEN}Running seeds...${NC}"
         cd backend && mix run priv/repo/seeds.exs
         ;;
+    build)
+        echo -e "${GREEN}Building Docker images...${NC}"
+        docker build --network=host -f Dockerfile.api -t malgamoe/stuff:api .
+        docker build --network=host -f backend/Dockerfile -t malgamoe/stuff:phoenix ./backend
+        echo -e "${GREEN}Done! Images: malgamoe/stuff:api, malgamoe/stuff:phoenix${NC}"
+        ;;
+    build-api)
+        echo -e "${GREEN}Building Rust API image...${NC}"
+        docker build --network=host -f Dockerfile.api -t malgamoe/stuff:api .
+        ;;
+    build-phoenix)
+        echo -e "${GREEN}Building Phoenix image...${NC}"
+        docker build --network=host -f backend/Dockerfile -t malgamoe/stuff:phoenix ./backend
+        ;;
+    push)
+        echo -e "${GREEN}Pushing images to Docker Hub...${NC}"
+        docker push malgamoe/stuff:api
+        docker push malgamoe/stuff:phoenix
+        echo -e "${GREEN}Done!${NC}"
+        ;;
+    push-api)
+        echo -e "${GREEN}Pushing Rust API image...${NC}"
+        docker push malgamoe/stuff:api
+        ;;
+    push-phoenix)
+        echo -e "${GREEN}Pushing Phoenix image...${NC}"
+        docker push malgamoe/stuff:phoenix
+        ;;
+    deploy)
+        echo -e "${GREEN}Building and pushing all images...${NC}"
+        $0 build
+        $0 push
+        echo -e "${GREEN}Images pushed! On server run: docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d${NC}"
+        ;;
     *)
-        echo "Usage: $0 {infra|api|web|stop|reset-db|seed}"
+        echo "Usage: $0 {infra|api|web|stop|reset-db|seed|build|push|deploy}"
         echo ""
-        echo "  infra    - Start Postgres + MinIO + OpenObserve (docker)"
-        echo "  api      - Start Rust API (port 3000)"
-        echo "  web      - Start Phoenix (port 4000)"
-        echo "  stop     - Stop all services"
-        echo "  reset-db - Drop, recreate, migrate, and seed database"
-        echo "  seed     - Run seeds only (create/update plans)"
+        echo "  infra        - Start Postgres + MinIO + OpenObserve (docker)"
+        echo "  api          - Start Rust API (port 3000)"
+        echo "  web          - Start Phoenix (port 4000)"
+        echo "  stop         - Stop all services"
+        echo "  reset-db     - Drop, recreate, migrate, and seed database"
+        echo "  seed         - Run seeds only (create/update plans)"
+        echo ""
+        echo "  build        - Build both Docker images"
+        echo "  build-api    - Build Rust API image only"
+        echo "  build-phoenix- Build Phoenix image only"
+        echo "  push         - Push both images to Docker Hub"
+        echo "  push-api     - Push Rust API image only"
+        echo "  push-phoenix - Push Phoenix image only"
+        echo "  deploy       - Build + push all (then pull on server)"
         echo ""
         echo "Run in 3 terminals:"
         echo "  Terminal 1: ./dev.sh infra"
