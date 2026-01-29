@@ -1,5 +1,5 @@
 # Build stage
-FROM rust:1.83-bookworm AS build
+FROM rust:latest AS build
 
 WORKDIR /app
 
@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
 # Copy workspace files
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
+COPY xtask ./xtask
 
 # Build release binary with deepfilter
 RUN cargo build --release -p poddyclip-api --features deepfilter
