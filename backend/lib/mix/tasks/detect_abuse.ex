@@ -16,6 +16,7 @@ defmodule Mix.Tasks.DetectAbuse do
   import Ecto.Query
   alias PoddyclipBackend.Repo
   alias PoddyclipBackend.Accounts.User
+  alias PoddyclipBackend.Processing.Job
 
   @shortdoc "Detect potential email abuse patterns"
 
@@ -44,10 +45,10 @@ defmodule Mix.Tasks.DetectAbuse do
       domain_clusters: find_domain_clusters(),
 
       # PATTERN 4: Heavy free-tier usage
-      # Free tier gets 15 mins. If someone used 30+, they might be
-      # creating new accounts after exhausting free tier.
-      # (minutes_used tracks lifetime usage, not current balance)
-      free_tier_heavy_users: find_free_tier_abuse()
+      # Free tier gets 15 mins. Users who have processed more than that
+      # while still on free plan might be gaming (got refunds, exploits, etc)
+      # Calculated by summing estimated_minutes from completed jobs
+      free_tier_heavy_users: find_free_tier_heavy_users()
     }
 
     IO.puts(Jason.encode!(report, pretty: true))
@@ -61,7 +62,7 @@ defmodule Mix.Tasks.DetectAbuse do
     user+newsletter@domain.com
   → Both normalize to user@domain.com
 
-  Returns: Map of base_email => [list of user records]
+  Returns: List of groups where multiple accounts share a base email.
   Only includes bases with 2+ accounts.
   """
   defp find_plus_aliases do
@@ -102,7 +103,7 @@ defmodule Mix.Tasks.DetectAbuse do
     john.doe+test@googlemail.com
   → All normalize to johndoe@gmail.com
 
-  Returns: Map of normalized_base => [list of user records]
+  Returns: List of groups where multiple Gmail accounts normalize to same base.
   Only includes bases with 2+ accounts.
   """
   defp find_gmail_dot_variants do
@@ -195,35 +196,47 @@ defmodule Mix.Tasks.DetectAbuse do
   end
 
   @doc """
-  Find free-tier users with suspiciously high usage.
+  Find free-tier users who have used more minutes than the free allowance.
 
-  Free tier gives 15 minutes. If a free user has used 30+ minutes lifetime,
-  they might be gaming the system (e.g., getting refunds, exploiting bugs,
-  or this account is part of a Sybil cluster).
+  Free tier gives 15 minutes. If a user on free plan has completed jobs
+  totaling more than 15 estimated_minutes, something is off:
+  - They got refunds/credits
+  - They exploited a bug
+  - They're part of a Sybil cluster rotating through accounts
 
-  This is a soft signal - could be legitimate (user bought minutes once
-  but is now on free tier after cancellation).
+  Sums estimated_minutes from completed jobs per user.
 
-  Returns: List of free-tier users with 30+ minutes used
+  Returns: List of free-tier users with total_minutes_used > 15
   """
-  defp find_free_tier_abuse do
-    # Assuming plan_id 1 is free tier - adjust if different
-    from(u in User,
-      join: p in assoc(u, :plan),
-      where: p.name == "free",
-      select: %{
-        id: u.id,
-        email: u.email,
-        minutes_available: u.minutes_available,
-        created: u.inserted_at
-      }
-    )
-    |> Repo.all()
-    |> Enum.filter(fn u ->
-      # Flag if they've used more than 2x the free allowance somehow
-      # (this would require additional tracking - placeholder logic)
-      # For now, just return all free users for manual review if needed
-      false
+  defp find_free_tier_heavy_users do
+    # Get all users on free plan
+    free_users =
+      from(u in User,
+        join: p in assoc(u, :plan),
+        where: p.name == "free",
+        select: %{id: u.id, email: u.email, minutes_available: u.minutes_available, created: u.inserted_at}
+      )
+      |> Repo.all()
+
+    free_user_ids = Enum.map(free_users, & &1.id)
+
+    # Sum estimated_minutes from completed jobs per user
+    usage_by_user =
+      from(j in Job,
+        where: j.user_id in ^free_user_ids and j.status == :completed,
+        group_by: j.user_id,
+        select: {j.user_id, sum(j.estimated_minutes)}
+      )
+      |> Repo.all()
+      |> Map.new()
+
+    # Find users who've used more than free tier allows (15 min)
+    free_users
+    |> Enum.map(fn user ->
+      total_used = Map.get(usage_by_user, user.id, 0) || 0
+      Map.put(user, :total_minutes_used, total_used)
     end)
+    |> Enum.filter(fn user -> user.total_minutes_used > 15 end)
+    |> Enum.sort_by(& &1.total_minutes_used, :desc)
   end
 end
