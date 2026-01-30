@@ -10,48 +10,12 @@
       </div>
     <% end %>
 
-    <!-- Processing upgrade - poll until webhook arrives -->
-    <%= if @upgraded and not @is_pro do %>
-      <div role="alert" class="alert alert-info mb-6" id="upgrade-pending">
+    <!-- Processing upgrade - LiveView will update automatically when webhook arrives -->
+    <%= if PoddyclipBackendWeb.AccountLive.upgrade_pending?(assigns) do %>
+      <div role="alert" class="alert alert-info mb-6">
         <span class="loading loading-spinner loading-sm"></span>
-        <span>Processing your upgrade... This usually takes a few seconds.</span>
+        <span>Processing your upgrade...</span>
       </div>
-      <script>
-        (function() {
-          let attempts = 0;
-          const maxAttempts = 30; // 30 attempts * 2s = 60s max
-
-          function checkUpgrade() {
-            attempts++;
-            fetch('/api/user')
-              .then(r => r.json())
-              .then(data => {
-                if (data.subscription_status === 'active') {
-                  // Upgrade complete, reload without the query param
-                  window.location.href = '/account?upgraded=true';
-                } else if (attempts < maxAttempts) {
-                  setTimeout(checkUpgrade, 2000);
-                } else {
-                  // Timeout - show message
-                  document.getElementById('upgrade-pending').innerHTML = `
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span>Upgrade is being processed. Please refresh the page in a moment.</span>
-                  `;
-                }
-              })
-              .catch(() => {
-                if (attempts < maxAttempts) {
-                  setTimeout(checkUpgrade, 2000);
-                }
-              });
-          }
-
-          // Start polling after a short delay
-          setTimeout(checkUpgrade, 1000);
-        })();
-      </script>
     <% end %>
 
     <.header>

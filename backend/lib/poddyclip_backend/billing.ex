@@ -21,6 +21,20 @@ defmodule PoddyclipBackend.Billing do
   alias PoddyclipBackend.Billing.{Plan, ProcessedWebhook}
   require Logger
 
+  # ----- PubSub -----
+
+  @doc """
+  Subscribe to updates for a user's billing/subscription changes.
+  Updates are broadcast as {:user_updated, user} messages.
+  """
+  def subscribe(user_id) do
+    Phoenix.PubSub.subscribe(PoddyclipBackend.PubSub, "user:#{user_id}")
+  end
+
+  defp broadcast_user_update(user) do
+    Phoenix.PubSub.broadcast(PoddyclipBackend.PubSub, "user:#{user.id}", {:user_updated, user})
+  end
+
   # ----- Plans -----
 
   @doc """
@@ -271,6 +285,10 @@ defmodule PoddyclipBackend.Billing do
             plan_id: attrs[:plan_id] || user.plan_id
           )
         end
+
+        # Broadcast update for LiveView subscribers
+        broadcast_user_update(Repo.preload(updated_user, :plan))
+
         {:ok, updated_user}
 
       error ->

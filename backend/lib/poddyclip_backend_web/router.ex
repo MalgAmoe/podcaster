@@ -146,7 +146,11 @@ defmodule PoddyclipBackendWeb.Router do
   scope "/", PoddyclipBackendWeb do
     pipe_through [:browser, :require_authenticated_user]
 
-    get "/account", AccountController, :show
+    live_session :authenticated,
+      on_mount: [{PoddyclipBackendWeb.UserAuthLive, :require_authenticated_user}] do
+      live "/account", AccountLive
+    end
+
     get "/users/settings", UserSettingsController, :edit
     put "/users/settings", UserSettingsController, :update
     get "/users/settings/confirm-email/:token", UserSettingsController, :confirm_email
