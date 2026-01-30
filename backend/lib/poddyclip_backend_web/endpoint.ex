@@ -1,5 +1,19 @@
 defmodule PoddyclipBackendWeb.Endpoint do
   use Phoenix.Endpoint, otp_app: :poddyclip_backend
+  require Logger
+
+  # Debug plug to log webhook requests early
+  def log_webhook_request(%{request_path: "/api/webhooks" <> _} = conn, _opts) do
+    Logger.info("[Endpoint] Webhook request received: #{conn.method} #{conn.request_path}")
+    Logger.info("[Endpoint] Raw req_headers for webhook-*:")
+    Enum.each(conn.req_headers, fn {k, v} ->
+      if String.starts_with?(k, "webhook") do
+        Logger.info("[Endpoint]   #{k}: #{inspect(v)}")
+      end
+    end)
+    conn
+  end
+  def log_webhook_request(conn, _opts), do: conn
 
   # The session will be stored in the cookie and signed,
   # this means its contents can be read but not tampered with.
@@ -46,6 +60,9 @@ defmodule PoddyclipBackendWeb.Endpoint do
 
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
+
+  # Debug: Log webhook requests early in pipeline
+  plug :log_webhook_request
 
   plug Plug.Parsers,
     parsers: [:urlencoded, :multipart, :json],
