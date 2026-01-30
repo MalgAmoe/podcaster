@@ -37,12 +37,30 @@ defmodule PoddyclipBackend.Polar do
       {:ok, %{"type" => "subscription.active", ...}}
   """
   def verify_signature(raw_body, headers, secret) do
+    require Logger
+
+    # Debug: log all webhook-related headers
+    Logger.info("[Polar] Raw headers received:")
+    Logger.info("[Polar]   webhook-id: #{inspect(Map.get(headers, "webhook-id"))}")
+    Logger.info("[Polar]   webhook-timestamp: #{inspect(Map.get(headers, "webhook-timestamp"))}")
+    Logger.info("[Polar]   webhook-signature: #{inspect(Map.get(headers, "webhook-signature"))}")
+
+    # Check for URL-encoded headers (sign of Traefik/proxy modification)
+    sig_header = Map.get(headers, "webhook-signature", "")
+    if String.contains?(sig_header, "%") do
+      Logger.warning("[Polar] Signature header appears URL-encoded!")
+    end
+
     with {:ok, webhook_id} <- get_header(headers, "webhook-id"),
          {:ok, timestamp} <- get_header(headers, "webhook-timestamp"),
          {:ok, signatures} <- get_header(headers, "webhook-signature"),
          :ok <- verify_timestamp(timestamp),
          :ok <- verify_signatures(raw_body, webhook_id, timestamp, signatures, secret) do
       {:ok, Jason.decode!(raw_body)}
+    else
+      error ->
+        Logger.error("[Polar] Signature verification failed: #{inspect(error)}")
+        error
     end
   end
 
@@ -73,6 +91,8 @@ defmodule PoddyclipBackend.Polar do
   end
 
   defp verify_signatures(body, webhook_id, timestamp, signatures_str, secret) do
+    require Logger
+
     # Build the signed payload
     signed_payload = "#{webhook_id}.#{timestamp}.#{body}"
 
@@ -81,17 +101,27 @@ defmodule PoddyclipBackend.Polar do
       :crypto.mac(:hmac, :sha256, secret, signed_payload)
       |> Base.encode64()
 
+    # Debug logging
+    Logger.info("[Polar] Signatures string raw: #{inspect(signatures_str)}")
+    Logger.info("[Polar] Signatures string bytes: #{inspect(:binary.bin_to_list(signatures_str))}")
+
     # Parse signatures from header (format: "v1,sig1 v1,sig2")
     provided_sigs =
       signatures_str
       |> String.split(" ")
       |> Enum.map(fn sig ->
+        Logger.info("[Polar] Parsing signature part: #{inspect(sig)}")
         case String.split(sig, ",", parts: 2) do
           ["v1", signature] -> signature
-          _ -> nil
+          other ->
+            Logger.warning("[Polar] Unexpected signature format: #{inspect(other)}")
+            nil
         end
       end)
       |> Enum.reject(&is_nil/1)
+
+    Logger.info("[Polar] Parsed signatures: #{inspect(provided_sigs)}")
+    Logger.info("[Polar] Expected signature: #{inspect(expected_sig)}")
 
     # Check if any provided signature matches
     if Enum.any?(provided_sigs, &secure_compare(&1, expected_sig)) do
