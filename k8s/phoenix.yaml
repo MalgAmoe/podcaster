@@ -40,12 +40,18 @@ spec:
           httpGet:
             path: /health
             port: 4000
+            httpHeaders:
+            - name: Host
+              value: localhost
           initialDelaySeconds: 10
           periodSeconds: 10
         livenessProbe:
           httpGet:
             path: /health
             port: 4000
+            httpHeaders:
+            - name: Host
+              value: localhost
           initialDelaySeconds: 30
           periodSeconds: 30
 ---
