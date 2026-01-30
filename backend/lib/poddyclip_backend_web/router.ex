@@ -4,6 +4,11 @@ defmodule PoddyclipBackendWeb.Router do
   import PoddyclipBackendWeb.UserAuth
   import Plug.Conn
 
+  # Health check for k8s probes (no pipeline, minimal overhead)
+  scope "/health", PoddyclipBackendWeb do
+    get "/", HealthController, :index
+  end
+
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session

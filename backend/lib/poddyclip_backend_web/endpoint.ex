@@ -1,6 +1,18 @@
 defmodule PoddyclipBackendWeb.Endpoint do
   use Phoenix.Endpoint, otp_app: :poddyclip_backend
 
+  require Logger
+
+  # Skip logging for health check endpoint to reduce noise from k8s probes
+  plug :skip_health_logging
+
+  defp skip_health_logging(%{request_path: "/health"} = conn, _opts) do
+    Logger.disable(self())
+    conn
+  end
+
+  defp skip_health_logging(conn, _opts), do: conn
+
   # The session will be stored in the cookie and signed,
   # this means its contents can be read but not tampered with.
   # Set :encryption_salt if you would also like to encrypt it.
