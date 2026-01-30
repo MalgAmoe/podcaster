@@ -37,23 +37,6 @@ defmodule PoddyclipBackendWeb.PolarWebhookController do
     headers = lowercase_headers(conn.req_headers)
     secret = Application.get_env(:poddyclip_backend, :polar_webhook_secret)
 
-    # Debug logging - RAW headers before any transformation
-    Logger.info("[Polar] ===== WEBHOOK RECEIVED =====")
-    Logger.info("[Polar] Raw conn.req_headers:")
-    Enum.each(conn.req_headers, fn {k, v} ->
-      if String.contains?(String.downcase(k), "webhook") do
-        Logger.info("[Polar]   #{k}: #{inspect(v)} (bytes: #{inspect(:binary.bin_to_list(v))})")
-      end
-    end)
-
-    Logger.info("[Polar] After lowercase:")
-    Logger.info("[Polar]   webhook-id: #{inspect(Map.get(headers, "webhook-id"))}")
-    Logger.info("[Polar]   webhook-timestamp: #{inspect(Map.get(headers, "webhook-timestamp"))}")
-    Logger.info("[Polar]   webhook-signature: #{inspect(Map.get(headers, "webhook-signature"))}")
-
-    Logger.info("[Polar] Raw body length: #{byte_size(raw_body)}")
-    Logger.info("[Polar] Secret configured: #{if secret && secret != "", do: "yes (#{String.length(secret)} chars)", else: "NO"}")
-
     cond do
       is_nil(secret) or secret == "" ->
         Logger.error("Polar webhook received but POLAR_WEBHOOK_SECRET not configured")

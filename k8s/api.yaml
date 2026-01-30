@@ -21,6 +21,7 @@ spec:
       containers:
       - name: api
         image: malgamoe/stuff:api
+        imagePullPolicy: Always
         ports:
         - containerPort: 3000
         envFrom:
