@@ -15,6 +15,7 @@ RUN mix local.hex --force && \
     mix local.rebar --force
 
 ENV MIX_ENV=prod
+ENV ADMIN_ENABLED=true
 
 # Install mix dependencies
 COPY mix.exs mix.lock ./
