@@ -133,12 +133,13 @@ if openobserve_url = System.get_env("OPENOBSERVE_URL") do
     backends: [:console, PoddyclipBackend.LogShipper.Backend]
 end
 
-# Admin auth credentials (only used if admin routes were compiled in)
+# Admin auth credentials and endpoint (only used if admin routes were compiled in)
 # ADMIN_ENABLED is a compile-time setting, but we still check it here
 # to avoid errors when admin routes aren't available
 if Application.compile_env(:poddyclip_backend, :admin_enabled) do
   admin_username = System.get_env("ADMIN_USERNAME", "admin")
   admin_password = System.get_env("ADMIN_PASSWORD")
+  admin_port = String.to_integer(System.get_env("ADMIN_PORT", "4001"))
 
   if config_env() == :prod and is_nil(admin_password) do
     raise """
@@ -150,6 +151,16 @@ if Application.compile_env(:poddyclip_backend, :admin_enabled) do
   config :poddyclip_backend,
     admin_username: admin_username,
     admin_password: admin_password || "dev"
+
+  # Admin endpoint on separate port, bound to localhost only (access via SSH tunnel)
+  # In dev, also enable server. In prod, controlled by PHX_SERVER.
+  config :poddyclip_backend, PoddyclipBackendWeb.AdminEndpoint,
+    http: [
+      ip: {127, 0, 0, 1},
+      port: admin_port
+    ],
+    server: config_env() == :dev or System.get_env("PHX_SERVER") != nil,
+    secret_key_base: System.get_env("SECRET_KEY_BASE") || "dev-secret-key-base-for-admin-at-least-64-bytes-long-for-security"
 end
 
 if config_env() == :prod do

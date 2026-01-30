@@ -87,38 +87,9 @@ defmodule PoddyclipBackendWeb.Router do
     get "/user", ProcessController, :current_user
   end
 
-  # Admin routes - only compiled when ADMIN_ENABLED=true at build time
-  if Application.compile_env(:poddyclip_backend, :admin_enabled) do
-    import Phoenix.LiveDashboard.Router
-
-    pipeline :admin_auth do
-      plug PoddyclipBackendWeb.Plugs.AdminAuth
-    end
-
-    # Admin API endpoints (JSON)
-    scope "/admin/api", PoddyclipBackendWeb do
-      pipe_through [:api, :admin_auth]
-
-      get "/health", AdminApiController, :health
-      get "/jobs/stats", AdminApiController, :job_stats
-      get "/jobs/active", AdminApiController, :active_jobs
-      get "/errors", AdminApiController, :errors
-      get "/users/stats", AdminApiController, :user_stats
-    end
-
-    # Admin LiveDashboard (with custom session name to avoid conflict with dev dashboard)
-    scope "/admin" do
-      pipe_through [:browser, :admin_auth]
-
-      live_dashboard "/dashboard",
-        metrics: PoddyclipBackendWeb.Telemetry,
-        live_session_name: :admin_dashboard,
-        additional_pages: [
-          jobs: PoddyclipBackendWeb.Live.Admin.JobsPage,
-          health: PoddyclipBackendWeb.Live.Admin.HealthPage
-        ]
-    end
-  end
+  # Admin routes are served on a separate endpoint (AdminEndpoint on port 4001)
+  # Access via SSH tunnel: ssh -L 4001:localhost:4001 user@server
+  # Then open http://localhost:4001/admin/dashboard
 
   # Enable LiveDashboard and Swoosh mailbox in development
   if Application.compile_env(:poddyclip_backend, :dev_routes) do
