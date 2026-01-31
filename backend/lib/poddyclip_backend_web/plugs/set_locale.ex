@@ -8,7 +8,7 @@ defmodule PoddyclipBackendWeb.Plugs.SetLocale do
 
   import Plug.Conn
 
-  @locales ~w(en es)
+  @locales ~w(en es it fr)
   @default_locale "en"
 
   def init(opts), do: opts

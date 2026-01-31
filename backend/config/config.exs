@@ -72,7 +72,7 @@ config :phoenix, :json_library, Jason
 # Gettext i18n configuration
 config :poddyclip_backend, PoddyclipBackendWeb.Gettext,
   default_locale: "en",
-  locales: ~w(en es)
+  locales: ~w(en es it fr)
 
 # Swoosh - disable API client for local adapter
 config :swoosh, :api_client, false

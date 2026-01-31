@@ -3,8 +3,10 @@
 
 import en from "../locales/en";
 import es from "../locales/es";
+import it from "../locales/it";
+import fr from "../locales/fr";
 
-const dictionaries = { en, es };
+const dictionaries = { en, es, it, fr };
 
 // Get the current locale from HTML lang attribute
 function getLocale() {
@@ -27,7 +29,9 @@ function flattenDict(dict, prefix = "") {
 
 const flatDictionaries = {
   en: flattenDict(en),
-  es: flattenDict(es)
+  es: flattenDict(es),
+  it: flattenDict(it),
+  fr: flattenDict(fr)
 };
 
 /**

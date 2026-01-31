@@ -34,7 +34,7 @@ if (solidRoot) {
   import("./solid/index.jsx").then(({ mountApp }) => {
     // Determine base path from locale (set on html lang attribute)
     const locale = document.documentElement.lang || "en";
-    const basePath = locale === "es" ? "/es/app" : "/app";
+    const basePath = locale === "en" ? "/app" : `/${locale}/app`;
     mountApp(solidRoot, basePath);
   });
 }

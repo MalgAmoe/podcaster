@@ -3,44 +3,42 @@ defmodule PoddyclipBackendWeb.LocaleHelpers do
   Helper functions for locale-aware paths and URLs.
   """
 
+  @supported_locales ~w(en es it fr)
+
   @doc """
   Returns the path with locale prefix.
   For English (default), returns the path as-is.
-  For Spanish, adds /es prefix.
+  For other locales, adds /{locale} prefix.
   """
   def locale_path(nil, path), do: path
   def locale_path("en", path), do: path
-  def locale_path("es", path), do: "/es" <> path
+  def locale_path(locale, path) when locale in @supported_locales, do: "/" <> locale <> path
   def locale_path(_locale, path), do: path
 
   @doc """
   Returns the path to switch to a different locale.
-  Handles the current request path and either adds or removes the /es prefix.
+  Handles the current request path and either adds or removes the locale prefix.
   """
   def switch_locale_path(assigns, new_locale) do
     # Get current path from conn or socket
     current_path = get_current_path(assigns)
-    current_locale = assigns[:locale] || "en"
 
-    cond do
-      # Already on target locale
-      new_locale == current_locale ->
-        current_path
+    # Remove any existing locale prefix
+    base_path = strip_locale_prefix(current_path)
 
-      # Switching to Spanish: add /es prefix
-      new_locale == "es" ->
-        # Remove any existing /es prefix first, then add it
-        path_without_es = String.replace_prefix(current_path, "/es", "")
-        "/es" <> path_without_es
-
-      # Switching to English: remove /es prefix
-      new_locale == "en" ->
-        path = String.replace_prefix(current_path, "/es", "")
-        if path == "", do: "/", else: path
-
-      true ->
-        current_path
+    # Add new locale prefix (unless English)
+    if new_locale == "en" do
+      if base_path == "", do: "/", else: base_path
+    else
+      "/" <> new_locale <> base_path
     end
+  end
+
+  # Strip any locale prefix from the path
+  defp strip_locale_prefix(path) do
+    Enum.reduce(@supported_locales -- ["en"], path, fn locale, acc ->
+      String.replace_prefix(acc, "/" <> locale, "")
+    end)
   end
 
   defp get_current_path(assigns) do

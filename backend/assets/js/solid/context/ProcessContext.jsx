@@ -305,7 +305,7 @@ export function ProcessProvider(props) {
         }
         // Get locale for locale-aware redirect
         const locale = document.documentElement.lang || "en";
-        const accountPath = locale === "es" ? "/es/account" : "/account";
+        const accountPath = locale === "en" ? "/account" : `/${locale}/account`;
         notify({
           type: "error",
           message,

@@ -2,8 +2,10 @@ import { createContext, useContext } from "solid-js";
 import * as i18n from "@solid-primitives/i18n";
 import en from "../locales/en";
 import es from "../locales/es";
+import it from "../locales/it";
+import fr from "../locales/fr";
 
-const dictionaries = { en, es };
+const dictionaries = { en, es, it, fr };
 
 // Flatten nested objects for translation lookup
 function flattenDict(dict, prefix = "") {
@@ -20,7 +22,9 @@ function flattenDict(dict, prefix = "") {
 
 const flatDictionaries = {
   en: flattenDict(en),
-  es: flattenDict(es)
+  es: flattenDict(es),
+  it: flattenDict(it),
+  fr: flattenDict(fr)
 };
 
 const I18nContext = createContext();

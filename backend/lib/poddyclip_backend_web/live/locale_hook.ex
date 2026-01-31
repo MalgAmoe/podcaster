@@ -10,7 +10,7 @@ defmodule PoddyclipBackendWeb.LocaleHook do
   import Phoenix.LiveView
 
   @default_locale "en"
-  @supported_locales ~w(en es)
+  @supported_locales ~w(en es it fr)
 
   def on_mount(:set_locale, _params, session, socket) do
     locale = get_locale_from_session(session)
