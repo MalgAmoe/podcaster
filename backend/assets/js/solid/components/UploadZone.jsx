@@ -79,11 +79,8 @@ export function UploadZone() {
                    cursor-pointer group ${isDragging() ? "border-primary bg-primary/5" : "border-base-300"}`}
           >
             <div class="flex flex-col items-center gap-4">
-              <div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                <svg class="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
+              <div class="w-20 h-20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <img src="/images/munchy_cow.svg" alt="Munchy Cow" class="w-full h-full" />
               </div>
               <div>
                 <p class="font-medium text-base-content text-lg">Feed the cow!</p>
@@ -96,15 +93,12 @@ export function UploadZone() {
       }
     >
       <div class="flex items-center gap-4 p-4 bg-base-300 rounded-2xl">
-        <div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+        <div class="w-12 h-12 flex items-center justify-center shrink-0">
           <Show
             when={store.uploadState === "ready"}
             fallback={<span class="loading loading-spinner loading-sm text-primary"></span>}
           >
-            <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-            </svg>
+            <img src="/images/munchy_cow_head.svg" alt="Munchy Cow" class="w-full h-full" />
           </Show>
         </div>
         <div class="flex-1 min-w-0">

@@ -3,7 +3,6 @@ import { Router, Route } from "@solidjs/router";
 import { ProcessProvider } from "./context/ProcessContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import { NotificationContainer } from "./components/NotificationContainer";
-import { Layout } from "./components/Layout";
 import { ProcessPage } from "./components/ProcessPage";
 import { PastMunchingsPage } from "./components/PastMunchingsPage";
 
@@ -11,9 +10,7 @@ function App(props) {
   return (
     <NotificationProvider>
       <ProcessProvider>
-        <Layout>
-          {props.children}
-        </Layout>
+        {props.children}
       </ProcessProvider>
       <NotificationContainer />
     </NotificationProvider>

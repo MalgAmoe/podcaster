@@ -52,7 +52,7 @@ defmodule PoddyclipBackendWeb.Router do
     get "/privacy", PageController, :privacy
   end
 
-  # Authenticated app (SolidJS SPA handles client-side routing)
+  # Authenticated app (SolidJS handles client-side routing for /app/*)
   scope "/app", PoddyclipBackendWeb do
     pipe_through [:browser, :require_authenticated_user]
 

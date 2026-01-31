@@ -49,15 +49,11 @@ export function JobComplete() {
   return (
     <Show when={store.job}>
       <div class="flex flex-col items-center py-6">
-        <div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-          <svg class="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-          </svg>
+        <div class="w-16 h-16 flex items-center justify-center mb-4">
+          <img src="/images/munchy_cow_head.svg" alt="" class="w-16 h-16 animate-bounce-soft" />
         </div>
 
-        <h3 class="text-xl font-bold">
-          MOOO! <img src="/images/munchy_cow_head.svg" alt="" class="w-8 h-8 inline-block animate-bounce-soft" />
-        </h3>
+        <h3 class="text-xl font-bold">MOOO!</h3>
         <p class="text-base-content/60 text-sm mt-1">Your audio is ready!</p>
         <p class="text-base-content/40 text-xs mt-1 truncate max-w-full">{store.job?.filename}</p>
 

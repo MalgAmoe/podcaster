@@ -41,20 +41,19 @@
     <div class="navbar bg-base-200 border-b border-base-300">
       <div class="navbar-start">
         <%= if @current_scope do %>
-          <.link href={~p"/app"} class="btn btn-ghost text-xl">Munchy Cow</.link>
-          <.link href={~p"/app/past-munchings"} class="btn btn-ghost btn-sm">Past Munchings</.link>
+          <.link href={~p"/app"} class="text-xl font-bold px-4 hover:text-primary transition-colors">Munchy Cow</.link>
+          <.link href={~p"/app/past-munchings"} class="text-sm px-3 hover:text-primary transition-colors">Past Munchings</.link>
         <% else %>
-          <.link href={~p"/"} class="btn btn-ghost text-xl">Munchy Cow</.link>
+          <.link href={~p"/"} class="text-xl font-bold px-4 hover:text-primary transition-colors">Munchy Cow</.link>
         <% end %>
       </div>
-      <div class="navbar-end gap-2">
+      <div class="navbar-end gap-2 pr-4">
         <%= if @current_scope do %>
-          <.link href={~p"/account"} class="btn btn-ghost btn-sm">Account</.link>
-          <div class="dropdown dropdown-end ml-2">
+          <div class="dropdown dropdown-end">
             <div tabindex="0" role="button" class="w-10 h-10 rounded-full bg-base-300 flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all">
               <img src="/images/munchy_cow_head.svg" alt="" class="w-7 h-7" />
             </div>
-            <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box z-50 w-56 p-2 shadow-lg border border-base-300 mt-2">
+            <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-2xl z-50 w-56 p-2 shadow-lg border border-base-300 mt-2">
               <li class="menu-title px-2 py-1">
                 <div class="flex items-center justify-between">
                   <span class="text-xs text-base-content/50 truncate">{@current_scope.user.email}</span>
@@ -70,13 +69,13 @@
                   {@current_scope.user.minutes_available} min remaining
                 </li>
               <% end %>
-              <li><.link href={~p"/account"}>Account</.link></li>
-              <li><.link href={~p"/users/settings"}>Settings</.link></li>
-              <li><.link href={~p"/users/log-out"} method="delete">Log out</.link></li>
+              <li><.link href={~p"/account"} class="hover:bg-transparent hover:text-primary transition-colors">Account</.link></li>
+              <li><.link href={~p"/users/settings"} class="hover:bg-transparent hover:text-primary transition-colors">Settings</.link></li>
+              <li><.link href={~p"/users/log-out"} method="delete" class="hover:bg-transparent hover:text-primary transition-colors">Log out</.link></li>
             </ul>
           </div>
         <% else %>
-          <.link href={~p"/pricing"} class="btn btn-ghost btn-sm">Pricing</.link>
+          <.link href={~p"/pricing"} class="text-sm px-3 hover:text-primary transition-colors">Pricing</.link>
           <.link href={~p"/users/log-in"} class="btn btn-primary btn-sm">Sign in</.link>
         <% end %>
       </div>

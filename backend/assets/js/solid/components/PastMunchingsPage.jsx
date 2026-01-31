@@ -17,15 +17,16 @@ export function PastMunchingsPage() {
     const now = new Date();
     const diffMs = now - date;
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     if (diffDays === 0) {
-      return "Today";
+      return `Today at ${time}`;
     } else if (diffDays === 1) {
-      return "Yesterday";
+      return `Yesterday at ${time}`;
     } else if (diffDays < 7) {
-      return `${diffDays} days ago`;
+      return `${diffDays} days ago at ${time}`;
     } else {
-      return date.toLocaleDateString();
+      return `${date.toLocaleDateString()} at ${time}`;
     }
   }
 
