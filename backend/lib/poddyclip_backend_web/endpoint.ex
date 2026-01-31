@@ -13,6 +13,9 @@ defmodule PoddyclipBackendWeb.Endpoint do
 
   defp skip_health_logging(conn, _opts), do: conn
 
+  # Basic auth for pre-launch testing (enabled via SITE_PASSWORD env var)
+  plug PoddyclipBackendWeb.Plugs.BasicAuth
+
   # The session will be stored in the cookie and signed,
   # this means its contents can be read but not tampered with.
   # Set :encryption_salt if you would also like to encrypt it.

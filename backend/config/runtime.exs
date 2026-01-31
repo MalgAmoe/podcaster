@@ -45,6 +45,13 @@ if phx_host = System.get_env("PHX_HOST") do
     url: [host: phx_host, scheme: "https", port: 443]
 end
 
+# Basic auth for pre-launch testing (set SITE_PASSWORD to enable)
+if site_password = System.get_env("SITE_PASSWORD") do
+  config :poddyclip_backend,
+    site_password: site_password,
+    site_username: System.get_env("SITE_USERNAME", "admin")
+end
+
 # S3 Configuration (MinIO or AWS S3 compatible)
 # Supports S3_ENDPOINT (full URL) or S3_HOST (just hostname)
 s3_endpoint = System.get_env("S3_ENDPOINT") || System.get_env("S3_HOST")
