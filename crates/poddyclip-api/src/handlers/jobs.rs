@@ -190,6 +190,7 @@ pub async fn create_s3_job(
     // Get cancellation flag before inserting job (Arc is cloned)
     let cancelled = job.cancelled.clone();
     let user_id_for_upload = req.user_id;
+    let phoenix_job_id_for_upload = req.phoenix_job_id;
     state.insert_job(job);
 
     info!(
@@ -284,13 +285,14 @@ pub async fn create_s3_job(
 
         match result {
             Ok(Ok(Ok((output_bytes, content_type)))) => {
-                // Upload to S3 with retry if storage is configured and user_id is present
-                let s3_key = if let (Some(ref storage), Some(user_id)) = (&state_clone.storage, user_id_for_upload) {
+                // Upload to S3 with retry if storage is configured and user_id/phoenix_job_id are present
+                let s3_key = if let (Some(ref storage), Some(user_id), Some(phoenix_job_id)) = (&state_clone.storage, user_id_for_upload, phoenix_job_id_for_upload) {
                     let extension = if content_type == "audio/mpeg" { ".mp3" } else { ".wav" };
 
                     upload_with_retry(
                         storage,
                         user_id,
+                        phoenix_job_id,
                         &output_bytes,
                         &content_type,
                         &filename_for_upload,
@@ -298,8 +300,8 @@ pub async fn create_s3_job(
                         job_id,
                     )
                     .await
-                } else if state_clone.storage.is_some() && user_id_for_upload.is_none() {
-                    error!("Job {} has no user_id, cannot upload to S3", job_id);
+                } else if state_clone.storage.is_some() && (user_id_for_upload.is_none() || phoenix_job_id_for_upload.is_none()) {
+                    error!("Job {} missing user_id or phoenix_job_id, cannot upload to S3", job_id);
                     None
                 } else {
                     None
@@ -487,6 +489,7 @@ fn is_metadata_ip(ip: &IpAddr) -> bool {
 async fn upload_with_retry(
     storage: &Storage,
     user_id: i64,
+    phoenix_job_id: i64,
     data: &[u8],
     content_type: &str,
     filename: &str,
@@ -497,7 +500,7 @@ async fn upload_with_retry(
 
     for attempt in 1..=S3_UPLOAD_MAX_RETRIES {
         match storage
-            .upload_result(user_id, data, content_type, filename, extension)
+            .upload_result(user_id, phoenix_job_id, data, content_type, filename, extension)
             .await
         {
             Ok(key) => {

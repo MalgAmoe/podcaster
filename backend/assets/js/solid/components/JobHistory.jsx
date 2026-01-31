@@ -34,13 +34,24 @@ export function JobHistory() {
     }
   }
 
-  function handleDownload(url, filename) {
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  const [downloading, setDownloading] = createSignal(null);
+
+  async function handleDownload(jobId, filename) {
+    if (downloading()) return;
+    setDownloading(jobId);
+    try {
+      const response = await api.getDownloadUrl(jobId);
+      console.log("Download URL response:", response);
+      if (response?.url) {
+        window.location.href = response.url;
+      } else {
+        console.error("No URL in response:", response);
+      }
+    } catch (err) {
+      console.error("Failed to get download URL:", err);
+    } finally {
+      setDownloading(null);
+    }
   }
 
   function toggleOpen() {
@@ -100,19 +111,23 @@ export function JobHistory() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => handleDownload(job.download_url, job.filename)}
+                      onClick={() => handleDownload(job.id, job.filename)}
                       class="btn btn-sm btn-ghost btn-square"
+                      classList={{ "loading": downloading() === job.id }}
+                      disabled={downloading() !== null}
                       title="Download"
                       aria-label={`Download ${job.filename}`}
                     >
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                        />
-                      </svg>
+                      <Show when={downloading() !== job.id}>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                          />
+                        </svg>
+                      </Show>
                     </button>
                   </li>
                 )}

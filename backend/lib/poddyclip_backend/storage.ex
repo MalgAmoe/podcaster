@@ -153,4 +153,75 @@ defmodule PoddyclipBackend.Storage do
     end
   end
 
+  @doc """
+  List all existing keys under a prefix.
+
+  Returns a list of keys that exist in S3.
+  """
+  def list_keys(prefix) do
+    if enabled?() do
+      case ExAws.S3.list_objects(bucket(), prefix: prefix) |> ExAws.request() do
+        {:ok, %{body: %{contents: contents}}} when is_list(contents) ->
+          Enum.map(contents, & &1.key)
+
+        {:ok, _} ->
+          []
+
+        {:error, _} ->
+          []
+      end
+    else
+      []
+    end
+  end
+
+  @doc """
+  Filter a list of keys to only those that exist in S3.
+
+  Uses list_objects with a common prefix for efficiency (single S3 API call).
+  Falls back to individual checks if keys don't share a prefix.
+  """
+  def filter_existing_keys([]), do: []
+
+  def filter_existing_keys(keys) do
+    if enabled?() do
+      # Find common prefix (e.g., "results/123/" for user's result files)
+      case find_common_prefix(keys) do
+        nil ->
+          # No common prefix, fall back to parallel HEAD requests
+          keys
+          |> Task.async_stream(&{&1, exists?(&1)}, max_concurrency: 10, timeout: 5000)
+          |> Enum.flat_map(fn
+            {:ok, {key, true}} -> [key]
+            _ -> []
+          end)
+
+        prefix ->
+          # Single list_objects call with common prefix
+          existing_set = list_keys(prefix) |> MapSet.new()
+          Enum.filter(keys, &MapSet.member?(existing_set, &1))
+      end
+    else
+      []
+    end
+  end
+
+  # Find common prefix for a list of keys (e.g., "results/123/")
+  defp find_common_prefix(keys) do
+    prefixes =
+      keys
+      |> Enum.map(fn key ->
+        case String.split(key, "/", parts: 3) do
+          [a, b, _rest] -> "#{a}/#{b}/"
+          _ -> nil
+        end
+      end)
+      |> Enum.uniq()
+
+    case prefixes do
+      [prefix] when not is_nil(prefix) -> prefix
+      _ -> nil
+    end
+  end
+
 end

@@ -298,27 +298,69 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   @doc """
   GET /api/jobs/history - Get user's completed jobs from last 7 days.
 
-  Response: {"jobs": [{"id": 123, "filename": "...", "created_at": "...", "download_url": "..."}]}
+  Response: {"jobs": [{"id": 123, "filename": "...", "created_at": "..."}]}
+
+  Note: download_url is not included - use GET /api/jobs/:id/download_url to get it on demand.
   """
   def job_history(conn, _params) do
     user = conn.assigns.current_user
     jobs = Processing.list_completed_jobs_for_user(user.id)
 
+    # Get all result keys and batch-check which exist (single S3 call)
+    keys = jobs |> Enum.map(& &1.result_s3_key) |> Enum.filter(& &1)
+    existing_keys = Storage.filter_existing_keys(keys) |> MapSet.new()
+
     valid_jobs =
       jobs
-      |> Enum.filter(fn job ->
-        job.result_s3_key && Storage.exists?(job.result_s3_key)
-      end)
+      |> Enum.filter(&(&1.result_s3_key && MapSet.member?(existing_keys, &1.result_s3_key)))
       |> Enum.map(fn job ->
         %{
           id: job.id,
-          filename: job.filename,
-          created_at: job.inserted_at,
-          download_url: presign_download_with_filename(job.result_s3_key, job.filename)
+          filename: filename_from_s3_key(job.result_s3_key),
+          created_at: job.inserted_at
         }
       end)
 
     json(conn, %{jobs: valid_jobs})
+  end
+
+  # Extract filename from S3 key (e.g., "results/123/podcast_processed.mp3" -> "podcast_processed.mp3")
+  defp filename_from_s3_key(nil), do: "processed.mp3"
+  defp filename_from_s3_key(s3_key), do: s3_key |> String.split("/") |> List.last() || "processed.mp3"
+
+  @doc """
+  GET /api/jobs/:id/download_url - Get presigned download URL for a job.
+
+  Response: {"url": "https://..."}
+
+  Only generates the presigned URL when user actually wants to download.
+  """
+  def download_url(conn, %{"id" => id}) do
+    with_authorized_job(conn, id, fn job ->
+      cond do
+        job.status != :completed ->
+          conn
+          |> put_status(400)
+          |> json(%{error: "Job not completed"})
+
+        is_nil(job.result_s3_key) ->
+          conn
+          |> put_status(404)
+          |> json(%{error: "No result file available"})
+
+        true ->
+          processed_name = filename_from_s3_key(job.result_s3_key)
+          case presign_download_with_filename(job.result_s3_key, processed_name) do
+            nil ->
+              conn
+              |> put_status(500)
+              |> json(%{error: "Failed to generate download URL"})
+
+            url ->
+              json(conn, %{url: url})
+          end
+      end
+    end)
   end
 
   @doc """

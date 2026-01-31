@@ -1,0 +1,19 @@
+# Munchy Cow robots.txt
+User-agent: *
+Allow: /
+Allow: /users/register
+Allow: /users/log-in
+
+# Disallow private pages
+Disallow: /users/settings
+Disallow: /users/log-out
+Disallow: /app
+
+# Disallow API
+Disallow: /api/
+
+# Disallow dev tools
+Disallow: /dev/
+
+# Sitemap
+Sitemap: https://munchycow.com/sitemap.xml

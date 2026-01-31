@@ -148,4 +148,8 @@ export const api = {
   async getJobHistory() {
     return request("GET", "/api/jobs/history");
   },
+
+  async getDownloadUrl(jobId) {
+    return request("GET", `/api/jobs/${jobId}/download_url`);
+  },
 };

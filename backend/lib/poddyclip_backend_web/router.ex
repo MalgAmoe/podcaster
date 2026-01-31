@@ -84,6 +84,7 @@ defmodule PoddyclipBackendWeb.Router do
     post "/jobs", ProcessController, :create_job
     delete "/jobs/:id", ProcessController, :cancel_job
     post "/jobs/:id/dismiss", ProcessController, :dismiss_job
+    get "/jobs/:id/download_url", ProcessController, :download_url
     get "/user", ProcessController, :current_user
   end
 

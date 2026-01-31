@@ -1,5 +1,10 @@
 import esbuild from "esbuild";
 import { solidPlugin } from "esbuild-plugin-solid";
+import { mkdirSync } from "fs";
+
+// Ensure output directories exist (prevents silent build failures)
+mkdirSync("../priv/static/assets/js", { recursive: true });
+mkdirSync("../priv/static/assets/css", { recursive: true });
 
 const args = process.argv.slice(2);
 const watch = args.includes("--watch");

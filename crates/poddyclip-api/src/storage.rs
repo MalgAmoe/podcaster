@@ -69,10 +69,11 @@ impl Storage {
     /// Upload processed audio to S3
     /// Returns the object key
     ///
-    /// Path format: results/{user_id}/{filename_stem}_processed{extension}
+    /// Path format: results/{user_id}/{job_id}/{filename_stem}_processed{extension}
     pub async fn upload_result(
         &self,
         user_id: i64,
+        job_id: i64,
         data: &[u8],
         content_type: &str,
         filename: &str,
@@ -84,7 +85,7 @@ impl Storage {
             .and_then(|s| s.to_str())
             .unwrap_or("audio");
 
-        let key = format!("results/{}/{}_processed{}", user_id, stem, extension);
+        let key = format!("results/{}/{}/{}_processed{}", user_id, job_id, stem, extension);
 
         self.bucket
             .put_object_with_content_type(&key, data, content_type)
