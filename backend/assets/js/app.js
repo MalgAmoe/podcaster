@@ -32,7 +32,10 @@ window.liveSocket = liveSocket
 const solidRoot = document.getElementById("solid-process-app");
 if (solidRoot) {
   import("./solid/index.jsx").then(({ mountApp }) => {
-    mountApp(solidRoot);
+    // Determine base path from locale (set on html lang attribute)
+    const locale = document.documentElement.lang || "en";
+    const basePath = locale === "es" ? "/es/app" : "/app";
+    mountApp(solidRoot, basePath);
   });
 }
 

@@ -3,25 +3,29 @@ defmodule PoddyclipBackendWeb.UserSessionController do
 
   alias PoddyclipBackend.Accounts
   alias PoddyclipBackendWeb.UserAuth
+  alias PoddyclipBackendWeb.LocaleHelpers
 
   def new(conn, _params) do
     email = get_in(conn.assigns, [:current_scope, Access.key(:user), Access.key(:email)])
     form = Phoenix.Component.to_form(%{"email" => email}, as: "user")
 
-    render(conn, :new, form: form)
+    conn
+    |> assign(:conn, conn)
+    |> render(:new, form: form)
   end
 
   # Redirect old register URLs to unified sign-in
   def redirect_to_login(conn, _params) do
-    redirect(conn, to: ~p"/users/log-in")
+    locale = conn.assigns[:locale] || "en"
+    redirect(conn, to: LocaleHelpers.locale_path(locale, "/users/log-in"))
   end
 
   # magic link login
   def create(conn, %{"user" => %{"token" => token} = user_params} = params) do
     info =
       case params do
-        %{"_action" => "confirmed"} -> "User confirmed successfully."
-        _ -> "Welcome back!"
+        %{"_action" => "confirmed"} -> gettext("User confirmed successfully.")
+        _ -> gettext("Welcome back!")
       end
 
     case Accounts.login_user_by_magic_link(token) do
@@ -32,7 +36,8 @@ defmodule PoddyclipBackendWeb.UserSessionController do
 
       {:error, :not_found} ->
         conn
-        |> put_flash(:error, "The link is invalid or it has expired.")
+        |> put_flash(:error, gettext("The link is invalid or it has expired."))
+        |> assign(:conn, conn)
         |> render(:new, form: Phoenix.Component.to_form(%{}, as: "user"))
     end
   end
@@ -40,18 +45,24 @@ defmodule PoddyclipBackendWeb.UserSessionController do
   # magic link request - auto-creates user if not found
   def create(conn, %{"user" => %{"email" => email}}) do
     user = Accounts.get_user_by_email(email) || create_user_for_email(email)
+    locale = conn.assigns[:locale] || "en"
 
     if user do
+      # Build magic link URL with locale prefix
       Accounts.deliver_login_instructions(
         user,
-        &url(~p"/users/log-in/#{&1}")
+        fn token ->
+          base_url = PoddyclipBackendWeb.Endpoint.url()
+          path = LocaleHelpers.locale_path(locale, "/users/log-in/#{token}")
+          base_url <> path
+        end
       )
     end
 
     # Same message whether new or existing (prevents email enumeration)
     conn
-    |> put_flash(:info, "Check your email for a sign-in link.")
-    |> redirect(to: ~p"/users/log-in")
+    |> put_flash(:info, gettext("Check your email for a sign-in link."))
+    |> redirect(to: LocaleHelpers.locale_path(locale, "/users/log-in"))
   end
 
   defp create_user_for_email(email) do
@@ -62,23 +73,26 @@ defmodule PoddyclipBackendWeb.UserSessionController do
   end
 
   def confirm(conn, %{"token" => token}) do
+    locale = conn.assigns[:locale] || "en"
+
     if user = Accounts.get_user_by_magic_link_token(token) do
       form = Phoenix.Component.to_form(%{"token" => token}, as: "user")
 
       conn
       |> assign(:user, user)
       |> assign(:form, form)
+      |> assign(:conn, conn)
       |> render(:confirm)
     else
       conn
-      |> put_flash(:error, "Magic link is invalid or it has expired.")
-      |> redirect(to: ~p"/users/log-in")
+      |> put_flash(:error, gettext("Magic link is invalid or it has expired."))
+      |> redirect(to: LocaleHelpers.locale_path(locale, "/users/log-in"))
     end
   end
 
   def delete(conn, _params) do
     conn
-    |> put_flash(:info, "Logged out successfully.")
+    |> put_flash(:info, gettext("Logged out successfully."))
     |> UserAuth.log_out_user()
   end
 end

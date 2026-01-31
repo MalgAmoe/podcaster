@@ -54,17 +54,15 @@ defmodule Mix.Tasks.DetectAbuse do
     IO.puts(Jason.encode!(report, pretty: true))
   end
 
-  @doc """
-  Find emails with + that share the same base address.
-
-  Example match:
-    user+spotify@domain.com
-    user+newsletter@domain.com
-  → Both normalize to user@domain.com
-
-  Returns: List of groups where multiple accounts share a base email.
-  Only includes bases with 2+ accounts.
-  """
+  # Find emails with + that share the same base address.
+  #
+  # Example match:
+  #   user+spotify@domain.com
+  #   user+newsletter@domain.com
+  # → Both normalize to user@domain.com
+  #
+  # Returns: List of groups where multiple accounts share a base email.
+  # Only includes bases with 2+ accounts.
   defp find_plus_aliases do
     from(u in User,
       where: like(u.email, "%+%@%"),
@@ -89,23 +87,21 @@ defmodule Mix.Tasks.DetectAbuse do
     end)
   end
 
-  @doc """
-  Find Gmail addresses that normalize to the same base.
-
-  Gmail quirks:
-  - Dots are ignored: j.o.h.n@gmail.com = john@gmail.com
-  - Plus aliases work: john+spam@gmail.com = john@gmail.com
-  - googlemail.com = gmail.com
-
-  Example match:
-    john.doe@gmail.com
-    johndoe@gmail.com
-    john.doe+test@googlemail.com
-  → All normalize to johndoe@gmail.com
-
-  Returns: List of groups where multiple Gmail accounts normalize to same base.
-  Only includes bases with 2+ accounts.
-  """
+  # Find Gmail addresses that normalize to the same base.
+  #
+  # Gmail quirks:
+  # - Dots are ignored: j.o.h.n@gmail.com = john@gmail.com
+  # - Plus aliases work: john+spam@gmail.com = john@gmail.com
+  # - googlemail.com = gmail.com
+  #
+  # Example match:
+  #   john.doe@gmail.com
+  #   johndoe@gmail.com
+  #   john.doe+test@googlemail.com
+  # → All normalize to johndoe@gmail.com
+  #
+  # Returns: List of groups where multiple Gmail accounts normalize to same base.
+  # Only includes bases with 2+ accounts.
   defp find_gmail_dot_variants do
     from(u in User,
       where: like(u.email, "%@gmail.com") or like(u.email, "%@googlemail.com"),
@@ -137,22 +133,20 @@ defmodule Mix.Tasks.DetectAbuse do
     end)
   end
 
-  @doc """
-  Find non-major domains with many accounts.
-
-  If someone owns their domain, they can create unlimited emails via catch-all.
-  Major providers (gmail, outlook, etc.) are excluded since multiple
-  legitimate users share those domains.
-
-  Example match:
-    alice@suspiciousdomain.com
-    bob@suspiciousdomain.com
-    charlie@suspiciousdomain.com
-    dave@suspiciousdomain.com
-  → 4 accounts on same non-major domain is suspicious
-
-  Returns: List of domains with 4+ accounts (excluding major providers)
-  """
+  # Find non-major domains with many accounts.
+  #
+  # If someone owns their domain, they can create unlimited emails via catch-all.
+  # Major providers (gmail, outlook, etc.) are excluded since multiple
+  # legitimate users share those domains.
+  #
+  # Example match:
+  #   alice@suspiciousdomain.com
+  #   bob@suspiciousdomain.com
+  #   charlie@suspiciousdomain.com
+  #   dave@suspiciousdomain.com
+  # → 4 accounts on same non-major domain is suspicious
+  #
+  # Returns: List of domains with 4+ accounts (excluding major providers)
   defp find_domain_clusters do
     # These domains are expected to have many users - don't flag them
     major_domains = ~w[
@@ -195,19 +189,17 @@ defmodule Mix.Tasks.DetectAbuse do
     |> Enum.sort_by(& &1.count, :desc)
   end
 
-  @doc """
-  Find free-tier users who have used more minutes than the free allowance.
-
-  Free tier gives 15 minutes. If a user on free plan has completed jobs
-  totaling more than 15 estimated_minutes, something is off:
-  - They got refunds/credits
-  - They exploited a bug
-  - They're part of a Sybil cluster rotating through accounts
-
-  Sums estimated_minutes from completed jobs per user.
-
-  Returns: List of free-tier users with total_minutes_used > 15
-  """
+  # Find free-tier users who have used more minutes than the free allowance.
+  #
+  # Free tier gives 15 minutes. If a user on free plan has completed jobs
+  # totaling more than 15 estimated_minutes, something is off:
+  # - They got refunds/credits
+  # - They exploited a bug
+  # - They're part of a Sybil cluster rotating through accounts
+  #
+  # Sums estimated_minutes from completed jobs per user.
+  #
+  # Returns: List of free-tier users with total_minutes_used > 15
   defp find_free_tier_heavy_users do
     # Get all users on free plan
     free_users =

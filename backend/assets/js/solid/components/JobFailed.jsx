@@ -1,9 +1,11 @@
 import { Show } from "solid-js";
 import { useProcess } from "../context/ProcessContext";
-import { getFriendlyJobError } from "../utils/errors";
+import { useI18n } from "../context/I18nContext";
+import { getErrorKey } from "../utils/errors";
 
 export function JobFailed() {
   const { store, reset } = useProcess();
+  const { t } = useI18n();
 
   return (
     <Show when={store.job}>
@@ -14,13 +16,13 @@ export function JobFailed() {
           </svg>
         </div>
 
-        <h3 class="text-2xl font-bold text-error">The cow choked!</h3>
+        <h3 class="text-2xl font-bold text-error">{t("cowChoked")}</h3>
         <p class="text-base-content/60 mt-2 text-center px-4">
-          {getFriendlyJobError(store.job?.error)}
+          {t(getErrorKey(store.job?.error))}
         </p>
 
         <button onClick={reset} class="btn btn-primary mt-8">
-          Feed her again
+          {t("feedHerAgain")}
         </button>
       </div>
     </Show>

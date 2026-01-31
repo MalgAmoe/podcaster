@@ -1,12 +1,14 @@
 import { useProcess } from "../context/ProcessContext";
+import { useI18n } from "../context/I18nContext";
 
 export function CategoryToggle() {
   const { store, setCategory } = useProcess();
+  const { t } = useI18n();
   const category = () => store.processingConfig.category;
 
   return (
     <div class="form-control text-center">
-      <p class="font-medium mb-3">What are you processing?</p>
+      <p class="font-medium mb-3">{t("whatProcessing")}</p>
       <div class="flex gap-2 justify-center">
         <button
           type="button"
@@ -17,7 +19,7 @@ export function CategoryToggle() {
               : "bg-base-300 text-base-content/50"
           }`}
         >
-          Voice
+          {t("voice")}
         </button>
         <button
           type="button"
@@ -28,7 +30,7 @@ export function CategoryToggle() {
               : "bg-base-300 text-base-content/50"
           }`}
         >
-          Mixed Audio
+          {t("mixedAudio")}
         </button>
       </div>
     </div>

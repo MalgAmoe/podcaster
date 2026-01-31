@@ -2,12 +2,12 @@
   <div class="mx-auto max-w-sm space-y-4">
     <div class="text-center">
       <.header>
-        <p>Sign in</p>
+        <p><%= gettext("Sign in") %></p>
         <:subtitle>
           <%= if @current_scope do %>
-            You need to reauthenticate to perform sensitive actions on your account.
+            <%= gettext("You need to reauthenticate to perform sensitive actions on your account.") %>
           <% else %>
-            Enter your email to sign in or create an account.
+            <%= gettext("Enter your email to sign in or create an account.") %>
           <% end %>
         </:subtitle>
       </.header>
@@ -23,18 +23,18 @@
       </div>
     </div>
 
-    <.form :let={f} for={@form} as={:user} id="login_form_magic" action={~p"/users/log-in"}>
+    <.form :let={f} for={@form} as={:user} id="login_form_magic" action={locale_path(@locale, "/users/log-in")}>
       <.input
         readonly={!!@current_scope}
         field={f[:email]}
         type="email"
-        label="Email"
+        label={gettext("Email")}
         autocomplete="email"
         required
         phx-mounted={JS.focus()}
       />
       <.button class="btn btn-primary w-full">
-        Continue with email <span aria-hidden="true">→</span>
+        <%= gettext("Continue with email") %> <span aria-hidden="true">&rarr;</span>
       </.button>
     </.form>
   </div>

@@ -76,6 +76,25 @@
   border-radius: 9999px;
 }
 
+/* Menu items: no gray background, use primary color on hover */
+[data-theme="poddyclip"] .menu li a:hover,
+[data-theme="poddyclip"] .menu li button:hover {
+  background-color: transparent;
+  color: #9333ea;
+}
+
+[data-theme="poddyclip"] .menu li a:focus,
+[data-theme="poddyclip"] .menu li button:focus {
+  background-color: transparent;
+}
+
+[data-theme="poddyclip"] .menu li a.active,
+[data-theme="poddyclip"] .menu li a[aria-current="page"] {
+  background-color: transparent;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
 /* Purple focus rings instead of default orange */
 [data-theme="poddyclip"] .btn:focus-visible,
 [data-theme="poddyclip"] .btn:focus {

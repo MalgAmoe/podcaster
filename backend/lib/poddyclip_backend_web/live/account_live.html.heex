@@ -6,7 +6,7 @@
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        <span>Welcome to Pro! Your account has been upgraded.</span>
+        <span><%= gettext("Welcome to Pro! Your account has been upgraded.") %></span>
       </div>
     <% end %>
 
@@ -14,30 +14,30 @@
     <%= if PoddyclipBackendWeb.AccountLive.upgrade_pending?(assigns) do %>
       <div role="alert" class="alert alert-info mb-6">
         <span class="loading loading-spinner loading-sm"></span>
-        <span>Processing your upgrade...</span>
+        <span><%= gettext("Processing your upgrade...") %></span>
       </div>
     <% end %>
 
     <.header>
-      Your Account
+      <%= gettext("Your Account") %>
       <:subtitle><%= @user.email %></:subtitle>
     </.header>
 
     <!-- Plan Card -->
     <div class="mt-8 p-6 rounded-2xl bg-base-200 border border-base-300">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-xl font-semibold">Current Plan</h2>
+        <h2 class="text-xl font-semibold"><%= gettext("Current Plan") %></h2>
         <%= if @is_pro do %>
-          <span class="px-3 py-1 text-xs font-semibold rounded-full bg-primary text-primary-content">Pro</span>
+          <span class="px-3 py-1 text-xs font-semibold rounded-full bg-primary text-primary-content"><%= gettext("Pro") %></span>
         <% else %>
-          <span class="px-3 py-1 text-xs font-semibold rounded-full bg-base-300 text-base-content">Free</span>
+          <span class="px-3 py-1 text-xs font-semibold rounded-full bg-base-300 text-base-content"><%= gettext("Free") %></span>
         <% end %>
       </div>
 
       <!-- Minutes Usage -->
       <div class="mb-6">
         <div class="flex justify-between text-sm mb-2">
-          <span class="text-base-content/70">Minutes Used</span>
+          <span class="text-base-content/70"><%= gettext("Minutes Used") %></span>
           <span class="font-medium"><%= @used_minutes %> / <%= @max_minutes %></span>
         </div>
         <div class="w-full bg-base-300 rounded-full h-3">
@@ -47,7 +47,7 @@
           ></div>
         </div>
         <p class="text-xs text-base-content/50 mt-2">
-          <%= @user.minutes_available %> minutes remaining
+          <%= ngettext("%{count} minute remaining", "%{count} minutes remaining", @user.minutes_available, count: @user.minutes_available) %>
         </p>
       </div>
 
@@ -55,16 +55,16 @@
       <%= if @is_pro do %>
         <div class="mb-6 p-4 rounded-lg bg-base-100">
           <div class="flex justify-between items-center">
-            <span class="text-sm text-base-content/70">Status</span>
+            <span class="text-sm text-base-content/70"><%= gettext("Status") %></span>
             <%= case @user.subscription_status do %>
               <% "active" -> %>
-                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-success/20 text-success">Active</span>
+                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-success/20 text-success"><%= gettext("Active") %></span>
               <% "cancelled" -> %>
-                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-warning/20 text-warning">Cancelled</span>
+                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-warning/20 text-warning"><%= gettext("Cancelled") %></span>
               <% "past_due" -> %>
-                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-error/20 text-error">Past Due</span>
+                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-error/20 text-error"><%= gettext("Past Due") %></span>
               <% _ -> %>
-                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-base-300 text-base-content/70"><%= @user.subscription_status || "Unknown" %></span>
+                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-base-300 text-base-content/70"><%= @user.subscription_status || gettext("Unknown") %></span>
             <% end %>
           </div>
 
@@ -72,9 +72,9 @@
             <div class="flex justify-between items-center mt-2">
               <span class="text-sm text-base-content/70">
                 <%= if @user.subscription_status == "cancelled" do %>
-                  Access until
+                  <%= gettext("Access until") %>
                 <% else %>
-                  Next renewal
+                  <%= gettext("Next renewal") %>
                 <% end %>
               </span>
               <span class="text-sm font-medium">
@@ -90,18 +90,18 @@
         <%= if @is_pro do %>
           <%= if @portal_url do %>
             <a href={@portal_url} class="btn btn-outline flex-1" target="_blank" rel="noopener">
-              Manage Subscription
+              <%= gettext("Manage Subscription") %>
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
               </svg>
             </a>
           <% else %>
-            <span class="text-sm text-base-content/50">Contact support to manage your subscription</span>
+            <span class="text-sm text-base-content/50"><%= gettext("Contact support to manage your subscription") %></span>
           <% end %>
         <% else %>
           <%= if @checkout_url do %>
             <a href={@checkout_url} class="btn btn-primary flex-1">
-              Upgrade to Pro - $15/mo
+              <%= gettext("Upgrade to Pro - $15/mo") %>
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>
@@ -109,7 +109,7 @@
           <% else %>
             <div class="flex-1 text-center p-4 rounded-lg bg-base-100 border border-base-300">
               <p class="text-sm text-base-content/70">
-                Billing is not yet configured. Contact support to upgrade.
+                <%= gettext("Billing is not yet configured. Contact support to upgrade.") %>
               </p>
             </div>
           <% end %>
@@ -119,25 +119,25 @@
       <!-- Upgrade benefits for free users -->
       <%= if not @is_pro do %>
         <div class="mt-6 pt-6 border-t border-base-300">
-          <p class="text-sm font-medium mb-3">Pro includes:</p>
+          <p class="text-sm font-medium mb-3"><%= gettext("Pro includes:") %></p>
           <ul class="space-y-2 text-sm text-base-content/70">
             <li class="flex items-center gap-2">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
               </svg>
-              900 minutes per month (15 hours)
+              <%= gettext("900 minutes per month (15 hours)") %>
             </li>
             <li class="flex items-center gap-2">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
               </svg>
-              2 hours per file
+              <%= gettext("2 hours per file") %>
             </li>
             <li class="flex items-center gap-2">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
               </svg>
-              Priority processing queue
+              <%= gettext("Priority processing queue") %>
             </li>
           </ul>
         </div>

@@ -21,10 +21,14 @@ defmodule PoddyclipBackendWeb.UserAuthLive do
     if socket.assigns.current_scope && socket.assigns.current_scope.user do
       {:cont, socket}
     else
+      # Get locale from session for locale-aware redirect
+      locale = session["locale"] || "en"
+      login_path = if locale == "es", do: "/es/users/log-in", else: "/users/log-in"
+
       socket =
         socket
         |> Phoenix.LiveView.put_flash(:error, "You must log in to access this page.")
-        |> Phoenix.LiveView.redirect(to: "/users/log-in")
+        |> Phoenix.LiveView.redirect(to: login_path)
 
       {:halt, socket}
     end

@@ -3,15 +3,18 @@ defmodule PoddyclipBackendWeb.PageController do
 
   alias PoddyclipBackend.Processing
   alias PoddyclipBackend.Storage
+  alias PoddyclipBackendWeb.LocaleHelpers
 
   # Public pages
   def landing(conn, _params) do
     # Redirect logged-in users to the app
     if conn.assigns[:current_scope] do
-      redirect(conn, to: ~p"/app")
+      locale = conn.assigns[:locale] || "en"
+      redirect(conn, to: LocaleHelpers.locale_path(locale, "/app"))
     else
       conn
       |> put_layout(false)
+      |> assign(:conn, conn)
       |> render(:landing)
     end
   end
@@ -19,10 +22,12 @@ defmodule PoddyclipBackendWeb.PageController do
   def pricing(conn, _params) do
     # Redirect logged-in users to account page (where they can upgrade)
     if conn.assigns[:current_scope] do
-      redirect(conn, to: ~p"/account")
+      locale = conn.assigns[:locale] || "en"
+      redirect(conn, to: LocaleHelpers.locale_path(locale, "/account"))
     else
       conn
       |> put_layout(false)
+      |> assign(:conn, conn)
       |> render(:pricing)
     end
   end
@@ -30,12 +35,14 @@ defmodule PoddyclipBackendWeb.PageController do
   def terms(conn, _params) do
     conn
     |> put_layout(false)
+    |> assign(:conn, conn)
     |> render(:terms)
   end
 
   def privacy(conn, _params) do
     conn
     |> put_layout(false)
+    |> assign(:conn, conn)
     |> render(:privacy)
   end
 
@@ -44,6 +51,7 @@ defmodule PoddyclipBackendWeb.PageController do
     # Use only root layout (no app layout) - root already has the navbar
     conn
     |> put_layout(false)
+    |> assign(:conn, conn)
     |> render(:process)
   end
 

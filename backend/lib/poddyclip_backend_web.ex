@@ -90,6 +90,7 @@ defmodule PoddyclipBackendWeb do
       # Common modules used in templates
       alias Phoenix.LiveView.JS
       alias PoddyclipBackendWeb.Layouts
+      import PoddyclipBackendWeb.LocaleHelpers, only: [locale_path: 2, switch_locale_path: 2]
 
       # Routes generation with the ~p sigil
       unquote(verified_routes())

@@ -1,29 +1,36 @@
-// Error message helpers from LiveView (process_live.ex)
+// Error message helpers - returns translation keys
+// The actual strings come from locales/en.js and locales/es.js
 
-export function getFriendlyJobError(error) {
-  if (!error) return "Unknown error";
+export function getErrorKey(error) {
+  if (!error) return "unknownError";
 
   if (error.includes("insufficient_minutes")) {
-    return "Not enough minutes available. Upgrade to Pro for more processing time.";
+    return "notEnoughMinutes";
   }
   if (error.includes("probe") || error.includes("Unsupported")) {
-    return "Audio format not supported. Try converting to WAV or MP3.";
+    return "formatNotSupported";
   }
   if (error.includes("No audio track")) {
-    return "No audio found in file.";
+    return "noAudioFound";
   }
   if (error.includes("decode") || error.includes("Decoding")) {
-    return "Could not read the audio file. It may be corrupted.";
+    return "couldNotReadFile";
   }
   if (error.includes("timeout") || error.includes("timed out")) {
-    return "Processing took too long. Try a shorter file.";
+    return "processingTooLong";
   }
   if (error.includes("S3") || error.includes("download")) {
-    return "Could not access the file. Please re-upload.";
+    return "couldNotAccessFile";
   }
   if (error.includes("encode") || error.includes("MP3")) {
-    return "Failed to create output file.";
+    return "failedToCreateOutput";
   }
 
-  return error;
+  // Return unknown error key for unrecognized errors
+  return "unknownError";
+}
+
+// For backwards compatibility - still used in some places
+export function getFriendlyJobError(error) {
+  return getErrorKey(error);
 }

@@ -22,6 +22,7 @@ const ctx = await esbuild.context({
   sourcemap: !deploy,
   define: {
     "process.env.NODE_ENV": deploy ? '"production"' : '"development"',
+    "import.meta.env.DEV": deploy ? "false" : "true",
   },
   nodePaths: ["./node_modules", "../deps", `../_build/${mixEnv}`],
 });

@@ -6,6 +6,13 @@ defmodule PoddyclipBackendWeb.UserAuth do
 
   alias PoddyclipBackend.Accounts
   alias PoddyclipBackend.Accounts.Scope
+  alias PoddyclipBackendWeb.LocaleHelpers
+
+  # Helper to build locale-aware paths
+  defp locale_path(conn, path) do
+    locale = conn.assigns[:locale] || "en"
+    LocaleHelpers.locale_path(locale, path)
+  end
 
   # Make the remember me cookie valid for 14 days. This should match
   # the session validity setting in UserToken.
@@ -71,7 +78,7 @@ defmodule PoddyclipBackendWeb.UserAuth do
     conn
     |> renew_session(nil)
     |> delete_resp_cookie(@remember_me_cookie)
-    |> redirect(to: ~p"/")
+    |> redirect(to: locale_path(conn, "/"))
   end
 
   @doc """
@@ -191,7 +198,7 @@ defmodule PoddyclipBackendWeb.UserAuth do
       conn
       |> put_flash(:info, "You must re-authenticate to access this page.")
       |> maybe_store_return_to()
-      |> redirect(to: ~p"/users/log-in")
+      |> redirect(to: locale_path(conn, "/users/log-in"))
       |> halt()
     end
   end
@@ -209,7 +216,7 @@ defmodule PoddyclipBackendWeb.UserAuth do
     end
   end
 
-  defp signed_in_path(_conn), do: ~p"/app"
+  defp signed_in_path(conn), do: locale_path(conn, "/app")
 
   @doc """
   Plug for routes that require the user to be authenticated.
@@ -221,7 +228,7 @@ defmodule PoddyclipBackendWeb.UserAuth do
       conn
       |> put_flash(:error, "You must log in to access this page.")
       |> maybe_store_return_to()
-      |> redirect(to: ~p"/users/log-in")
+      |> redirect(to: locale_path(conn, "/users/log-in"))
       |> halt()
     end
   end

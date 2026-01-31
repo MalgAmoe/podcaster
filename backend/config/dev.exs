@@ -93,3 +93,8 @@ config :phoenix_live_view,
   debug_attributes: true,
   # Enable helpful, but potentially expensive runtime checks
   enable_expensive_runtime_checks: true
+
+# Faster cleanup in dev for testing (3 hours instead of 7 days)
+config :poddyclip_backend, :cleanup,
+  job_retention_hours: 3,
+  stale_job_hours: 2

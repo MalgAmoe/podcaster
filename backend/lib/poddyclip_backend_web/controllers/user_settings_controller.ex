@@ -2,8 +2,15 @@ defmodule PoddyclipBackendWeb.UserSettingsController do
   use PoddyclipBackendWeb, :controller
 
   alias PoddyclipBackend.Accounts
+  alias PoddyclipBackendWeb.LocaleHelpers
 
   import PoddyclipBackendWeb.UserAuth, only: [require_sudo_mode: 2]
+
+  # Helper for locale-aware redirects
+  defp settings_path(conn) do
+    locale = conn.assigns[:locale] || "en"
+    LocaleHelpers.locale_path(locale, "/users/settings")
+  end
 
   plug :require_sudo_mode
   plug :assign_email_changeset
@@ -30,7 +37,7 @@ defmodule PoddyclipBackendWeb.UserSettingsController do
           :info,
           "A link to confirm your email change has been sent to the new address."
         )
-        |> redirect(to: ~p"/users/settings")
+        |> redirect(to: settings_path(conn))
 
       changeset ->
         render(conn, :edit, email_changeset: %{changeset | action: :insert})
@@ -53,12 +60,12 @@ defmodule PoddyclipBackendWeb.UserSettingsController do
       {:ok, _user} ->
         conn
         |> put_flash(:info, "Notification preferences updated.")
-        |> redirect(to: ~p"/users/settings")
+        |> redirect(to: settings_path(conn))
 
       {:error, _changeset} ->
         conn
         |> put_flash(:error, "Failed to update notification preferences.")
-        |> redirect(to: ~p"/users/settings")
+        |> redirect(to: settings_path(conn))
     end
   end
 
@@ -67,12 +74,12 @@ defmodule PoddyclipBackendWeb.UserSettingsController do
       {:ok, _user} ->
         conn
         |> put_flash(:info, "Email changed successfully.")
-        |> redirect(to: ~p"/users/settings")
+        |> redirect(to: settings_path(conn))
 
       {:error, _} ->
         conn
         |> put_flash(:error, "Email change link is invalid or it has expired.")
-        |> redirect(to: ~p"/users/settings")
+        |> redirect(to: settings_path(conn))
     end
   end
 

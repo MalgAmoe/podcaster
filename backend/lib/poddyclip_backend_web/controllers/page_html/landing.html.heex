@@ -6,17 +6,17 @@
         <img src="/images/munchy_cow.svg" alt="Munchy Cow" class="w-64 h-auto mx-auto" />
       </div>
       <h1 class="text-5xl md:text-6xl font-bold mb-6">
-        Give me your <span class="text-primary">tasty audio</span>
+        <%= gettext("Give me your") %> <span class="text-primary"><%= gettext("tasty audio") %></span>
       </h1>
       <p class="text-2xl text-base-content/70 mb-10">
-        I eat room echo, background noise, and that weird hum.<br/>
-        Out comes clean, publish-ready sound.
+        <%= gettext("I eat room echo, background noise, and that weird hum.") %><br/>
+        <%= gettext("Out comes clean, natural,  publish-ready sound.") %>
       </p>
-      <.link href={~p"/users/log-in"} class="btn btn-primary btn-lg text-lg px-10">
-        Feed the cow
+      <.link href={locale_path(@locale, "/users/log-in")} class="btn btn-primary btn-lg text-lg px-10">
+        <%= gettext("Feed the cow") %>
       </.link>
       <p class="text-sm text-base-content/50 mt-4">
-        Free to try. No credit card required.
+        <%= gettext("Free to try. No credit card required.") %>
       </p>
     </div>
   </section>
@@ -25,13 +25,13 @@
   <section class="py-24 px-6 bg-base-200/50">
     <div class="max-w-3xl mx-auto">
       <h2 class="text-4xl font-bold mb-12 text-center">
-        I'm not picky
+        <%= gettext("I'm not picky") %>
       </h2>
       <div class="space-y-4 text-xl">
-        <p><span class="text-base-content/70">That fan noise you didn't notice until editing?</span> <span class="text-primary font-medium">Delicious.</span></p>
-        <p><span class="text-base-content/70">The bathroom reverb from your "recording studio"?</span> <span class="text-primary font-medium">Yum.</span></p>
-        <p><span class="text-base-content/70">Volume all over the place?</span> <span class="text-primary font-medium">Nom nom nom.</span></p>
-        <p><span class="text-base-content/70">Harsh sibilants making you sound like a snake?</span> <span class="text-primary font-medium italic">*chef's kiss*</span></p>
+        <p><span class="text-base-content/70"><%= gettext("That fan noise you didn't notice until editing?") %></span> <span class="text-primary font-medium"><%= gettext("Delicious.") %></span></p>
+        <p><span class="text-base-content/70"><%= gettext("The bathroom reverb from your \"recording studio\"?") %></span> <span class="text-primary font-medium"><%= gettext("Yum.") %></span></p>
+        <p><span class="text-base-content/70"><%= gettext("Volume all over the place?") %></span> <span class="text-primary font-medium"><%= gettext("Nom nom nom.") %></span></p>
+        <p><span class="text-base-content/70"><%= gettext("Harsh sibilants making you sound like a snake?") %></span> <span class="text-primary font-medium italic"><%= gettext("*chef's kiss*") %></span></p>
       </div>
     </div>
   </section>
@@ -40,8 +40,8 @@
   <section class="py-24 px-6">
     <div class="max-w-2xl mx-auto text-center">
       <p class="text-3xl md:text-4xl font-medium mb-6 leading-snug">
-        Other tools make you sound like a robot.<br/>
-        <span class="text-base-content/60">I just make you sound like you recorded somewhere nicer.</span>
+        <%= gettext("Other tools make you sound like a robot.") %><br/>
+        <span class="text-base-content/60"><%= gettext("I just make you sound like you recorded somewhere nicer.") %></span>
       </p>
     </div>
   </section>
@@ -50,19 +50,19 @@
   <section class="py-24 px-6 bg-base-200/50">
     <div class="max-w-xl mx-auto text-center">
       <p class="text-4xl font-bold mb-4">
-        Upload something.
+        <%= gettext("Upload something.") %>
       </p>
       <p class="text-4xl font-bold text-base-content/50 mb-10">
-        See what happens.
+        <%= gettext("See what happens.") %>
       </p>
       <p class="text-lg text-base-content/60 mb-8">
-        15 free minutes. No credit card. No sales calls.
+        <%= gettext("15 free minutes. No credit card. No sales calls.") %>
       </p>
-      <.link href={~p"/users/log-in"} class="btn btn-primary btn-lg text-lg px-10">
-        Let's go
+      <.link href={locale_path(@locale, "/users/log-in")} class="btn btn-primary btn-lg text-lg px-10">
+        <%= gettext("Let's go") %>
       </.link>
       <p class="text-sm text-base-content/50 mt-6">
-        🔒 Your audio stays private. Files deleted after 7 days.
+        <%= gettext("Your audio stays private. Files deleted after 7 days.") %>
       </p>
     </div>
   </section>
@@ -72,9 +72,9 @@
     <div class="max-w-4xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
       <span class="text-base-content/50 flex items-center gap-1"><img src="/images/munchy_cow_head.svg" alt="" class="w-6 h-6" /> Munchy Cow</span>
       <nav class="flex gap-6 text-sm text-base-content/50">
-        <.link href={~p"/pricing"} class="hover:text-base-content transition-colors">Pricing</.link>
-        <.link href={~p"/terms"} class="hover:text-base-content transition-colors">Terms</.link>
-        <.link href={~p"/privacy"} class="hover:text-base-content transition-colors">Privacy</.link>
+        <.link href={locale_path(@locale, "/pricing")} class="hover:text-base-content transition-colors"><%= gettext("Pricing") %></.link>
+        <.link href={locale_path(@locale, "/terms")} class="hover:text-base-content transition-colors"><%= gettext("Terms") %></.link>
+        <.link href={locale_path(@locale, "/privacy")} class="hover:text-base-content transition-colors"><%= gettext("Privacy") %></.link>
       </nav>
     </div>
   </footer>

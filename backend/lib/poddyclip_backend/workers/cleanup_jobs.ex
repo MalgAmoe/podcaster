@@ -27,16 +27,22 @@ defmodule PoddyclipBackend.Workers.CleanupJobs do
   @impl Oban.Worker
   def perform(_job) do
     config = Application.get_env(:poddyclip_backend, :cleanup, [])
-    retention_days = Keyword.get(config, :job_retention_days, 7)
     stale_hours = Keyword.get(config, :stale_job_hours, 2)
 
-    Logger.info("Starting job cleanup (retention: #{retention_days} days, stale: #{stale_hours} hours)")
+    # Support hours for dev/testing, falls back to days for production
+    {retention_value, retention_unit} =
+      case Keyword.get(config, :job_retention_hours) do
+        nil -> {Keyword.get(config, :job_retention_days, 7), :day}
+        hours -> {hours, :hour}
+      end
+
+    Logger.info("Starting job cleanup (retention: #{retention_value} #{retention_unit}s, stale: #{stale_hours} hours)")
 
     # 1. Mark stale processing jobs as failed
     stale_count = mark_stale_jobs(stale_hours)
 
     # 2. Delete old completed/failed jobs
-    {deleted_count, s3_deleted} = delete_old_jobs(retention_days)
+    {deleted_count, s3_deleted} = delete_old_jobs(retention_value, retention_unit)
 
     Logger.info("Cleanup complete: #{stale_count} stale jobs marked failed, #{deleted_count} jobs deleted, #{s3_deleted} S3 files removed")
 
@@ -64,8 +70,8 @@ defmodule PoddyclipBackend.Workers.CleanupJobs do
     count
   end
 
-  defp delete_old_jobs(days) do
-    cutoff = DateTime.utc_now() |> DateTime.add(-days, :day)
+  defp delete_old_jobs(retention_value, retention_unit) do
+    cutoff = DateTime.utc_now() |> DateTime.add(-retention_value, retention_unit)
 
     # Find old jobs to delete
     old_jobs =

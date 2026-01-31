@@ -1,5 +1,6 @@
 import { Show, Switch, Match } from "solid-js";
 import { useProcess } from "../context/ProcessContext";
+import { useI18n } from "../context/I18nContext";
 import { UploadZone } from "./UploadZone";
 import { ProcessingConfig } from "./ProcessingConfig";
 import { JobProgress } from "./JobProgress";
@@ -9,6 +10,7 @@ import { StepsIndicator, getCurrentStep } from "./StepsIndicator";
 
 export function ProcessPage() {
   const { store, submitJob } = useProcess();
+  const { t } = useI18n();
 
   return (
     <div class="min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center p-4">
@@ -17,7 +19,7 @@ export function ProcessPage() {
           <Show when={!store.initializing} fallback={
             <div class="flex flex-col items-center justify-center py-12">
               <span class="loading loading-spinner loading-lg text-primary" />
-              <p class="text-base-content/60 mt-4">Loading...</p>
+              <p class="text-base-content/60 mt-4">{t("processing")}</p>
             </div>
           }>
             <Show when={store.job} fallback={
@@ -30,9 +32,9 @@ export function ProcessPage() {
                   disabled={store.uploadState !== "ready" || store.submitting}
                   class="btn btn-primary w-full btn-lg"
                 >
-                  <Show when={store.submitting} fallback="MUNCH IT!">
+                  <Show when={store.submitting} fallback={t("munchIt")}>
                     <span class="loading loading-spinner loading-sm"></span>
-                    Loading...
+                    {t("processing")}
                   </Show>
                 </button>
               </div>

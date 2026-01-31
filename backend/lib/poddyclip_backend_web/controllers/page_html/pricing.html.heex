@@ -2,9 +2,9 @@
   <!-- Header -->
   <section class="py-20 px-6">
     <div class="max-w-2xl mx-auto text-center">
-      <h1 class="text-5xl font-bold mb-4">How much hay?</h1>
+      <h1 class="text-5xl font-bold mb-4"><%= gettext("How much hay?") %></h1>
       <p class="text-xl text-base-content/60">
-        Start free. Upgrade when you're hooked.
+        <%= gettext("Start free. Upgrade when you're hooked.") %>
       </p>
     </div>
   </section>
@@ -15,33 +15,33 @@
       <div class="grid md:grid-cols-2 gap-6">
         <!-- Free -->
         <div class="p-8 rounded-3xl bg-base-200/50 border border-base-300">
-          <h2 class="text-2xl font-bold mb-1">Free</h2>
-          <p class="text-base-content/50 mb-6">Kick the tires</p>
+          <h2 class="text-2xl font-bold mb-1"><%= gettext("Free") %></h2>
+          <p class="text-base-content/50 mb-6"><%= gettext("Kick the tires") %></p>
           <p class="text-5xl font-bold mb-8">$0</p>
           <ul class="space-y-3 mb-8 text-base-content/80">
-            <li>15 minutes of processing</li>
-            <li>Same quality as Pro</li>
-            <li>No credit card required</li>
+            <li><%= gettext("15 minutes of processing") %></li>
+            <li><%= gettext("Same quality as Pro") %></li>
+            <li><%= gettext("No credit card required") %></li>
           </ul>
-          <.link href={~p"/users/log-in"} class="btn btn-outline btn-block">
-            Start free
+          <.link href={locale_path(@locale, "/users/log-in")} class="btn btn-outline btn-block">
+            <%= gettext("Start free") %>
           </.link>
         </div>
 
         <!-- Pro -->
         <div class="p-8 rounded-3xl bg-primary text-primary-content">
-          <h2 class="text-2xl font-bold mb-1">Pro</h2>
-          <p class="text-primary-content/60 mb-6">Feed me more</p>
+          <h2 class="text-2xl font-bold mb-1"><%= gettext("Pro") %></h2>
+          <p class="text-primary-content/60 mb-6"><%= gettext("Feed me more") %></p>
           <p class="text-5xl font-bold mb-8">
-            $15<span class="text-xl font-normal text-primary-content/60">/mo</span>
+            $15<span class="text-xl font-normal text-primary-content/60">/<%= gettext("mo") %></span>
           </p>
           <ul class="space-y-3 mb-8 text-primary-content/80">
-            <li>15 hours per month</li>
-            <li>2 hours per file</li>
-            <li>Priority queue</li>
+            <li><%= gettext("15 hours per month") %></li>
+            <li><%= gettext("2 hours per file") %></li>
+            <li><%= gettext("Priority queue") %></li>
           </ul>
-          <.link href={~p"/users/log-in"} class="btn bg-white text-primary hover:bg-white/90 btn-block">
-            Get started
+          <.link href={locale_path(@locale, "/users/log-in")} class="btn bg-white text-primary hover:bg-white/90 btn-block">
+            <%= gettext("Get started") %>
           </.link>
         </div>
       </div>
@@ -51,23 +51,23 @@
   <!-- FAQ - casual -->
   <section class="py-20 px-6 bg-base-200/50">
     <div class="max-w-2xl mx-auto">
-      <h2 class="text-3xl font-bold text-center mb-12">You might be wondering</h2>
+      <h2 class="text-3xl font-bold text-center mb-12"><%= gettext("You might be wondering") %></h2>
       <div class="space-y-8">
         <div>
-          <h3 class="font-semibold text-lg mb-2">What formats work?</h3>
-          <p class="text-base-content/70">WAV, MP3, FLAC, M4A, whatever. You get WAV back.</p>
+          <h3 class="font-semibold text-lg mb-2"><%= gettext("What formats work?") %></h3>
+          <p class="text-base-content/70"><%= gettext("WAV, MP3, FLAC, M4A, whatever. You get WAV back.") %></p>
         </div>
         <div>
-          <h3 class="font-semibold text-lg mb-2">How fast?</h3>
-          <p class="text-base-content/70">Usually a couple minutes. Pro skips the line.</p>
+          <h3 class="font-semibold text-lg mb-2"><%= gettext("How fast?") %></h3>
+          <p class="text-base-content/70"><%= gettext("Usually a couple minutes. Pro skips the line.") %></p>
         </div>
         <div>
-          <h3 class="font-semibold text-lg mb-2">Can I cancel?</h3>
-          <p class="text-base-content/70">Anytime. No contracts, no guilt trips.</p>
+          <h3 class="font-semibold text-lg mb-2"><%= gettext("Can I cancel?") %></h3>
+          <p class="text-base-content/70"><%= gettext("Anytime. No contracts, no guilt trips.") %></p>
         </div>
         <div>
-          <h3 class="font-semibold text-lg mb-2">What if it sounds bad?</h3>
-          <p class="text-base-content/70">Email me. I'll make it right or refund you. I'm a cow, not a monster.</p>
+          <h3 class="font-semibold text-lg mb-2"><%= gettext("What if it sounds bad?") %></h3>
+          <p class="text-base-content/70"><%= gettext("Email me. I'll make it right or refund you. I'm a cow, not a monster.") %></p>
         </div>
       </div>
     </div>
@@ -78,9 +78,9 @@
     <div class="max-w-4xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
       <span class="text-base-content/50 flex items-center gap-1"><img src="/images/munchy_cow_head.svg" alt="" class="w-5 h-5" /> Munchy Cow</span>
       <nav class="flex gap-6 text-sm text-base-content/50">
-        <.link href={~p"/"} class="hover:text-base-content transition-colors">Home</.link>
-        <.link href={~p"/terms"} class="hover:text-base-content transition-colors">Terms</.link>
-        <.link href={~p"/privacy"} class="hover:text-base-content transition-colors">Privacy</.link>
+        <.link href={locale_path(@locale, "/")} class="hover:text-base-content transition-colors"><%= gettext("Home") %></.link>
+        <.link href={locale_path(@locale, "/terms")} class="hover:text-base-content transition-colors"><%= gettext("Terms") %></.link>
+        <.link href={locale_path(@locale, "/privacy")} class="hover:text-base-content transition-colors"><%= gettext("Privacy") %></.link>
       </nav>
     </div>
   </footer>

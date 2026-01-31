@@ -3,7 +3,8 @@ import { createStore } from "solid-js/store";
 import { Socket } from "phoenix";
 import { api, ApiError } from "../utils/api";
 import { clearAudioCache } from "../components/WaveformPlayer";
-import { getFriendlyJobError } from "../utils/errors";
+import { getErrorKey } from "../utils/errors";
+import { t, tt } from "../utils/translate";
 import { useNotifications } from "./NotificationContext";
 
 const ProcessContext = createContext();
@@ -112,7 +113,7 @@ export function ProcessProvider(props) {
           if (connectionLostNotificationId) {
             // We'll let the auto-dismiss handle it, but show success
           }
-          notify({ type: "success", message: "Connection restored" });
+          notify({ type: "success", message: t("connectionRestored") });
         }
         wasConnected = true;
         reconnectAttempts = 0;
@@ -127,7 +128,7 @@ export function ProcessProvider(props) {
             // First disconnect - show warning
             connectionLostNotificationId = notify({
               type: "warning",
-              message: "Connection lost. Reconnecting..."
+              message: t("connectionLost")
             });
           }
 
@@ -135,7 +136,7 @@ export function ProcessProvider(props) {
             // Max retries exceeded - show persistent error
             notify({
               type: "error",
-              message: "Unable to connect. Please refresh the page.",
+              message: t("unableToConnect"),
               persistent: true
             });
           }
@@ -272,7 +273,7 @@ export function ProcessProvider(props) {
 
   async function submitJob() {
     if (!store.s3Key || !store.filename) {
-      notify({ type: "error", message: "Please upload a file first" });
+      notify({ type: "error", message: t("uploadFirst") });
       return;
     }
 
@@ -298,15 +299,18 @@ export function ProcessProvider(props) {
       // Billing errors get persistent notification with upgrade action
       if (err instanceof ApiError && err.code === "insufficient_minutes") {
         const details = err.details;
-        let message = getFriendlyJobError(err.code);
+        let message = t(getErrorKey(err.code));
         if (details?.minutes_available !== undefined && details?.minutes_needed !== undefined) {
-          message += ` You need ${details.minutes_needed} minutes but only have ${details.minutes_available} available.`;
+          message += tt("needMinutes", { needed: details.minutes_needed, available: details.minutes_available });
         }
+        // Get locale for locale-aware redirect
+        const locale = document.documentElement.lang || "en";
+        const accountPath = locale === "es" ? "/es/account" : "/account";
         notify({
           type: "error",
           message,
           persistent: true,
-          action: { label: "Upgrade", onClick: () => window.location.href = "/account" }
+          action: { label: t("upgrade"), onClick: () => window.location.href = accountPath }
         });
       } else {
         notify({ type: "error", message: err.message, persistent: true });
