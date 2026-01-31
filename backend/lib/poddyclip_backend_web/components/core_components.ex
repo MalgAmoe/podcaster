@@ -60,7 +60,7 @@ defmodule PoddyclipBackendWeb.CoreComponents do
       {@rest}
     >
       <div class={[
-        "alert w-80 sm:w-96 max-w-80 sm:max-w-96 text-wrap",
+        "alert w-80 sm:w-96 max-w-80 sm:max-w-96 text-wrap rounded-2xl",
         @kind == :info && "alert-info",
         @kind == :error && "alert-error"
       ]}>
@@ -239,7 +239,7 @@ defmodule PoddyclipBackendWeb.CoreComponents do
         <select
           id={@id}
           name={@name}
-          class={[@class || "w-full select", @errors != [] && (@error_class || "select-error")]}
+          class={[@class || "w-full select rounded-lg", @errors != [] && (@error_class || "select-error")]}
           multiple={@multiple}
           {@rest}
         >
@@ -261,7 +261,7 @@ defmodule PoddyclipBackendWeb.CoreComponents do
           id={@id}
           name={@name}
           class={[
-            @class || "w-full textarea",
+            @class || "w-full textarea rounded-lg",
             @errors != [] && (@error_class || "textarea-error")
           ]}
           {@rest}
@@ -284,7 +284,7 @@ defmodule PoddyclipBackendWeb.CoreComponents do
           id={@id}
           value={Phoenix.HTML.Form.normalize_value(@type, @value)}
           class={[
-            @class || "w-full input",
+            @class || "w-full input rounded-lg",
             @errors != [] && (@error_class || "input-error")
           ]}
           {@rest}

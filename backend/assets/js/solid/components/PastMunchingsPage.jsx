@@ -1,4 +1,5 @@
 import { createSignal, createResource, Show, For } from "solid-js";
+import dayjs from "dayjs";
 import { api } from "../utils/api";
 
 export function PastMunchingsPage() {
@@ -13,11 +14,12 @@ export function PastMunchingsPage() {
   });
 
   function formatDate(dateString) {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const date = dayjs(dateString);
+    const now = dayjs();
+    const time = date.format("HH:mm");
+
+    // Compare calendar days (start of day comparison)
+    const diffDays = now.startOf("day").diff(date.startOf("day"), "day");
 
     if (diffDays === 0) {
       return `Today at ${time}`;
@@ -26,7 +28,7 @@ export function PastMunchingsPage() {
     } else if (diffDays < 7) {
       return `${diffDays} days ago at ${time}`;
     } else {
-      return `${date.toLocaleDateString()} at ${time}`;
+      return `${date.format("MMM D, YYYY")} at ${time}`;
     }
   }
 

@@ -20,9 +20,9 @@ function App(props) {
 export function mountApp(container) {
   if (!container) return;
   render(() => (
-    <Router root={App}>
-      <Route path="/app" component={ProcessPage} />
-      <Route path="/app/past-munchings" component={PastMunchingsPage} />
+    <Router root={App} base="/app">
+      <Route path="/" component={ProcessPage} />
+      <Route path="/past-munchings" component={PastMunchingsPage} />
     </Router>
   ), container);
 }

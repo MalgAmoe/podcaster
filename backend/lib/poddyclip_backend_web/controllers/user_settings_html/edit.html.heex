@@ -24,7 +24,7 @@
             name={f[:email].name}
             id={f[:email].id}
             value={Phoenix.HTML.Form.normalize_value("email", f[:email].value)}
-            class="input input-bordered w-full bg-base-100"
+            class="input input-bordered w-full bg-base-100 rounded-lg"
             autocomplete="email"
             required
           />
@@ -37,7 +37,7 @@
           <% end %>
         </div>
 
-        <div class="mt-4">
+        <div class="mt-4 flex justify-end">
           <button type="submit" class="btn btn-primary" phx-disable-with="Sending...">
             Update email
           </button>
@@ -114,7 +114,7 @@
           </label>
         </div>
 
-        <div class="mt-6">
+        <div class="mt-6 flex justify-end">
           <button type="submit" class="btn btn-primary">
             Save preferences
           </button>

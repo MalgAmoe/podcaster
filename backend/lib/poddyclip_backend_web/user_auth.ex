@@ -189,7 +189,7 @@ defmodule PoddyclipBackendWeb.UserAuth do
       conn
     else
       conn
-      |> put_flash(:error, "You must re-authenticate to access this page.")
+      |> put_flash(:info, "You must re-authenticate to access this page.")
       |> maybe_store_return_to()
       |> redirect(to: ~p"/users/log-in")
       |> halt()
