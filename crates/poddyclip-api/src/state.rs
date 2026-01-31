@@ -19,7 +19,6 @@ pub struct AppState {
 
 pub struct AppConfig {
     pub max_file_size_mb: usize,
-    pub max_concurrent_jobs: usize,
     pub job_timeout_seconds: u64,
     pub result_retention_seconds: u64,
     pub chains_dir: PathBuf,
@@ -33,7 +32,6 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             max_file_size_mb: DEFAULT_MAX_FILE_SIZE_MB,
-            max_concurrent_jobs: 4,
             job_timeout_seconds: 600,
             result_retention_seconds: 3600,
             chains_dir: PathBuf::from("chains"),
@@ -51,10 +49,6 @@ impl AppConfig {
                 .ok()
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(DEFAULT_MAX_FILE_SIZE_MB),
-            max_concurrent_jobs: std::env::var("MAX_CONCURRENT_JOBS")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(4),
             job_timeout_seconds: std::env::var("JOB_TIMEOUT_SECONDS")
                 .ok()
                 .and_then(|s| s.parse().ok())

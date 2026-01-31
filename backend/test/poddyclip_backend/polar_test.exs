@@ -3,9 +3,8 @@ defmodule PoddyclipBackend.PolarTest do
 
   alias PoddyclipBackend.Polar
 
-  # Test secret (base64 encoded random bytes)
-  @test_secret_raw :crypto.strong_rand_bytes(32)
-  @test_secret "whsec_" <> Base.encode64(@test_secret_raw)
+  # Test secret - used directly as HMAC key (production code uses secret string as-is)
+  @test_secret "test_webhook_secret_for_testing_12345"
 
   describe "verify_signature/3" do
     test "verifies valid signature" do
@@ -13,9 +12,9 @@ defmodule PoddyclipBackend.PolarTest do
       webhook_id = "wh_test_123"
       timestamp = to_string(System.system_time(:second))
 
-      # Compute signature
+      # Compute signature using the secret directly
       signed_payload = "#{webhook_id}.#{timestamp}.#{body}"
-      signature = :crypto.mac(:hmac, :sha256, @test_secret_raw, signed_payload) |> Base.encode64()
+      signature = :crypto.mac(:hmac, :sha256, @test_secret, signed_payload) |> Base.encode64()
 
       headers = %{
         "webhook-id" => webhook_id,
@@ -33,7 +32,7 @@ defmodule PoddyclipBackend.PolarTest do
       timestamp = to_string(System.system_time(:second))
 
       signed_payload = "#{webhook_id}.#{timestamp}.#{body}"
-      valid_sig = :crypto.mac(:hmac, :sha256, @test_secret_raw, signed_payload) |> Base.encode64()
+      valid_sig = :crypto.mac(:hmac, :sha256, @test_secret, signed_payload) |> Base.encode64()
       invalid_sig = Base.encode64(:crypto.strong_rand_bytes(32))
 
       headers = %{
@@ -103,7 +102,7 @@ defmodule PoddyclipBackend.PolarTest do
       old_timestamp = to_string(System.system_time(:second) - 360)
 
       signed_payload = "#{webhook_id}.#{old_timestamp}.#{body}"
-      signature = :crypto.mac(:hmac, :sha256, @test_secret_raw, signed_payload) |> Base.encode64()
+      signature = :crypto.mac(:hmac, :sha256, @test_secret, signed_payload) |> Base.encode64()
 
       headers = %{
         "webhook-id" => webhook_id,
@@ -114,15 +113,17 @@ defmodule PoddyclipBackend.PolarTest do
       assert {:error, :timestamp_too_old} = Polar.verify_signature(body, headers, @test_secret)
     end
 
-    test "accepts secret without whsec_ prefix" do
-      secret_no_prefix = Base.encode64(@test_secret_raw)
+    test "uses secret directly as HMAC key" do
+      # This test verifies that the secret is used as-is for HMAC,
+      # matching how Polar.sh sends webhooks
+      secret = "my_plain_secret"
 
-      body = ~s({"type": "no_prefix"})
-      webhook_id = "wh_noprefix"
+      body = ~s({"type": "plain"})
+      webhook_id = "wh_plain"
       timestamp = to_string(System.system_time(:second))
 
       signed_payload = "#{webhook_id}.#{timestamp}.#{body}"
-      signature = :crypto.mac(:hmac, :sha256, @test_secret_raw, signed_payload) |> Base.encode64()
+      signature = :crypto.mac(:hmac, :sha256, secret, signed_payload) |> Base.encode64()
 
       headers = %{
         "webhook-id" => webhook_id,
@@ -130,7 +131,7 @@ defmodule PoddyclipBackend.PolarTest do
         "webhook-signature" => "v1,#{signature}"
       }
 
-      assert {:ok, _} = Polar.verify_signature(body, headers, secret_no_prefix)
+      assert {:ok, _} = Polar.verify_signature(body, headers, secret)
     end
   end
 end

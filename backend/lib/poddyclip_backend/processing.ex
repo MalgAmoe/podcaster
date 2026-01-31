@@ -16,8 +16,12 @@ defmodule PoddyclipBackend.Processing do
   Submit a job for processing using an S3 input key.
 
   The audio file should already be uploaded to S3. This function:
-  1. Creates a job record in the database
-  2. Notifies the Rust API to start processing (includes webhook URL)
+  1. Creates a job record in the database with status :queued
+  2. Enqueues an Oban job to start processing on the Rust API
+
+  The job starts as :queued and transitions to :processing when the Oban
+  worker successfully starts it on the Rust API. Oban enforces the
+  concurrency limit (4 jobs), so excess jobs wait in line instead of failing.
 
   ## Options
     * `:chain` - Name of the processing chain preset to use
@@ -45,31 +49,23 @@ defmodule PoddyclipBackend.Processing do
       chain: opts[:chain]
     )
 
-    # Notify Rust API to start processing (include filename and user_id for output path)
-    case Client.start_processing(job.id, input_s3_key, [{:user_id, user_id}, {:filename, filename} | opts]) do
-      {:ok, %{"job_id" => rust_job_id}} ->
-        updated_job =
-          job
-          |> Job.changeset(%{rust_job_id: rust_job_id, status: :processing})
-          |> Repo.update!()
+    # Enqueue Oban job to start processing
+    # Oban handles concurrency limits and job queuing
+    %{
+      job_id: job.id,
+      user_id: user_id,
+      filename: filename,
+      category: opts[:category],
+      mode: opts[:mode],
+      strength: opts[:strength],
+      ai_clean: opts[:ai_clean],
+      output_format: opts[:output_format],
+      mp3_bitrate: opts[:mp3_bitrate]
+    }
+    |> PoddyclipBackend.Workers.ProcessingWorker.new()
+    |> Oban.insert!()
 
-        Logger.info("Job processing started",
-          job_id: job.id,
-          user_id: user_id,
-          rust_job_id: rust_job_id
-        )
-
-        {:ok, updated_job}
-
-      {:error, reason} ->
-        # Job stays queued, can be retried later
-        Logger.error("Job submission to API failed",
-          job_id: job.id,
-          user_id: user_id,
-          error: inspect(reason)
-        )
-        {:error, reason}
-    end
+    {:ok, job}
   end
 
   @doc """
@@ -84,6 +80,60 @@ defmodule PoddyclipBackend.Processing do
   """
   def get_job!(job_id) do
     Repo.get!(Job, job_id)
+  end
+
+  @doc """
+  Mark a job as processing with the given Rust job ID.
+  Called by ProcessingWorker when the Rust API accepts the job.
+  """
+  def mark_processing(job_id, rust_job_id) do
+    case get_job(job_id) do
+      nil ->
+        {:error, :not_found}
+
+      job ->
+        {:ok, updated_job} =
+          job
+          |> Job.changeset(%{status: :processing, rust_job_id: rust_job_id})
+          |> Repo.update()
+
+        Logger.info("Job processing started",
+          job_id: job.id,
+          user_id: job.user_id,
+          rust_job_id: rust_job_id
+        )
+
+        broadcast_update(updated_job)
+        {:ok, updated_job}
+    end
+  end
+
+  @doc """
+  Mark a job as failed with the given error message.
+  Called by ProcessingWorker when the Rust API rejects the job.
+  Automatically refunds estimated minutes to the user.
+  """
+  def mark_failed(job_id, error) do
+    case get_job(job_id) do
+      nil ->
+        {:error, :not_found}
+
+      job ->
+        {:ok, updated_job} =
+          job
+          |> Job.changeset(%{status: :failed, error: error})
+          |> Repo.update()
+
+        Logger.error("Job failed",
+          job_id: job.id,
+          user_id: job.user_id,
+          error: error
+        )
+
+        broadcast_update(updated_job)
+        refund_job_minutes(updated_job)
+        {:ok, updated_job}
+    end
   end
 
   @doc """

@@ -29,6 +29,8 @@ defmodule PoddyclipBackend.Processing.Client do
 
   @doc """
   Check if the poddyclip-api service is healthy.
+
+  Returns `{:ok, body}` with health info on success, or `{:error, reason}` on failure.
   """
   def health do
     case Req.get("#{base_url()}/health", receive_timeout: 5_000) do

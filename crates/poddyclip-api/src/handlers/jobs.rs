@@ -137,12 +137,6 @@ pub async fn create_s3_job(
         return Err(ApiError::FileTooLarge(size_mb, state.config.max_file_size_mb));
     }
 
-    // Check concurrent jobs limit
-    let (active, _) = state.job_count();
-    if active >= state.config.max_concurrent_jobs {
-        return Err(ApiError::ServerBusy);
-    }
-
     // Build ProcessConfig from request
     // If category/mode/strength are provided, use dynamic builder
     // Otherwise fall back to chain preset (legacy) or defaults

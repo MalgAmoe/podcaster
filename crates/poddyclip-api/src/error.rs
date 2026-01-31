@@ -32,9 +32,6 @@ pub enum ApiError {
     #[error("Chain preset not found: {0}")]
     ChainNotFound(String),
 
-    #[error("Server busy: too many concurrent jobs")]
-    ServerBusy,
-
     #[error("Internal error: {0}")]
     Internal(String),
 }
@@ -64,9 +61,6 @@ impl IntoResponse for ApiError {
                 "chain_not_found",
                 format!("Chain '{}' not found", n),
             ),
-            ApiError::ServerBusy => {
-                (StatusCode::SERVICE_UNAVAILABLE, "server_busy", self.to_string())
-            }
             ApiError::Internal(m) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal_error", m.clone())
             }

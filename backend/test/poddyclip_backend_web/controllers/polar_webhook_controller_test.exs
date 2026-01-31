@@ -7,9 +7,8 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
   import PoddyclipBackend.AccountsFixtures
   import PoddyclipBackend.BillingFixtures
 
-  # Test secret (base64 encoded)
-  @test_secret_raw :crypto.strong_rand_bytes(32)
-  @test_secret "whsec_" <> Base.encode64(@test_secret_raw)
+  # Test secret - used directly as HMAC key (production code uses secret string as-is)
+  @test_secret "test_webhook_secret_for_testing_12345"
 
   setup do
     # Configure test secret
@@ -28,7 +27,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
   defp sign_webhook(body, webhook_id \\ "wh_test_#{System.unique_integer([:positive])}") do
     timestamp = to_string(System.system_time(:second))
     signed_payload = "#{webhook_id}.#{timestamp}.#{body}"
-    signature = :crypto.mac(:hmac, :sha256, @test_secret_raw, signed_payload) |> Base.encode64()
+    signature = :crypto.mac(:hmac, :sha256, @test_secret, signed_payload) |> Base.encode64()
 
     {webhook_id, timestamp, "v1,#{signature}"}
   end
