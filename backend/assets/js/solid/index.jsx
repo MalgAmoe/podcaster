@@ -1,7 +1,31 @@
 import { render } from "solid-js/web";
-import { App } from "./App";
+import { Router, Route } from "@solidjs/router";
+import { ProcessProvider } from "./context/ProcessContext";
+import { NotificationProvider } from "./context/NotificationContext";
+import { NotificationContainer } from "./components/NotificationContainer";
+import { Layout } from "./components/Layout";
+import { ProcessPage } from "./components/ProcessPage";
+import { PastMunchingsPage } from "./components/PastMunchingsPage";
+
+function App(props) {
+  return (
+    <NotificationProvider>
+      <ProcessProvider>
+        <Layout>
+          {props.children}
+        </Layout>
+      </ProcessProvider>
+      <NotificationContainer />
+    </NotificationProvider>
+  );
+}
 
 export function mountApp(container) {
   if (!container) return;
-  render(() => <App />, container);
+  render(() => (
+    <Router root={App}>
+      <Route path="/app" component={ProcessPage} />
+      <Route path="/app/past-munchings" component={PastMunchingsPage} />
+    </Router>
+  ), container);
 }

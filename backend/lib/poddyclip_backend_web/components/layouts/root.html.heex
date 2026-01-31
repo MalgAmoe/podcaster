@@ -42,6 +42,7 @@
       <div class="navbar-start">
         <%= if @current_scope do %>
           <.link href={~p"/app"} class="btn btn-ghost text-xl">Munchy Cow</.link>
+          <.link href={~p"/app/past-munchings"} class="btn btn-ghost btn-sm">Past Munchings</.link>
         <% else %>
           <.link href={~p"/"} class="btn btn-ghost text-xl">Munchy Cow</.link>
         <% end %>

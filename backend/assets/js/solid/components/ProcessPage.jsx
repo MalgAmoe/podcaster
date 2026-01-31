@@ -5,7 +5,6 @@ import { ProcessingConfig } from "./ProcessingConfig";
 import { JobProgress } from "./JobProgress";
 import { JobComplete } from "./JobComplete";
 import { JobFailed } from "./JobFailed";
-import { JobHistory } from "./JobHistory";
 import { StepsIndicator, getCurrentStep } from "./StepsIndicator";
 
 export function ProcessPage() {
@@ -53,11 +52,6 @@ export function ProcessPage() {
 
       <Show when={!store.initializing}>
         <StepsIndicator currentStep={getCurrentStep(store.job)} />
-      </Show>
-
-      {/* Show job history when not actively processing */}
-      <Show when={!store.initializing && !store.job}>
-        <JobHistory />
       </Show>
     </div>
   );

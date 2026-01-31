@@ -52,11 +52,12 @@ defmodule PoddyclipBackendWeb.Router do
     get "/privacy", PageController, :privacy
   end
 
-  # Authenticated app
+  # Authenticated app (SolidJS SPA handles client-side routing)
   scope "/app", PoddyclipBackendWeb do
     pipe_through [:browser, :require_authenticated_user]
 
     get "/", PageController, :process
+    get "/*path", PageController, :process
   end
 
   # Internal API for Rust service webhooks

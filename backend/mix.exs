@@ -95,11 +95,11 @@ defmodule PoddyclipBackend.MixProject do
       setup: ["deps.get", "ecto.setup", "assets.setup", "assets.build"],
       "ecto.setup": ["ecto.create", "ecto.migrate"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
-      "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
-      "assets.build": ["compile", "tailwind poddyclip_backend", "esbuild poddyclip_backend"],
+      "assets.setup": ["tailwind.install --if-missing", "cmd --cd assets npm install"],
+      "assets.build": ["tailwind poddyclip_backend", "cmd --cd assets node build.mjs"],
       "assets.deploy": [
         "tailwind poddyclip_backend --minify",
-        "esbuild poddyclip_backend --minify",
+        "cmd --cd assets node build.mjs",
         "phx.digest"
       ],
       precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]

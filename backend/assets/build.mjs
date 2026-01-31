@@ -8,6 +8,7 @@ mkdirSync("../priv/static/assets/css", { recursive: true });
 
 const args = process.argv.slice(2);
 const watch = args.includes("--watch");
+const deploy = process.env.MIX_ENV === "prod" || args.includes("--deploy");
 const mixEnv = process.env.MIX_ENV || "dev";
 
 const ctx = await esbuild.context({
@@ -17,8 +18,10 @@ const ctx = await esbuild.context({
   outdir: "../priv/static/assets/js",
   external: ["/fonts/*", "/images/*"],
   plugins: [solidPlugin()],
+  minify: deploy,
+  sourcemap: !deploy,
   define: {
-    "process.env.NODE_ENV": watch ? '"development"' : '"production"',
+    "process.env.NODE_ENV": deploy ? '"production"' : '"development"',
   },
   nodePaths: ["./node_modules", "../deps", `../_build/${mixEnv}`],
 });
