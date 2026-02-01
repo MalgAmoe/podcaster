@@ -193,16 +193,16 @@ pub fn process_audio(
     if effective_config.ai_denoise {
         report("ai_denoise", 7)?;
 
-        match DeepFilterDenoiser::new(sample_rate) {
-            Ok(mut denoiser) => {
-                // Analyze for auto-tuning (on already denoised audio)
-                let analysis = analyze_for_deepfilter(&samples[0], sample_rate);
-                info!(
-                    "AI Denoise: SNR {:.1}dB ({})",
-                    analysis.estimated_snr,
-                    analysis.noise_severity()
-                );
+        // Analyze first to build model with correct params
+        let analysis = analyze_for_deepfilter(&samples[0], sample_rate);
+        info!(
+            "AI Denoise: SNR {:.1}dB ({})",
+            analysis.estimated_snr,
+            analysis.noise_severity()
+        );
 
+        match DeepFilterDenoiser::new_with_analysis(sample_rate, &analysis) {
+            Ok(mut denoiser) => {
                 // Process each channel
                 if is_stereo {
                     samples[0] = denoiser.process_with_analysis(&samples[0], &analysis);

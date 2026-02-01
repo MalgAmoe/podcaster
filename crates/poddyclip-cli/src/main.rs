@@ -637,8 +637,8 @@ fn main() -> Result<()> {
             );
         }
 
-        // Create denoiser and process
-        match poddyclip::deepfilter::DeepFilterDenoiser::new(sample_rate) {
+        // Create denoiser with analysis (builds model with correct params from start)
+        match poddyclip::deepfilter::DeepFilterDenoiser::new_with_analysis(sample_rate, &df_analysis) {
             Ok(mut denoiser) => {
                 if is_stereo {
                     samples[0] = denoiser.process_with_analysis(&samples[0], &df_analysis);

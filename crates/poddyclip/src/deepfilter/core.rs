@@ -19,6 +19,28 @@ use super::analysis::DfAnalysis;
 /// let mut denoiser = DeepFilterDenoiser::new(48000)?;
 /// let output = denoiser.process(&input_samples);
 /// ```
+/// SNR bracket for caching model parameters
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum SnrBracket {
+    VeryNoisy,  // < 10 dB
+    Noisy,      // 10-20 dB
+    Moderate,   // 20-30 dB
+    Clean,      // 30-40 dB
+    VeryClean,  // > 40 dB
+}
+
+impl SnrBracket {
+    fn from_snr(snr: f32) -> Self {
+        match snr {
+            s if s < 10.0 => Self::VeryNoisy,
+            s if s < 20.0 => Self::Noisy,
+            s if s < 30.0 => Self::Moderate,
+            s if s < 40.0 => Self::Clean,
+            _ => Self::VeryClean,
+        }
+    }
+}
+
 pub struct DeepFilterDenoiser {
     /// The DeepFilterNet model (uses Tract backend)
     model: DfTract,
@@ -28,6 +50,8 @@ pub struct DeepFilterDenoiser {
     model_sample_rate: usize,
     /// Runtime parameters for the model
     runtime_params: RuntimeParams,
+    /// Cached SNR bracket to avoid unnecessary model rebuilds
+    cached_snr_bracket: Option<SnrBracket>,
 }
 
 impl DeepFilterDenoiser {
@@ -41,10 +65,45 @@ impl DeepFilterDenoiser {
     ///
     /// Result containing the denoiser or an error if model loading fails
     pub fn new(sample_rate: u32) -> Result<Self> {
-        // Default runtime params for moderate noise
+        Self::new_with_snr(sample_rate, None)
+    }
+
+    /// Create a new DeepFilterDenoiser with parameters tuned for specific SNR
+    ///
+    /// # Arguments
+    ///
+    /// * `sample_rate` - Input sample rate (audio will be resampled to 48kHz if needed)
+    /// * `analysis` - Optional analysis results to tune parameters upfront
+    ///
+    /// # Returns
+    ///
+    /// Result containing the denoiser or an error if model loading fails
+    pub fn new_with_analysis(sample_rate: u32, analysis: &DfAnalysis) -> Result<Self> {
+        Self::new_with_snr(sample_rate, Some(analysis.estimated_snr))
+    }
+
+    /// Internal constructor with optional SNR for parameter tuning
+    fn new_with_snr(sample_rate: u32, snr: Option<f32>) -> Result<Self> {
+        let (bracket, atten_lim, min_thresh, max_thresh, post_filter_beta) = match snr {
+            Some(s) => {
+                let b = SnrBracket::from_snr(s);
+                let (a, min_t, max_t) = match b {
+                    SnrBracket::VeryNoisy => (45.0, -12.0, 38.0),
+                    SnrBracket::Noisy => (35.0, -14.0, 36.0),
+                    SnrBracket::Moderate => (25.0, -16.0, 34.0),
+                    SnrBracket::Clean => (18.0, -18.0, 30.0),
+                    SnrBracket::VeryClean => (12.0, -20.0, 25.0),
+                };
+                let pf = if s < 20.0 { 0.005 } else { 0.0 };
+                (Some(b), a, min_t, max_t, pf)
+            }
+            None => (None, 25.0, -16.0, 34.0, 0.0), // Moderate defaults
+        };
+
         let r_params = RuntimeParams::default_with_ch(1)
-            .with_atten_lim(25.0)
-            .with_thresholds(-16.0, 34.0, 34.0);
+            .with_atten_lim(atten_lim)
+            .with_post_filter(post_filter_beta)
+            .with_thresholds(min_thresh, max_thresh, max_thresh);
 
         let df_params = DfParams::default();
         let model = DfTract::new(df_params, &r_params)?;
@@ -55,6 +114,7 @@ impl DeepFilterDenoiser {
             input_sample_rate: sample_rate,
             model_sample_rate: model_sr,
             runtime_params: r_params,
+            cached_snr_bracket: bracket,
         })
     }
 
@@ -165,27 +225,19 @@ impl DeepFilterDenoiser {
 
     /// Auto-tune model parameters based on audio analysis
     fn auto_tune(&mut self, analysis: &DfAnalysis) {
-        let (atten_lim, min_thresh, max_thresh) = match analysis.estimated_snr {
-            snr if snr < 10.0 => {
-                // Very noisy
-                (45.0, -12.0, 38.0)
-            }
-            snr if snr < 20.0 => {
-                // Noisy
-                (35.0, -14.0, 36.0)
-            }
-            snr if snr < 30.0 => {
-                // Moderate
-                (25.0, -16.0, 34.0)
-            }
-            snr if snr < 40.0 => {
-                // Clean
-                (18.0, -18.0, 30.0)
-            }
-            _ => {
-                // Very clean
-                (12.0, -20.0, 25.0)
-            }
+        let new_bracket = SnrBracket::from_snr(analysis.estimated_snr);
+
+        // Skip rebuild if SNR bracket hasn't changed
+        if self.cached_snr_bracket == Some(new_bracket) {
+            return;
+        }
+
+        let (atten_lim, min_thresh, max_thresh) = match new_bracket {
+            SnrBracket::VeryNoisy => (45.0, -12.0, 38.0),
+            SnrBracket::Noisy => (35.0, -14.0, 36.0),
+            SnrBracket::Moderate => (25.0, -16.0, 34.0),
+            SnrBracket::Clean => (18.0, -18.0, 30.0),
+            SnrBracket::VeryClean => (12.0, -20.0, 25.0),
         };
 
         // Post-filter beta for very noisy signals
@@ -205,6 +257,7 @@ impl DeepFilterDenoiser {
         let df_params = DfParams::default();
         if let Ok(model) = DfTract::new(df_params, &self.runtime_params) {
             self.model = model;
+            self.cached_snr_bracket = Some(new_bracket);
         }
     }
 
@@ -253,12 +306,23 @@ impl DeepFilterDenoiser {
 
     /// Reset the processor state
     ///
-    /// Call this between processing different audio files or channels
+    /// Call this between processing different audio files or channels.
+    /// Preserves the cached SNR bracket so the model won't be rebuilt
+    /// if the next channel has similar noise characteristics.
     pub fn reset(&mut self) {
-        // Recreate model to reset internal state
+        // Recreate model to reset internal STFT state
+        // Keep cached_snr_bracket so auto_tune can skip rebuild if SNR is similar
         let df_params = DfParams::default();
         if let Ok(model) = DfTract::new(df_params, &self.runtime_params) {
             self.model = model;
         }
+    }
+
+    /// Full reset including cached parameters
+    ///
+    /// Call this between processing completely different audio files
+    pub fn reset_full(&mut self) {
+        self.cached_snr_bracket = None;
+        self.reset();
     }
 }
