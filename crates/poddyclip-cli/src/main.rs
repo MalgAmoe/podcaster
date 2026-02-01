@@ -1,6 +1,7 @@
 mod chain;
 
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use anyhow::{bail, Result};
 use chain::{ChainPreset, CompressorType, OutputSetting, ProcessorSetting};
@@ -179,6 +180,124 @@ struct Args {
     /// List available chain presets
     #[arg(long)]
     list_chains: bool,
+
+    /// Show per-stage timing breakdown
+    #[arg(long)]
+    benchmark: bool,
+}
+
+/// Timing data for each processing stage
+#[derive(Default)]
+struct StageTimings {
+    load: Duration,
+    filter: Duration,
+    input_gain: Duration,
+    declick: Duration,
+    dereverb: Duration,
+    denoise: Duration,
+    ai_denoise: Duration,
+    spectral_gate: Duration,
+    peak_attenuation: Duration,
+    expander: Duration,
+    compressor: Duration,
+    fixeq: Duration,
+    deesser: Duration,
+    saturation: Duration,
+    buttercomp: Duration,
+    enhance: Duration,
+    tape: Duration,
+    radio: Duration,
+    output: Duration,
+    save: Duration,
+}
+
+impl StageTimings {
+    fn total(&self) -> Duration {
+        self.load
+            + self.filter
+            + self.input_gain
+            + self.declick
+            + self.dereverb
+            + self.denoise
+            + self.ai_denoise
+            + self.spectral_gate
+            + self.peak_attenuation
+            + self.expander
+            + self.compressor
+            + self.fixeq
+            + self.deesser
+            + self.saturation
+            + self.buttercomp
+            + self.enhance
+            + self.tape
+            + self.radio
+            + self.output
+            + self.save
+    }
+
+    fn percent(&self, stage: Duration) -> f64 {
+        let total = self.total().as_secs_f64();
+        if total == 0.0 {
+            0.0
+        } else {
+            (stage.as_secs_f64() / total) * 100.0
+        }
+    }
+
+    fn print(&self, audio_duration_secs: f64) {
+        let total = self.total();
+        println!("\n┌─────────────────────────────────────────┐");
+        println!("│          Stage Timings                  │");
+        println!("├─────────────────────────────────────────┤");
+
+        // Print each stage (skip zeros)
+        let stages: [(&str, Duration); 20] = [
+            ("Load", self.load),
+            ("Filter", self.filter),
+            ("Input Gain", self.input_gain),
+            ("Declick", self.declick),
+            ("DeReverb", self.dereverb),
+            ("Denoise", self.denoise),
+            ("AI Denoise", self.ai_denoise),
+            ("Spectral Gate", self.spectral_gate),
+            ("Peak Atten", self.peak_attenuation),
+            ("Expander", self.expander),
+            ("Compressor", self.compressor),
+            ("FixEQ", self.fixeq),
+            ("DeEsser", self.deesser),
+            ("Saturation", self.saturation),
+            ("ButterComp", self.buttercomp),
+            ("Enhance", self.enhance),
+            ("Tape", self.tape),
+            ("Radio", self.radio),
+            ("Output", self.output),
+            ("Save", self.save),
+        ];
+
+        for (name, duration) in stages {
+            if duration.as_nanos() > 0 {
+                println!(
+                    "│ {:14} {:>8.2}ms ({:>5.1}%)     │",
+                    name,
+                    duration.as_secs_f64() * 1000.0,
+                    self.percent(duration)
+                );
+            }
+        }
+
+        println!("├─────────────────────────────────────────┤");
+        println!(
+            "│ {:14} {:>8.2}ms              │",
+            "Total",
+            total.as_secs_f64() * 1000.0
+        );
+        println!(
+            "│ {:14} {:>8.1}x               │",
+            "Realtime",
+            audio_duration_secs / total.as_secs_f64()
+        );
+        println!("└─────────────────────────────────────────┘");
+    }
 }
 
 fn main() -> Result<()> {
@@ -319,10 +438,17 @@ fn main() -> Result<()> {
     );
 
     // =========================================================================
+    // TIMING SETUP
+    // =========================================================================
+    let mut timings = StageTimings::default();
+
+    // =========================================================================
     // LOAD
     // =========================================================================
     println!("Loading: {}", input.display());
+    let start = Instant::now();
     let (mut samples, sample_rate) = load_audio(&input)?;
+    timings.load = start.elapsed();
     let is_stereo = samples.len() >= 2;
 
     println!("Sample rate: {} Hz", sample_rate);
@@ -345,6 +471,7 @@ fn main() -> Result<()> {
         };
         println!("\n[Filters] HP 80Hz @ {}dB/oct, LP 15.5kHz", args.hp_slope);
 
+        let start = Instant::now();
         let mut filters = Stereo::from_pair(
             FilterChain::new(sample_rate as f32, slope),
             FilterChain::new(sample_rate as f32, slope),
@@ -355,10 +482,12 @@ fn main() -> Result<()> {
         } else {
             filters.process_mono(&mut samples[0]);
         }
+        timings.filter = start.elapsed();
     }
 
     // Input gain
     println!("\n[Input Gain]");
+    let start = Instant::now();
     let (rms, peak) = if is_stereo {
         poddyclip::dynamics::autogain::calculate_rms_and_peak_stereo(&samples[0], &samples[1])
     } else {
@@ -372,12 +501,14 @@ fn main() -> Result<()> {
     );
     println!("  Applying: {:+.1}dB", gain_db);
     apply_gain(&mut samples, gain_db);
+    timings.input_gain = start.elapsed();
 
     // =========================================================================
     // REPAIR (OFFLINE)
     // =========================================================================
     if args.declick {
         println!("\n[Declick]");
+        let start = Instant::now();
         let declicker = Declicker::new(sample_rate);
         println!(
             "  Tuned for {}Hz: frame={}samples, order={}, threshold={}",
@@ -392,6 +523,7 @@ fn main() -> Result<()> {
             println!("  Channel {}: {} clicks repaired", i, clicks_found);
             *channel = repaired;
         }
+        timings.declick = start.elapsed();
     }
 
     // =========================================================================
@@ -399,6 +531,7 @@ fn main() -> Result<()> {
     // =========================================================================
     if args.dereverb > 0 {
         println!("\n[DeReverb]");
+        let start = Instant::now();
 
         // Analyze reverb characteristics on original audio
         let mono_for_reverb = if is_stereo {
@@ -438,12 +571,14 @@ fn main() -> Result<()> {
             samples[0] = dereverb.process(&samples[0]);
         }
         println!("    Max GR: {:.1}dB", dereverb.get_max_gain_reduction_db());
+        timings.dereverb = start.elapsed();
     }
 
     // =========================================================================
     // DENOISE
     // =========================================================================
     println!("\n[Denoise]");
+    let start = Instant::now();
     let preset: usize = denoiser_preset.into();
 
     // Analyze noise floor (on filtered + gain-normalized audio)
@@ -475,6 +610,7 @@ fn main() -> Result<()> {
         denoiser.init_with_noise_floor(&result.noise_floor);
         samples[0] = denoiser.process(&samples[0]);
     }
+    timings.denoise = start.elapsed();
 
     // =========================================================================
     // AI DENOISE (DeepFilterNet) - optional, runs before spectral denoiser
@@ -482,6 +618,7 @@ fn main() -> Result<()> {
     #[cfg(feature = "deepfilter")]
     if args.ai_denoise {
         println!("\n[AI Denoise (DeepFilterNet)]");
+        let start = Instant::now();
 
         // Analyze for auto-tuning
         let df_analysis = poddyclip::deepfilter::analyze_for_deepfilter(&samples[0], sample_rate);
@@ -520,6 +657,7 @@ fn main() -> Result<()> {
                 eprintln!("  Skipping AI denoising, will use spectral denoiser only");
             }
         }
+        timings.ai_denoise = start.elapsed();
     }
 
     // =========================================================================
@@ -527,6 +665,7 @@ fn main() -> Result<()> {
     // =========================================================================
     if args.spectral_gate > 0 {
         println!("\n[Spectral Gate]");
+        let start = Instant::now();
         println!(
             "  Preset: {} ({})",
             args.spectral_gate,
@@ -550,6 +689,7 @@ fn main() -> Result<()> {
             samples[0] = gate.process(&samples[0]);
             println!("    Max GR: {:.1}dB", gate.get_max_gain_reduction_db());
         }
+        timings.spectral_gate = start.elapsed();
     }
 
     // =========================================================================
@@ -557,6 +697,7 @@ fn main() -> Result<()> {
     // =========================================================================
     if args.depeak {
         println!("\n[Peak Attenuation]");
+        let start = Instant::now();
 
         // Analyze for tonal peaks using first second of audio
         let analyze_samples = (sample_rate as usize).min(samples[0].len());
@@ -605,6 +746,7 @@ fn main() -> Result<()> {
                 );
             }
         }
+        timings.peak_attenuation = start.elapsed();
     }
 
     // =========================================================================
@@ -614,6 +756,7 @@ fn main() -> Result<()> {
 
     // Expander (first - reduces noise in quiet passages)
     if expander_enabled {
+        let start = Instant::now();
         let mut expander = StereoExpander::new_with_preset(sample_rate as f32, expander_preset)
             .expect("Invalid expander preset");
         println!(
@@ -628,10 +771,12 @@ fn main() -> Result<()> {
             expander.process_mono(&mut samples[0]);
         }
         println!("    Max GR: {:.1}dB", expander.get_max_gain_reduction_db());
+        timings.expander = start.elapsed();
     }
 
     // Compressor (FET or Peak)
     if comp_enabled {
+        let start = Instant::now();
         if use_fet {
             let mut fetcomp = StereoFetCompressor::new_with_preset(sample_rate as f32, comp_preset)
                 .expect("Invalid fetcomp preset");
@@ -666,6 +811,7 @@ fn main() -> Result<()> {
                 peakcomp.process_mono(&mut samples[0]);
             }
         }
+        timings.compressor = start.elapsed();
     }
 
     // Spectral analysis (on denoised audio - used by FixEq and EnhanceEq)
@@ -678,6 +824,7 @@ fn main() -> Result<()> {
 
     // FixEq
     if fixeq_enabled {
+        let start = Instant::now();
         let mut fixeq = FixEq::new(sample_rate as f32);
         fixeq.configure_from_spectrum(&spectrum, preset, is_stereo);
         println!(
@@ -692,10 +839,12 @@ fn main() -> Result<()> {
         } else {
             fixeq.process_mono(&mut samples[0]);
         }
+        timings.fixeq = start.elapsed();
     }
 
     // De-esser
     if deesser_enabled {
+        let start = Instant::now();
         let mut deesser = StereoDeEsser::new(sample_rate as f32);
         let sibilance = deesser.configure(&samples).clone();
         println!(
@@ -718,10 +867,12 @@ fn main() -> Result<()> {
             }
         }
         println!("    Max GR: {:.1}dB", max_gr);
+        timings.deesser = start.elapsed();
     }
 
     // Saturation (Channel9)
     if saturation_enabled {
+        let start = Instant::now();
         let sat_preset =
             get_saturation_preset(saturation_preset).expect("Invalid saturation preset");
         let mut channel9: Stereo<Channel9> = Stereo::new(sample_rate as f32);
@@ -738,10 +889,12 @@ fn main() -> Result<()> {
         } else {
             channel9.process_mono(&mut samples[0]);
         }
+        timings.saturation = start.elapsed();
     }
 
     // ButterComp
     if buttercomp_enabled {
+        let start = Instant::now();
         let buttercomp_amount =
             get_buttercomp_preset(buttercomp_preset).expect("Invalid buttercomp preset");
         let mut compressor: Stereo<ButterComp2> = Stereo::new(sample_rate as f32);
@@ -758,6 +911,7 @@ fn main() -> Result<()> {
         } else {
             compressor.process_mono(&mut samples[0]);
         }
+        timings.buttercomp = start.elapsed();
     }
 
     // Fresh spectral analysis for EnhanceEQ (on current audio state)
@@ -769,6 +923,7 @@ fn main() -> Result<()> {
 
     // EnhanceEQ (or RadioVoice)
     if !args.radio && enhanceeq_enabled {
+        let start = Instant::now();
         let eq_preset_data = get_eq_preset(eq_preset).expect("Invalid EQ preset");
         let enhance_spectrum = analysis::SpectralAnalysis::new(&mono_for_enhance, sample_rate);
         let mut enhanceeq_proc = StereoEnhanceEq::new(sample_rate as f32);
@@ -799,10 +954,12 @@ fn main() -> Result<()> {
         } else {
             enhanceeq_proc.process_mono(&mut samples[0]);
         }
+        timings.enhance = start.elapsed();
     }
 
     // TapeGlue
     if tape_enabled {
+        let start = Instant::now();
         let sat_preset = get_saturation_preset(tape_preset).expect("Invalid saturation preset");
         let mut tape_left = TapeGlue::new(sample_rate as f64);
         let mut tape_right = TapeGlue::new(sample_rate as f64);
@@ -821,6 +978,7 @@ fn main() -> Result<()> {
                 *sample = tape_left.process(*sample);
             }
         }
+        timings.tape = start.elapsed();
     }
 
     // =========================================================================
@@ -828,6 +986,7 @@ fn main() -> Result<()> {
     // =========================================================================
     if args.radio {
         println!("\n[Radio Voice EQ]");
+        let start = Instant::now();
         let mut radio = RadioVoiceProcessor::new(sample_rate);
         radio.set_amount(args.radio_amount);
 
@@ -888,6 +1047,7 @@ fn main() -> Result<()> {
             radio.get_presence_freq()
         );
         println!("  Air: {:+.1} dB", radio.get_air_gain());
+        timings.radio = start.elapsed();
     }
 
     // =========================================================================
@@ -897,6 +1057,7 @@ fn main() -> Result<()> {
 
     // LUFS normalization + Limiter (paired together)
     if output_enabled {
+        let start = Instant::now();
         let lufs = measure_integrated_lufs(&samples, sample_rate);
         let lufs_gain_db = lufs_target - lufs;
         println!(
@@ -914,6 +1075,7 @@ fn main() -> Result<()> {
             limiter.process_mono(&mut samples[0])
         };
         println!("  Limiter: -1dBTP, max GR {:.1}dB", stats.max_reduction_db);
+        timings.output = start.elapsed();
     } else {
         println!("  Output: DISABLED (no LUFS normalization or limiting)");
     }
@@ -933,8 +1095,19 @@ fn main() -> Result<()> {
     });
 
     println!("\nSaving: {}", output_path.display());
+    let start = Instant::now();
     save_wav(&output_path, &samples, sample_rate)?;
+    timings.save = start.elapsed();
     println!("Done.");
+
+    // =========================================================================
+    // BENCHMARK OUTPUT
+    // =========================================================================
+    if args.benchmark {
+        let audio_duration_secs = samples[0].len() as f64 / sample_rate as f64;
+        timings.print(audio_duration_secs);
+    }
+
     Ok(())
 }
 

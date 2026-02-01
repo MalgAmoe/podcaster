@@ -7,6 +7,58 @@
 
 use super::common::*;
 use crate::stft::{StftProcessor, RT_HOP_SIZE, RT_WINDOW_SIZE, EPSILON};
+use std::collections::VecDeque;
+
+// =============================================================================
+// Sliding Minimum (O(1) amortized minimum tracking for windows)
+// =============================================================================
+
+/// Monotonic deque for O(1) amortized sliding window minimum
+struct SlidingMin {
+    deque: VecDeque<(usize, f32)>,
+    window_size: usize,
+}
+
+impl SlidingMin {
+    fn new(window_size: usize) -> Self {
+        Self {
+            deque: VecDeque::with_capacity(window_size),
+            window_size,
+        }
+    }
+
+    /// Push a new value and return the current minimum in the window
+    #[inline]
+    fn push(&mut self, idx: usize, val: f32) -> f32 {
+        // Remove old entries that are outside the window
+        while let Some(&(front_idx, _)) = self.deque.front() {
+            if idx >= self.window_size && front_idx <= idx - self.window_size {
+                self.deque.pop_front();
+            } else {
+                break;
+            }
+        }
+
+        // Remove entries from back that are larger than the new value
+        // (they can never be the minimum while the new value is in the window)
+        while let Some(&(_, back_val)) = self.deque.back() {
+            if back_val >= val {
+                self.deque.pop_back();
+            } else {
+                break;
+            }
+        }
+
+        self.deque.push_back((idx, val));
+
+        // The front is always the minimum
+        self.deque.front().map(|&(_, v)| v).unwrap_or(f32::INFINITY)
+    }
+
+    fn reset(&mut self) {
+        self.deque.clear();
+    }
+}
 
 // =============================================================================
 // Analysis: Simple Audio Metrics
@@ -114,17 +166,21 @@ fn compute_noise_floor_from_spectra(
     let window_duration_seconds = 1.5;
     let frames_per_window =
         ((sample_rate as f32 * window_duration_seconds) / RT_HOP_SIZE as f32) as usize;
+    let frames_per_window = frames_per_window.max(1);
 
+    let num_frames = all_power_spectra.len();
     let mut noise_floor = vec![f32::INFINITY; n_bins];
 
-    for window_start in 0..all_power_spectra.len() {
-        let window_end = (window_start + frames_per_window).min(all_power_spectra.len());
+    // Use sliding minimum for O(n) per bin instead of O(n × window)
+    // Process each frequency bin independently
+    for bin in 0..n_bins {
+        let mut sliding_min = SlidingMin::new(frames_per_window);
 
-        for bin in 0..n_bins {
-            let mut window_min = f32::INFINITY;
-            for frame_idx in window_start..window_end {
-                window_min = window_min.min(all_power_spectra[frame_idx][bin]);
-            }
+        for frame_idx in 0..num_frames {
+            let power = all_power_spectra[frame_idx][bin];
+            let window_min = sliding_min.push(frame_idx, power);
+
+            // Track overall minimum across all windows
             noise_floor[bin] = noise_floor[bin].min(window_min);
         }
     }

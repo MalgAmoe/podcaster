@@ -25,6 +25,11 @@ pub struct StftProcessor {
     // Overlap-add buffer
     overlap_buffer: Vec<f32>,
 
+    // Reusable work buffers (avoid per-frame allocations)
+    work_spectrum: Vec<Complex<f32>>,
+    work_output: Vec<f32>,
+    work_power: Vec<f32>,
+
     // Configuration
     config: StftConfig,
     sample_rate: u32,
@@ -46,6 +51,10 @@ impl StftProcessor {
             fft_scratch,
             window,
             overlap_buffer: vec![0.0; config.window_size],
+            // Pre-allocate work buffers
+            work_spectrum: vec![Complex::new(0.0, 0.0); config.window_size],
+            work_output: vec![0.0; config.window_size],
+            work_power: vec![0.0; config.n_bins()],
             config,
             sample_rate,
         }
@@ -113,6 +122,31 @@ impl StftProcessor {
         spectrum
     }
 
+    /// Apply window and perform forward FFT on a frame using internal buffer
+    ///
+    /// Returns a reference to the internal spectrum buffer. This avoids allocation
+    /// but the buffer is only valid until the next FFT operation.
+    pub fn forward_fft_inplace(&mut self, frame: &[f32]) -> &[Complex<f32>] {
+        debug_assert_eq!(frame.len(), self.config.window_size);
+
+        // Explicit for-loop enables LLVM auto-vectorization
+        let window_size = self.config.window_size;
+        for i in 0..window_size {
+            self.work_spectrum[i] = Complex::new(frame[i] * self.window[i], 0.0);
+        }
+
+        // Forward FFT
+        self.fft
+            .process_with_scratch(&mut self.work_spectrum, &mut self.fft_scratch);
+
+        &self.work_spectrum
+    }
+
+    /// Get mutable access to internal spectrum buffer (for modification after forward_fft_inplace)
+    pub fn spectrum_mut(&mut self) -> &mut [Complex<f32>] {
+        &mut self.work_spectrum
+    }
+
     /// Perform inverse FFT, apply window, and return time-domain samples
     ///
     /// Input spectrum is modified in place.
@@ -133,6 +167,23 @@ impl StftProcessor {
         output
     }
 
+    /// Perform inverse FFT using internal buffer, returns reference to output
+    ///
+    /// Uses the internal work_spectrum as input and work_output for result.
+    pub fn inverse_fft_inplace(&mut self) -> &[f32] {
+        // Inverse FFT on internal spectrum buffer
+        self.ifft
+            .process_with_scratch(&mut self.work_spectrum, &mut self.fft_scratch);
+
+        // Explicit for-loop enables LLVM auto-vectorization
+        let window_size = self.config.window_size;
+        let scale = 1.0 / window_size as f32;
+        for i in 0..window_size {
+            self.work_output[i] = self.work_spectrum[i].re * scale * self.window[i];
+        }
+        &self.work_output
+    }
+
     /// Compute power spectrum from complex spectrum
     ///
     /// Returns only positive frequencies (n_bins)
@@ -144,6 +195,15 @@ impl StftProcessor {
             power[i] = spectrum[i].norm_sqr();
         }
         power
+    }
+
+    /// Compute power spectrum into internal buffer, returns reference
+    pub fn compute_power_inplace(&mut self) -> &[f32] {
+        let n_bins = self.n_bins();
+        for i in 0..n_bins {
+            self.work_power[i] = self.work_spectrum[i].norm_sqr();
+        }
+        &self.work_power
     }
 
     /// Ensure conjugate symmetry for real IFFT
@@ -168,8 +228,8 @@ impl StftProcessor {
         debug_assert_eq!(synthesized.len(), self.config.window_size);
 
         // Add to overlap buffer
-        for (i, &s) in synthesized.iter().enumerate() {
-            self.overlap_buffer[i] += s;
+        for i in 0..self.config.window_size {
+            self.overlap_buffer[i] += synthesized[i];
         }
 
         // Extract output (first hop_size samples)
@@ -177,16 +237,45 @@ impl StftProcessor {
 
         // Shift buffer
         self.overlap_buffer.rotate_left(self.config.hop_size);
-        for i in (self.config.window_size - self.config.hop_size)..self.config.window_size {
+        let clear_start = self.config.window_size - self.config.hop_size;
+        for i in clear_start..self.config.window_size {
             self.overlap_buffer[i] = 0.0;
         }
 
         output
     }
 
-    /// Reset overlap buffer
+    /// Add synthesized frame (from internal work_output) to overlap buffer
+    /// and copy output to provided slice
+    ///
+    /// This version avoids allocation by using caller-provided output buffer.
+    pub fn overlap_add_inplace(&mut self, output: &mut [f32]) {
+        debug_assert!(output.len() >= self.config.hop_size);
+
+        // Add internal work_output to overlap buffer
+        for i in 0..self.config.window_size {
+            self.overlap_buffer[i] += self.work_output[i];
+        }
+
+        // Copy output (first hop_size samples)
+        output[..self.config.hop_size].copy_from_slice(&self.overlap_buffer[..self.config.hop_size]);
+
+        // Shift buffer
+        self.overlap_buffer.rotate_left(self.config.hop_size);
+        let clear_start = self.config.window_size - self.config.hop_size;
+        for i in clear_start..self.config.window_size {
+            self.overlap_buffer[i] = 0.0;
+        }
+    }
+
+    /// Reset overlap buffer and work buffers
     pub fn reset(&mut self) {
         self.overlap_buffer.fill(0.0);
+        for c in &mut self.work_spectrum {
+            *c = Complex::new(0.0, 0.0);
+        }
+        self.work_output.fill(0.0);
+        self.work_power.fill(0.0);
     }
 
     // =========================================================================

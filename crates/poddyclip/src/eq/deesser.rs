@@ -203,9 +203,10 @@ impl StereoDeEsser {
 
     /// Process stereo audio in-place
     pub fn process_stereo(&mut self, left: &mut [f32], right: &mut [f32]) {
-        for (l, r) in left.iter_mut().zip(right.iter_mut()) {
-            *l = self.left.process(*l);
-            *r = self.right.process(*r);
+        let len = left.len().min(right.len());
+        for i in 0..len {
+            left[i] = self.left.process(left[i]);
+            right[i] = self.right.process(right[i]);
         }
     }
 

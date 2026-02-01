@@ -123,6 +123,7 @@ impl Expander {
     }
 
     /// Process a single sample
+    #[inline]
     pub fn process(&mut self, input: f32) -> f32 {
         let level_db = linear_to_db(input.abs());
 
@@ -156,7 +157,7 @@ impl Expander {
             self.max_gain_reduction_db = self.gain_reduction_db;
         }
 
-        // Apply gain
+        // Apply gain using fast approximation
         let gain = db_to_linear(-self.gain_reduction_db);
         input * gain
     }
@@ -309,6 +310,7 @@ impl StereoExpander {
     }
 
     /// Process a stereo sample pair with linked detection
+    #[inline]
     pub fn process_sample(&mut self, left: f32, right: f32) -> (f32, f32) {
         // Linked detection: max of both channels
         let peak = left.abs().max(right.abs());
@@ -340,7 +342,7 @@ impl StereoExpander {
             self.max_gain_reduction_db = self.gain_reduction_db;
         }
 
-        // Apply same gain to both channels
+        // Apply same gain to both channels using fast approximation
         let gain = db_to_linear(-self.gain_reduction_db);
         (left * gain, right * gain)
     }
@@ -391,10 +393,11 @@ impl StereoExpander {
 
     /// Process stereo audio in-place
     pub fn process_stereo(&mut self, left: &mut [f32], right: &mut [f32]) {
-        for (l, r) in left.iter_mut().zip(right.iter_mut()) {
-            let (out_l, out_r) = self.process_sample(*l, *r);
-            *l = out_l;
-            *r = out_r;
+        let len = left.len().min(right.len());
+        for i in 0..len {
+            let (out_l, out_r) = self.process_sample(left[i], right[i]);
+            left[i] = out_l;
+            right[i] = out_r;
         }
     }
 

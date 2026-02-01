@@ -5,9 +5,70 @@
 
 #![allow(dead_code)]
 
-use crate::analysis::utils::{db_to_linear, linear_to_db, mix_to_mono};
+use crate::analysis::utils::{linear_to_db, db_to_linear, mix_to_mono};
 use super::peakcomp_analysis::{analyze_peak_profile, PeakProfile};
 use std::collections::VecDeque;
+
+// =============================================================================
+// Sliding Maximum (O(1) amortized peak tracking for lookahead windows)
+// =============================================================================
+
+/// Monotonic deque for O(1) amortized sliding window maximum
+#[derive(Clone, Debug)]
+struct SlidingMax {
+    /// Deque stores (index, value) pairs
+    deque: VecDeque<(usize, f32)>,
+    /// Window size
+    window_size: usize,
+    /// Current sample index
+    current_idx: usize,
+}
+
+impl SlidingMax {
+    fn new(window_size: usize) -> Self {
+        Self {
+            deque: VecDeque::with_capacity(window_size),
+            window_size,
+            current_idx: 0,
+        }
+    }
+
+    /// Push a new value and return the current maximum in the window
+    #[inline]
+    fn push(&mut self, val: f32) -> f32 {
+        let idx = self.current_idx;
+        self.current_idx += 1;
+
+        // Remove old entries that are outside the window
+        while let Some(&(front_idx, _)) = self.deque.front() {
+            if idx >= self.window_size && front_idx <= idx - self.window_size {
+                self.deque.pop_front();
+            } else {
+                break;
+            }
+        }
+
+        // Remove entries from back that are smaller than the new value
+        // (they can never be the maximum while the new value is in the window)
+        while let Some(&(_, back_val)) = self.deque.back() {
+            if back_val <= val {
+                self.deque.pop_back();
+            } else {
+                break;
+            }
+        }
+
+        self.deque.push_back((idx, val));
+
+        // The front is always the maximum
+        self.deque.front().map(|&(_, v)| v).unwrap_or(0.0)
+    }
+
+    fn reset(&mut self) {
+        self.deque.clear();
+        self.current_idx = 0;
+    }
+}
 
 // =============================================================================
 // PeakComp Presets (VCA lookahead: transparent, catches peaks)
@@ -75,9 +136,12 @@ pub struct VcaPeakComp {
     knee_db: f32,
     lookahead_samples: usize,
     lookahead_buffer: VecDeque<f32>,
+    sliding_max: SlidingMax,
     envelope: f32,
     gain_reduction_db: f32,
     sample_rate: f32,
+    // Cached values for ratio calculation
+    ratio_factor: f32, // 1.0 - 1.0 / ratio
 }
 
 impl VcaPeakComp {
@@ -105,9 +169,11 @@ impl VcaPeakComp {
             knee_db,
             lookahead_samples,
             lookahead_buffer: VecDeque::with_capacity(lookahead_samples + 1),
+            sliding_max: SlidingMax::new(lookahead_samples + 1),
             envelope: 0.0,
             gain_reduction_db: 0.0,
             sample_rate,
+            ratio_factor: 1.0 - 1.0 / ratio,
         }
     }
 
@@ -132,6 +198,7 @@ impl VcaPeakComp {
     /// Set ratio
     pub fn set_ratio(&mut self, ratio: f32) {
         self.ratio = ratio.max(1.0);
+        self.ratio_factor = 1.0 - 1.0 / self.ratio;
     }
 
     /// Set attack time in ms
@@ -145,6 +212,7 @@ impl VcaPeakComp {
     }
 
     /// VCA-style gain calculation with soft knee
+    #[inline]
     fn calculate_gain_reduction(&self, level_db: f32) -> f32 {
         let knee_start = self.threshold_db - self.knee_db / 2.0;
         let knee_end = self.threshold_db + self.knee_db / 2.0;
@@ -152,37 +220,36 @@ impl VcaPeakComp {
         if level_db < knee_start {
             0.0 // Below knee - no reduction
         } else if level_db > knee_end {
-            // Above knee - full ratio
-            (level_db - self.threshold_db) * (1.0 - 1.0 / self.ratio)
+            // Above knee - full ratio (use cached ratio_factor)
+            (level_db - self.threshold_db) * self.ratio_factor
         } else {
             // In knee - quadratic interpolation for smooth transition
             let x = level_db - knee_start;
             let knee_ratio = x / self.knee_db;
-            knee_ratio * knee_ratio * (level_db - self.threshold_db) * (1.0 - 1.0 / self.ratio)
-                / 2.0
+            knee_ratio * knee_ratio * (level_db - self.threshold_db) * self.ratio_factor / 2.0
         }
     }
 
     /// Process a single sample with look-ahead
+    #[inline]
     pub fn process(&mut self, input: f32) -> f32 {
         // Add input to look-ahead buffer
         self.lookahead_buffer.push_back(input);
 
         // If buffer not full yet, return silence (latency compensation)
         if self.lookahead_buffer.len() <= self.lookahead_samples {
+            // Still add to sliding max for when we start processing
+            self.sliding_max.push(input.abs());
             return 0.0;
         }
 
         // Get the delayed sample (the one we'll actually output)
         let delayed_sample = self.lookahead_buffer.pop_front().unwrap_or(0.0);
 
-        // Look ahead to find peak in the window
-        let mut peak_in_window = input.abs();
-        for &sample in self.lookahead_buffer.iter() {
-            peak_in_window = peak_in_window.max(sample.abs());
-        }
+        // Use sliding max for O(1) peak detection (instead of O(lookahead_samples) scan)
+        let peak_in_window = self.sliding_max.push(input.abs());
 
-        // Convert to dB
+        // Convert to dB using fast approximation
         let peak_db = linear_to_db(peak_in_window);
 
         // Calculate target gain reduction
@@ -199,7 +266,7 @@ impl VcaPeakComp {
                 + (1.0 - self.release_coeff) * target_gr_db;
         }
 
-        // Apply gain reduction
+        // Apply gain reduction using fast approximation
         let gain = db_to_linear(-self.gain_reduction_db);
         delayed_sample * gain
     }
@@ -212,6 +279,7 @@ impl VcaPeakComp {
     /// Reset internal state
     pub fn reset(&mut self) {
         self.lookahead_buffer.clear();
+        self.sliding_max.reset();
         self.envelope = 0.0;
         self.gain_reduction_db = 0.0;
     }
@@ -254,17 +322,22 @@ pub struct StereoVcaPeakComp {
     is_stereo: bool,
     sample_rate: f32,
     last_profile: Option<PeakProfile>,
+    /// Sliding max for linked stereo peak detection
+    stereo_sliding_max: SlidingMax,
 }
 
 impl StereoVcaPeakComp {
     /// Create a new stereo VCA peak compressor
     pub fn new(sample_rate: f32) -> Self {
+        let left = VcaPeakComp::new_default(sample_rate);
+        let lookahead = left.lookahead_samples + 1;
         Self {
-            left: VcaPeakComp::new_default(sample_rate),
+            left,
             right: VcaPeakComp::new_default(sample_rate),
             is_stereo: false,
             sample_rate,
             last_profile: None,
+            stereo_sliding_max: SlidingMax::new(lookahead),
         }
     }
 
@@ -280,6 +353,7 @@ impl StereoVcaPeakComp {
             p.lookahead_ms,
             sample_rate,
         );
+        let lookahead = left.lookahead_samples + 1;
         let right = VcaPeakComp::new(
             p.threshold_db,
             p.ratio,
@@ -295,6 +369,7 @@ impl StereoVcaPeakComp {
             is_stereo: false,
             sample_rate,
             last_profile: None,
+            stereo_sliding_max: SlidingMax::new(lookahead),
         })
     }
 
@@ -347,22 +422,21 @@ impl StereoVcaPeakComp {
     /// Process stereo audio in-place
     /// Uses linked peak detection for stereo coherence
     pub fn process_stereo(&mut self, left: &mut [f32], right: &mut [f32]) {
-        for (l, r) in left.iter_mut().zip(right.iter_mut()) {
+        let len = left.len().min(right.len());
+        for i in 0..len {
             // Linked detection: use max of both channels
-            let peak = l.abs().max(r.abs());
-
-            // Process with linked peak
-            // We need to feed both compressors the same peak info
-            // But apply gain to their respective delayed samples
+            let peak = left[i].abs().max(right[i].abs());
 
             // Add to both buffers
-            self.left.lookahead_buffer.push_back(*l);
-            self.right.lookahead_buffer.push_back(*r);
+            self.left.lookahead_buffer.push_back(left[i]);
+            self.right.lookahead_buffer.push_back(right[i]);
 
             // Check if buffers are full
             if self.left.lookahead_buffer.len() <= self.left.lookahead_samples {
-                *l = 0.0;
-                *r = 0.0;
+                // Still add to sliding max
+                self.stereo_sliding_max.push(peak);
+                left[i] = 0.0;
+                right[i] = 0.0;
                 continue;
             }
 
@@ -370,16 +444,8 @@ impl StereoVcaPeakComp {
             let delayed_l = self.left.lookahead_buffer.pop_front().unwrap_or(0.0);
             let delayed_r = self.right.lookahead_buffer.pop_front().unwrap_or(0.0);
 
-            // Find peak in look-ahead window (linked across channels)
-            let mut peak_in_window = peak;
-            for (&ls, &rs) in self
-                .left
-                .lookahead_buffer
-                .iter()
-                .zip(self.right.lookahead_buffer.iter())
-            {
-                peak_in_window = peak_in_window.max(ls.abs()).max(rs.abs());
-            }
+            // Use sliding max for O(1) peak detection (linked across channels)
+            let peak_in_window = self.stereo_sliding_max.push(peak);
 
             // Calculate gain reduction using left compressor (linked)
             let peak_db = linear_to_db(peak_in_window);
@@ -394,15 +460,16 @@ impl StereoVcaPeakComp {
                     + (1.0 - self.left.release_coeff) * target_gr_db;
             }
 
-            // Apply same gain to both channels
+            // Apply same gain to both channels using fast approximation
             let gain = db_to_linear(-self.left.gain_reduction_db);
-            *l = delayed_l * gain;
-            *r = delayed_r * gain;
+            left[i] = delayed_l * gain;
+            right[i] = delayed_r * gain;
         }
     }
 
     /// Process a single stereo sample pair with linked detection
     /// Returns (left_out, right_out)
+    #[inline]
     pub fn process_sample_stereo(&mut self, left_in: f32, right_in: f32) -> (f32, f32) {
         // Linked detection: use max of both channels
         let peak = left_in.abs().max(right_in.abs());
@@ -413,6 +480,8 @@ impl StereoVcaPeakComp {
 
         // Check if buffers are full (latency compensation)
         if self.left.lookahead_buffer.len() <= self.left.lookahead_samples {
+            // Still track in sliding max
+            self.stereo_sliding_max.push(peak);
             return (0.0, 0.0);
         }
 
@@ -420,16 +489,8 @@ impl StereoVcaPeakComp {
         let delayed_l = self.left.lookahead_buffer.pop_front().unwrap_or(0.0);
         let delayed_r = self.right.lookahead_buffer.pop_front().unwrap_or(0.0);
 
-        // Find peak in look-ahead window (linked across channels)
-        let mut peak_in_window = peak;
-        for (&ls, &rs) in self
-            .left
-            .lookahead_buffer
-            .iter()
-            .zip(self.right.lookahead_buffer.iter())
-        {
-            peak_in_window = peak_in_window.max(ls.abs()).max(rs.abs());
-        }
+        // Use sliding max for O(1) peak detection (linked across channels)
+        let peak_in_window = self.stereo_sliding_max.push(peak);
 
         // Calculate gain reduction using left compressor (linked)
         let peak_db = linear_to_db(peak_in_window);
@@ -444,7 +505,7 @@ impl StereoVcaPeakComp {
                 + (1.0 - self.left.release_coeff) * target_gr_db;
         }
 
-        // Apply same gain to both channels (linked)
+        // Apply same gain to both channels (linked) using fast approximation
         let gain = db_to_linear(-self.left.gain_reduction_db);
         (delayed_l * gain, delayed_r * gain)
     }
@@ -475,6 +536,7 @@ impl StereoVcaPeakComp {
     pub fn reset(&mut self) {
         self.left.reset();
         self.right.reset();
+        self.stereo_sliding_max.reset();
     }
 }
 

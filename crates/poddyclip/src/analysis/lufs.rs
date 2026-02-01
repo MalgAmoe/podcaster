@@ -149,6 +149,8 @@ fn ms_to_lufs(ms: f32) -> f32 {
 
 /// Measure integrated LUFS (ITU-R BS.1770-4)
 ///
+/// Optimized streaming version that avoids allocating a full copy of K-weighted audio.
+///
 /// # Arguments
 /// * `samples` - Audio channels (mono or stereo)
 /// * `sample_rate` - Sample rate in Hz
@@ -157,42 +159,97 @@ fn ms_to_lufs(ms: f32) -> f32 {
 /// Integrated LUFS value
 pub fn measure_integrated_lufs(samples: &[Vec<f32>], sample_rate: u32) -> f32 {
     let sample_rate_f = sample_rate as f32;
+    let num_channels = samples.len();
+
+    if num_channels == 0 {
+        return -70.0;
+    }
 
     // Block size: 400ms with 75% overlap (100ms hop)
     let block_samples = (0.4 * sample_rate_f) as usize;
     let hop_samples = (0.1 * sample_rate_f) as usize;
 
-    // Apply K-weighting to all channels
-    let weighted: Vec<Vec<f32>> = samples
-        .iter()
-        .map(|channel| {
-            let mut filter = KWeightingFilter::new(sample_rate_f);
-            channel.iter().map(|&s| filter.process(s)).collect()
-        })
-        .collect();
-
-    // Calculate mean square for each 400ms block
-    let num_samples = weighted.first().map(|c| c.len()).unwrap_or(0);
+    let num_samples = samples.first().map(|c| c.len()).unwrap_or(0);
     if num_samples < block_samples {
-        // Audio too short, just measure the whole thing
-        let total_ms: f32 =
-            weighted.iter().map(|ch| mean_square(ch)).sum::<f32>() / weighted.len().max(1) as f32;
-        return ms_to_lufs(total_ms);
+        // Audio too short - apply K-weighting to the whole thing
+        let mut total_ms = 0.0_f32;
+        for channel in samples {
+            let mut filter = KWeightingFilter::new(sample_rate_f);
+            let mut sum_sq = 0.0_f32;
+            for &s in channel {
+                let weighted = filter.process(s);
+                sum_sq += weighted * weighted;
+            }
+            total_ms += sum_sq / channel.len().max(1) as f32;
+        }
+        return ms_to_lufs(total_ms / num_channels as f32);
     }
 
-    let mut block_ms: Vec<f32> = Vec::new();
+    // Streaming approach: process audio in blocks, applying K-weighting on the fly
+    // We need to maintain filter state across blocks for continuity
 
-    let mut pos = 0;
-    while pos + block_samples <= num_samples {
-        // Sum mean square across all channels (equal weight for stereo)
-        let ms: f32 = weighted
-            .iter()
-            .map(|ch| mean_square(&ch[pos..pos + block_samples]))
-            .sum::<f32>()
-            / weighted.len() as f32;
+    // Create filters for each channel
+    let mut filters: Vec<KWeightingFilter> = (0..num_channels)
+        .map(|_| KWeightingFilter::new(sample_rate_f))
+        .collect();
 
-        block_ms.push(ms);
-        pos += hop_samples;
+    // Rolling buffer to handle overlap - we need to keep block_samples worth of weighted data
+    // and shift by hop_samples each iteration
+    let mut rolling_buffers: Vec<Vec<f32>> = (0..num_channels)
+        .map(|_| Vec::with_capacity(block_samples + hop_samples))
+        .collect();
+
+    let mut block_ms: Vec<f32> = Vec::with_capacity(num_samples / hop_samples + 1);
+
+    // Process samples in chunks, maintaining K-weighting filter state
+    let mut sample_idx = 0;
+    let mut first_block = true;
+
+    while sample_idx < num_samples {
+        // How many new samples to process this iteration
+        let chunk_size = if first_block {
+            block_samples
+        } else {
+            hop_samples
+        };
+        let end_idx = (sample_idx + chunk_size).min(num_samples);
+
+        // Process chunk through K-weighting for each channel
+        for (ch_idx, channel) in samples.iter().enumerate() {
+            // Apply K-weighting to new samples and append to rolling buffer
+            for i in sample_idx..end_idx {
+                let weighted = filters[ch_idx].process(channel[i]);
+                rolling_buffers[ch_idx].push(weighted);
+            }
+        }
+
+        // Check if we have enough for a block
+        if rolling_buffers[0].len() >= block_samples {
+            // Calculate mean square for this block across all channels
+            let mut block_ms_sum = 0.0_f32;
+            for ch_idx in 0..num_channels {
+                let buf = &rolling_buffers[ch_idx];
+                let start = buf.len() - block_samples;
+                let mut sum_sq = 0.0_f32;
+                for i in start..buf.len() {
+                    sum_sq += buf[i] * buf[i];
+                }
+                block_ms_sum += sum_sq / block_samples as f32;
+            }
+            block_ms.push(block_ms_sum / num_channels as f32);
+
+            // Trim rolling buffers to keep only what we need for overlap
+            // Keep the last (block_samples - hop_samples) samples
+            let keep_from = rolling_buffers[0].len().saturating_sub(block_samples - hop_samples);
+            for buf in &mut rolling_buffers {
+                if keep_from > 0 {
+                    buf.drain(0..keep_from);
+                }
+            }
+            first_block = false;
+        }
+
+        sample_idx = end_idx;
     }
 
     if block_ms.is_empty() {
@@ -201,36 +258,45 @@ pub fn measure_integrated_lufs(samples: &[Vec<f32>], sample_rate: u32) -> f32 {
 
     // Step 1: Absolute gate at -70 LUFS
     let absolute_gate_ms = 10.0_f32.powf((-70.0 + 0.691) / 10.0);
-    let gated_blocks: Vec<f32> = block_ms
-        .iter()
-        .copied()
-        .filter(|&ms| ms > absolute_gate_ms)
-        .collect();
 
-    if gated_blocks.is_empty() {
+    // Count and sum in one pass
+    let mut gated_sum = 0.0_f32;
+    let mut gated_count = 0usize;
+    for &ms in &block_ms {
+        if ms > absolute_gate_ms {
+            gated_sum += ms;
+            gated_count += 1;
+        }
+    }
+
+    if gated_count == 0 {
         return -70.0;
     }
 
     // Step 2: Calculate ungated average
-    let ungated_avg = gated_blocks.iter().sum::<f32>() / gated_blocks.len() as f32;
+    let ungated_avg = gated_sum / gated_count as f32;
     let ungated_lufs = ms_to_lufs(ungated_avg);
 
     // Step 3: Relative gate at -10 LU below ungated average
     let relative_gate_lufs = ungated_lufs - 10.0;
     let relative_gate_ms = 10.0_f32.powf((relative_gate_lufs + 0.691) / 10.0);
 
-    let final_blocks: Vec<f32> = gated_blocks
-        .into_iter()
-        .filter(|&ms| ms > relative_gate_ms)
-        .collect();
+    // Final pass with relative gate
+    let mut final_sum = 0.0_f32;
+    let mut final_count = 0usize;
+    for &ms in &block_ms {
+        if ms > absolute_gate_ms && ms > relative_gate_ms {
+            final_sum += ms;
+            final_count += 1;
+        }
+    }
 
-    if final_blocks.is_empty() {
+    if final_count == 0 {
         return -70.0;
     }
 
     // Step 4: Calculate final integrated loudness
-    let final_avg = final_blocks.iter().sum::<f32>() / final_blocks.len() as f32;
-    ms_to_lufs(final_avg)
+    ms_to_lufs(final_sum / final_count as f32)
 }
 
 /// Calculate gain in dB to reach target LUFS

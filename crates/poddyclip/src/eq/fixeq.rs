@@ -145,9 +145,10 @@ impl FixEq {
 
     /// Process stereo audio in-place
     pub fn process_stereo(&mut self, left: &mut [f32], right: &mut [f32]) {
-        for (l, r) in left.iter_mut().zip(right.iter_mut()) {
-            *l = self.process_sample_left(*l);
-            *r = self.process_sample_right(*r);
+        let len = left.len().min(right.len());
+        for i in 0..len {
+            left[i] = self.process_sample_left(left[i]);
+            right[i] = self.process_sample_right(right[i]);
         }
     }
 

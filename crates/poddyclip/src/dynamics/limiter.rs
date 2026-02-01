@@ -5,6 +5,68 @@
 
 #![allow(dead_code)]
 
+use std::collections::VecDeque;
+
+// =============================================================================
+// Sliding Maximum (O(1) amortized peak tracking for lookahead windows)
+// =============================================================================
+
+/// Monotonic deque for O(1) amortized sliding window maximum
+#[derive(Clone, Debug)]
+struct SlidingMax {
+    /// Deque stores (index, value) pairs
+    deque: VecDeque<(usize, f32)>,
+    /// Window size
+    window_size: usize,
+    /// Current sample index
+    current_idx: usize,
+}
+
+impl SlidingMax {
+    fn new(window_size: usize) -> Self {
+        Self {
+            deque: VecDeque::with_capacity(window_size),
+            window_size,
+            current_idx: 0,
+        }
+    }
+
+    /// Push a new value and return the current maximum in the window
+    #[inline]
+    fn push(&mut self, val: f32) -> f32 {
+        let idx = self.current_idx;
+        self.current_idx += 1;
+
+        // Remove old entries that are outside the window
+        while let Some(&(front_idx, _)) = self.deque.front() {
+            if idx >= self.window_size && front_idx <= idx - self.window_size {
+                self.deque.pop_front();
+            } else {
+                break;
+            }
+        }
+
+        // Remove entries from back that are smaller than the new value
+        while let Some(&(_, back_val)) = self.deque.back() {
+            if back_val <= val {
+                self.deque.pop_back();
+            } else {
+                break;
+            }
+        }
+
+        self.deque.push_back((idx, val));
+
+        // The front is always the maximum
+        self.deque.front().map(|&(_, v)| v).unwrap_or(0.0)
+    }
+
+    fn reset(&mut self) {
+        self.deque.clear();
+        self.current_idx = 0;
+    }
+}
+
 /// Gain reduction statistics from limiter processing
 #[derive(Debug, Clone, Copy, Default)]
 pub struct LimiterStats {
@@ -25,6 +87,11 @@ pub struct Limiter {
     lookahead_buffer: Vec<f32>,       // Mono or left channel samples for next call's lookahead
     lookahead_buffer_right: Vec<f32>, // Right channel samples (stereo only)
     current_gain: f32,                // Carry over gain state for release smoothing
+
+    // Pre-allocated work buffers (reused across calls to avoid allocations)
+    work_combined: Vec<f32>,
+    work_peak_envelope: Vec<f32>,
+    work_gain: Vec<f32>,
 }
 
 impl Limiter {
@@ -43,6 +110,8 @@ impl Limiter {
         let release_samples = release_ms * sample_rate / 1000.0;
         let release_coeff = (-2.2 / release_samples).exp();
 
+        // Pre-allocate work buffers with reasonable initial capacity
+        let initial_capacity = 65536; // ~1.4 seconds at 48kHz
         Self {
             ceiling_linear,
             ceiling_db,
@@ -51,6 +120,9 @@ impl Limiter {
             lookahead_buffer: Vec::new(),
             lookahead_buffer_right: Vec::new(),
             current_gain: 1.0,
+            work_combined: Vec::with_capacity(initial_capacity),
+            work_peak_envelope: Vec::with_capacity(initial_capacity),
+            work_gain: Vec::with_capacity(initial_capacity),
         }
     }
 
@@ -60,39 +132,53 @@ impl Limiter {
             return LimiterStats::default();
         }
 
-        // Combine previous buffer with current samples for full lookahead at boundaries
-        let combined: Vec<f32> = self.lookahead_buffer.iter()
-            .chain(samples.iter())
-            .copied()
-            .collect();
         let offset = self.lookahead_buffer.len();
+        let total_len = offset + samples.len();
 
-        // Step 1: Find peak values within lookahead window for each sample
-        let mut peak_envelope = vec![0.0_f32; samples.len()];
-        for i in 0..samples.len() {
-            let combined_idx = offset + i;
-            let mut max_peak = combined[combined_idx].abs();
-            // Look ahead by lookahead_samples (into combined buffer)
-            let end = (combined_idx + self.lookahead_samples).min(combined.len());
-            for j in combined_idx..end {
-                max_peak = max_peak.max(combined[j].abs());
-            }
-            peak_envelope[i] = max_peak;
+        // Reuse work_combined buffer
+        self.work_combined.clear();
+        self.work_combined.reserve(total_len);
+        self.work_combined.extend_from_slice(&self.lookahead_buffer);
+        self.work_combined.extend_from_slice(samples);
+
+        // Step 1: Find peak values using sliding max (O(n) total instead of O(n × lookahead))
+        self.work_peak_envelope.clear();
+        self.work_peak_envelope.resize(samples.len(), 0.0);
+
+        let mut sliding_max = SlidingMax::new(self.lookahead_samples);
+
+        // Prime the sliding max with the initial lookahead window
+        for i in 0..offset.min(self.lookahead_samples) {
+            sliding_max.push(self.work_combined[i].abs());
         }
 
-        // Step 2: Calculate required gain reduction
-        let mut gain = vec![1.0_f32; samples.len()];
-        for (i, &peak) in peak_envelope.iter().enumerate() {
+        // Process with sliding max
+        for i in 0..samples.len() {
+            let combined_idx = offset + i;
+            // Push the sample at lookahead distance (if it exists)
+            let lookahead_idx = combined_idx + self.lookahead_samples.saturating_sub(1);
+            if lookahead_idx < total_len {
+                self.work_peak_envelope[i] = sliding_max.push(self.work_combined[lookahead_idx].abs());
+            } else {
+                // At the end, just use current max
+                self.work_peak_envelope[i] = sliding_max.push(self.work_combined[combined_idx].abs());
+            }
+        }
+
+        // Step 2: Calculate required gain reduction (reuse work_gain buffer)
+        self.work_gain.clear();
+        self.work_gain.resize(samples.len(), 1.0);
+        for i in 0..samples.len() {
+            let peak = self.work_peak_envelope[i];
             if peak > self.ceiling_linear {
-                gain[i] = self.ceiling_linear / peak;
+                self.work_gain[i] = self.ceiling_linear / peak;
             }
         }
 
         // Step 3: Smooth gain with release (attack is instant due to lookahead)
-        // Start from previous call's gain for continuity
         let mut prev_gain = self.current_gain;
-        for g in gain.iter_mut() {
-            // If current gain is higher (less reduction), smooth the recovery
+        for i in 0..samples.len() {
+            let g = &mut self.work_gain[i];
             if *g > prev_gain {
                 *g = prev_gain * self.release_coeff + *g * (1.0 - self.release_coeff);
             }
@@ -100,19 +186,23 @@ impl Limiter {
         }
 
         // Track min gain (max reduction)
-        let min_gain = gain.iter().cloned().fold(1.0_f32, f32::min);
+        let mut min_gain = 1.0_f32;
+        for &g in &self.work_gain {
+            min_gain = min_gain.min(g);
+        }
 
         // Step 4: Apply gain
         let mut peak_output = 0.0_f32;
-        for (sample, g) in samples.iter_mut().zip(gain.iter()) {
-            *sample *= g;
-            peak_output = peak_output.max(sample.abs());
+        for i in 0..samples.len() {
+            samples[i] *= self.work_gain[i];
+            peak_output = peak_output.max(samples[i].abs());
         }
 
         // Store state for next call
         let start = samples.len().saturating_sub(self.lookahead_samples);
-        self.lookahead_buffer = samples[start..].to_vec();
-        self.current_gain = *gain.last().unwrap_or(&1.0);
+        self.lookahead_buffer.clear();
+        self.lookahead_buffer.extend_from_slice(&samples[start..]);
+        self.current_gain = *self.work_gain.last().unwrap_or(&1.0);
 
         LimiterStats {
             max_reduction_db: 20.0 * min_gain.max(1e-10).log10(),
@@ -127,42 +217,60 @@ impl Limiter {
         }
 
         let len = left.len().min(right.len());
-
-        // Combine previous buffers with current samples for full lookahead at boundaries
-        let combined_left: Vec<f32> = self.lookahead_buffer.iter()
-            .chain(left[..len].iter())
-            .copied()
-            .collect();
-        let combined_right: Vec<f32> = self.lookahead_buffer_right.iter()
-            .chain(right[..len].iter())
-            .copied()
-            .collect();
         let offset = self.lookahead_buffer.len();
+        let total_len = offset + len;
 
-        // Step 1: Find peak values within lookahead window (linked stereo)
-        let mut peak_envelope = vec![0.0_f32; len];
+        // Reuse work_combined for linked stereo peaks (max of L/R)
+        self.work_combined.clear();
+        self.work_combined.reserve(total_len);
+
+        // Add previous buffer peaks
+        for i in 0..offset {
+            let l = if i < self.lookahead_buffer.len() { self.lookahead_buffer[i].abs() } else { 0.0 };
+            let r = if i < self.lookahead_buffer_right.len() { self.lookahead_buffer_right[i].abs() } else { 0.0 };
+            self.work_combined.push(l.max(r));
+        }
+        // Add current buffer peaks
+        for i in 0..len {
+            self.work_combined.push(left[i].abs().max(right[i].abs()));
+        }
+
+        // Step 1: Find peak values using sliding max (O(n) total)
+        self.work_peak_envelope.clear();
+        self.work_peak_envelope.resize(len, 0.0);
+
+        let mut sliding_max = SlidingMax::new(self.lookahead_samples);
+
+        // Prime the sliding max with the initial lookahead window
+        for i in 0..offset.min(self.lookahead_samples) {
+            sliding_max.push(self.work_combined[i]);
+        }
+
+        // Process with sliding max
         for i in 0..len {
             let combined_idx = offset + i;
-            let mut max_peak = combined_left[combined_idx].abs().max(combined_right[combined_idx].abs());
-            let end = (combined_idx + self.lookahead_samples).min(combined_left.len());
-            for j in combined_idx..end {
-                max_peak = max_peak.max(combined_left[j].abs().max(combined_right[j].abs()));
+            let lookahead_idx = combined_idx + self.lookahead_samples.saturating_sub(1);
+            if lookahead_idx < total_len {
+                self.work_peak_envelope[i] = sliding_max.push(self.work_combined[lookahead_idx]);
+            } else {
+                self.work_peak_envelope[i] = sliding_max.push(self.work_combined[combined_idx]);
             }
-            peak_envelope[i] = max_peak;
         }
 
         // Step 2: Calculate required gain reduction
-        let mut gain = vec![1.0_f32; len];
-        for (i, &peak) in peak_envelope.iter().enumerate() {
+        self.work_gain.clear();
+        self.work_gain.resize(len, 1.0);
+        for i in 0..len {
+            let peak = self.work_peak_envelope[i];
             if peak > self.ceiling_linear {
-                gain[i] = self.ceiling_linear / peak;
+                self.work_gain[i] = self.ceiling_linear / peak;
             }
         }
 
         // Step 3: Smooth gain with release
-        // Start from previous call's gain for continuity
         let mut prev_gain = self.current_gain;
-        for g in gain.iter_mut() {
+        for i in 0..len {
+            let g = &mut self.work_gain[i];
             if *g > prev_gain {
                 *g = prev_gain * self.release_coeff + *g * (1.0 - self.release_coeff);
             }
@@ -170,21 +278,26 @@ impl Limiter {
         }
 
         // Track min gain (max reduction)
-        let min_gain = gain.iter().cloned().fold(1.0_f32, f32::min);
+        let mut min_gain = 1.0_f32;
+        for &g in &self.work_gain {
+            min_gain = min_gain.min(g);
+        }
 
         // Step 4: Apply gain to both channels
         let mut peak_output = 0.0_f32;
         for i in 0..len {
-            left[i] *= gain[i];
-            right[i] *= gain[i];
+            left[i] *= self.work_gain[i];
+            right[i] *= self.work_gain[i];
             peak_output = peak_output.max(left[i].abs().max(right[i].abs()));
         }
 
         // Store state for next call
         let start = len.saturating_sub(self.lookahead_samples);
-        self.lookahead_buffer = left[start..len].to_vec();
-        self.lookahead_buffer_right = right[start..len].to_vec();
-        self.current_gain = *gain.last().unwrap_or(&1.0);
+        self.lookahead_buffer.clear();
+        self.lookahead_buffer.extend_from_slice(&left[start..len]);
+        self.lookahead_buffer_right.clear();
+        self.lookahead_buffer_right.extend_from_slice(&right[start..len]);
+        self.current_gain = *self.work_gain.last().unwrap_or(&1.0);
 
         LimiterStats {
             max_reduction_db: 20.0 * min_gain.max(1e-10).log10(),
