@@ -34,6 +34,7 @@ export function WaveformPlayer(props) {
   let canvasRef;
   let audioRef;
   let waveformImageData = null; // Cached waveform for playhead redraw optimization
+  const [canvasReady, setCanvasReady] = createSignal(false);
   const [localPlaying, setLocalPlaying] = createSignal(false);
   const [localTime, setLocalTime] = createSignal(0);
   const [duration, setDuration] = createSignal(0);
@@ -209,10 +210,12 @@ export function WaveformPlayer(props) {
   }
 
   // Draw waveform when buffer is ready AND canvas is mounted
-  // (canvas only mounts after loading() becomes false)
+  // Need to track canvasReady signal to handle race condition where
+  // buffer loads from cache before canvas is in the DOM
   createEffect(() => {
     const buffer = audioBuffer();
-    if (!loading() && buffer) {
+    const ready = canvasReady();
+    if (!loading() && buffer && ready) {
       drawWaveform(buffer);
     }
   });
@@ -312,7 +315,7 @@ export function WaveformPlayer(props) {
 
       <Show when={!loading() && !error()}>
         <canvas
-          ref={el => canvasRef = el}
+          ref={el => { canvasRef = el; if (el) setCanvasReady(true); }}
           width={400}
           height={80}
           class="w-full h-20 rounded-lg bg-base-300 cursor-pointer"
