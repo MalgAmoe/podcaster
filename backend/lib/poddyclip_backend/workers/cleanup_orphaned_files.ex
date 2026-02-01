@@ -52,9 +52,13 @@ defmodule PoddyclipBackend.Workers.CleanupOrphanedFiles do
       |> Repo.all()
       |> MapSet.new()
 
+    Logger.info("Found #{MapSet.size(user_ids_with_jobs)} users with jobs in database")
+
     # List all input prefixes (inputs/{user_id}/)
     case list_s3_prefixes("inputs/") do
       {:ok, user_prefixes} ->
+        Logger.info("Found #{length(user_prefixes)} user input prefixes in S3")
+
         user_prefixes
         |> Enum.reduce(0, fn prefix, acc ->
           # Extract user_id from prefix like "inputs/123/"
@@ -65,6 +69,7 @@ defmodule PoddyclipBackend.Workers.CleanupOrphanedFiles do
                 cleanup_user_inputs_if_orphaned(user_id) + acc
               else
                 # User has no jobs, delete all their inputs
+                Logger.info("User #{user_id} has no jobs, deleting all inputs")
                 delete_prefix("inputs/#{user_id}/") + acc
               end
 
@@ -86,9 +91,13 @@ defmodule PoddyclipBackend.Workers.CleanupOrphanedFiles do
       |> Repo.all()
       |> MapSet.new()
 
+    Logger.info("Found #{MapSet.size(result_keys)} result keys in database")
+
     # List all result files
     case list_s3_objects("results/") do
       {:ok, objects} ->
+        Logger.info("Found #{length(objects)} result files in S3")
+
         deleted_count =
           objects
           |> Enum.reduce(0, fn key, acc ->
@@ -96,6 +105,7 @@ defmodule PoddyclipBackend.Workers.CleanupOrphanedFiles do
               acc
             else
               # Orphaned result file
+              Logger.info("Deleting orphaned result file", s3_key: key)
               case Storage.delete(key) do
                 {:ok, _} ->
                   acc + 1
@@ -143,6 +153,7 @@ defmodule PoddyclipBackend.Workers.CleanupOrphanedFiles do
               acc
             else
               # Old input file, delete it
+              Logger.info("Deleting old input file", user_id: user_id, s3_key: key)
               case Storage.delete(key) do
                 {:ok, _} ->
                   acc + 1
@@ -207,10 +218,13 @@ defmodule PoddyclipBackend.Workers.CleanupOrphanedFiles do
   end
 
   defp delete_prefix(prefix) do
+    Logger.info("Deleting all files under prefix", prefix: prefix)
     case list_s3_objects(prefix) do
       {:ok, keys} ->
+        Logger.info("Found #{length(keys)} files under prefix #{prefix}")
         deleted_count =
           Enum.reduce(keys, 0, fn key, acc ->
+            Logger.info("Deleting orphaned file", s3_key: key)
             case Storage.delete(key) do
               {:ok, _} ->
                 acc + 1

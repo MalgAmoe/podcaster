@@ -52,26 +52,37 @@ defmodule PoddyclipBackend.Workers.CleanupJobs do
   defp mark_stale_jobs(hours) do
     cutoff = DateTime.utc_now() |> DateTime.add(-hours, :hour)
 
-    {count, _} =
+    # First find the stale jobs to log their IDs
+    stale_job_ids =
       from(j in Job,
         where: j.status == :processing,
-        where: j.updated_at < ^cutoff
+        where: j.updated_at < ^cutoff,
+        select: j.id
       )
-      |> Repo.update_all(set: [
-        status: :failed,
-        error: "Job timed out (no progress for #{hours} hours)",
-        updated_at: DateTime.utc_now()
-      ])
+      |> Repo.all()
 
-    if count > 0 do
+    if length(stale_job_ids) > 0 do
+      Logger.warning("Found stale processing jobs: #{inspect(stale_job_ids)}")
+
+      {count, _} =
+        from(j in Job, where: j.id in ^stale_job_ids)
+        |> Repo.update_all(set: [
+          status: :failed,
+          error: "Job timed out (no progress for #{hours} hours)",
+          updated_at: DateTime.utc_now()
+        ])
+
       Logger.warning("Marked #{count} stale processing jobs as failed")
+      count
+    else
+      0
     end
-
-    count
   end
 
   defp delete_old_jobs(retention_value, retention_unit) do
     cutoff = DateTime.utc_now() |> DateTime.add(-retention_value, retention_unit)
+
+    Logger.info("Looking for jobs older than #{DateTime.to_iso8601(cutoff)}")
 
     # Find old jobs to delete
     old_jobs =
@@ -81,6 +92,10 @@ defmodule PoddyclipBackend.Workers.CleanupJobs do
         select: %{id: j.id, input_s3_key: j.input_s3_key, result_s3_key: j.result_s3_key}
       )
       |> Repo.all()
+
+    if length(old_jobs) > 0 do
+      Logger.info("Found #{length(old_jobs)} jobs to delete: #{inspect(Enum.map(old_jobs, & &1.id))}")
+    end
 
     # Delete S3 files for each job
     s3_deleted =
@@ -108,6 +123,7 @@ defmodule PoddyclipBackend.Workers.CleanupJobs do
       if job.input_s3_key do
         case Storage.delete(job.input_s3_key) do
           {:ok, _} ->
+            Logger.info("Deleted S3 input", job_id: job.id, s3_key: job.input_s3_key)
             count + 1
           {:error, reason} ->
             Logger.error("Failed to delete S3 input",
@@ -125,6 +141,7 @@ defmodule PoddyclipBackend.Workers.CleanupJobs do
     if job.result_s3_key do
       case Storage.delete(job.result_s3_key) do
         {:ok, _} ->
+          Logger.info("Deleted S3 result", job_id: job.id, s3_key: job.result_s3_key)
           count + 1
         {:error, reason} ->
           Logger.error("Failed to delete S3 result",
