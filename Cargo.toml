@@ -17,6 +17,7 @@ license = "UNLICENSED"
 [profile.release]
 lto = "thin"
 strip = "symbols"
+codegen-units = 1  # Better cross-module optimization
 
 [profile.profiling]
 inherits = "release"

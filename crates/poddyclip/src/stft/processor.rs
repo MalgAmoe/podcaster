@@ -99,12 +99,12 @@ impl StftProcessor {
     pub fn forward_fft(&mut self, frame: &[f32]) -> Vec<Complex<f32>> {
         debug_assert_eq!(frame.len(), self.config.window_size);
 
-        // Apply analysis window
-        let mut spectrum: Vec<Complex<f32>> = frame
-            .iter()
-            .zip(self.window.iter())
-            .map(|(&s, &w)| Complex::new(s * w, 0.0))
-            .collect();
+        // Explicit for-loop enables LLVM auto-vectorization
+        let window_size = self.config.window_size;
+        let mut spectrum = vec![Complex::new(0.0, 0.0); window_size];
+        for i in 0..window_size {
+            spectrum[i] = Complex::new(frame[i] * self.window[i], 0.0);
+        }
 
         // Forward FFT
         self.fft
@@ -123,23 +123,27 @@ impl StftProcessor {
         self.ifft
             .process_with_scratch(spectrum, &mut self.fft_scratch);
 
-        // Apply synthesis window and normalize
-        let scale = 1.0 / self.config.window_size as f32;
-        spectrum
-            .iter()
-            .zip(self.window.iter())
-            .map(|(c, &w)| c.re * scale * w)
-            .collect()
+        // Explicit for-loop enables LLVM auto-vectorization
+        let window_size = self.config.window_size;
+        let scale = 1.0 / window_size as f32;
+        let mut output = vec![0.0; window_size];
+        for i in 0..window_size {
+            output[i] = spectrum[i].re * scale * self.window[i];
+        }
+        output
     }
 
     /// Compute power spectrum from complex spectrum
     ///
     /// Returns only positive frequencies (n_bins)
     pub fn compute_power(&self, spectrum: &[Complex<f32>]) -> Vec<f32> {
-        spectrum[..self.n_bins()]
-            .iter()
-            .map(|c| c.norm_sqr())
-            .collect()
+        // Explicit for-loop enables LLVM auto-vectorization
+        let n_bins = self.n_bins();
+        let mut power = vec![0.0; n_bins];
+        for i in 0..n_bins {
+            power[i] = spectrum[i].norm_sqr();
+        }
+        power
     }
 
     /// Ensure conjugate symmetry for real IFFT

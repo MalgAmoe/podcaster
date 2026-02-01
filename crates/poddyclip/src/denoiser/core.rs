@@ -258,14 +258,14 @@ impl RealtimeDenoiser {
     }
 
     fn compute_snr_per_bin(&self, power: &[f32]) -> Vec<f32> {
-        power
-            .iter()
-            .zip(self.noise_pow.iter())
-            .map(|(&p, &n)| {
-                let snr_linear = p / (n + EPSILON);
-                10.0 * (snr_linear + EPSILON).log10()
-            })
-            .collect()
+        // Explicit for-loop enables LLVM auto-vectorization
+        let len = power.len();
+        let mut snr = vec![0.0; len];
+        for i in 0..len {
+            let snr_linear = power[i] / (self.noise_pow[i] + EPSILON);
+            snr[i] = 10.0 * (snr_linear + EPSILON).log10();
+        }
+        snr
     }
 
     fn update_noise_estimate(&mut self, power: &[f32]) {
@@ -324,30 +324,33 @@ impl RealtimeDenoiser {
     }
 
     fn compute_gain(&self, power: &[f32], alpha: &[f32]) -> Vec<f32> {
-        power
-            .iter()
-            .zip(alpha.iter())
-            .zip(self.noise_pow.iter())
-            .map(|((&p, &a), &n)| {
-                let subtracted = p - a * n;
-                let floored = self.params.beta * p;
-                let numerator = subtracted.max(floored);
-                let gain = (numerator / (p + EPSILON)).sqrt();
-                gain.clamp(0.0, 1.0)
-            })
-            .collect()
+        // Explicit for-loop enables LLVM auto-vectorization
+        let len = power.len();
+        let mut gain = vec![0.0; len];
+        let beta = self.params.beta;
+        for i in 0..len {
+            let p = power[i];
+            let a = alpha[i];
+            let n = self.noise_pow[i];
+            let subtracted = p - a * n;
+            let floored = beta * p;
+            let numerator = subtracted.max(floored);
+            let g = (numerator / (p + EPSILON)).sqrt();
+            gain[i] = g.clamp(0.0, 1.0);
+        }
+        gain
     }
 
     fn smooth_gain(&mut self, gain: &[f32]) -> Vec<f32> {
         self.rebuild_gamma_curve();
 
-        let smoothed: Vec<f32> = self
-            .gamma_curve
-            .iter()
-            .zip(self.prev_gain.iter())
-            .zip(gain.iter())
-            .map(|((&g, &prev), &curr)| g * prev + (1.0 - g) * curr)
-            .collect();
+        // Explicit for-loop enables LLVM auto-vectorization
+        let len = self.gamma_curve.len();
+        let mut smoothed = vec![0.0; len];
+        for i in 0..len {
+            let g = self.gamma_curve[i];
+            smoothed[i] = g * self.prev_gain[i] + (1.0 - g) * gain[i];
+        }
 
         self.prev_gain.copy_from_slice(&smoothed);
         smoothed
