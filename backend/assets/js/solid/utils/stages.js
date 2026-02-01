@@ -2,8 +2,9 @@
 // The actual strings come from locales/en.js and locales/es.js
 
 const STAGE_KEYS = {
-  null: "stages.decoding",
-  undefined: "stages.decoding",
+  null: "stages.waiting",
+  undefined: "stages.waiting",
+  "waiting": "stages.waiting",
   "decoding": "stages.decoding",
   "filters": "stages.filters",
   "input_gain": "stages.input_gain",
@@ -11,6 +12,7 @@ const STAGE_KEYS = {
   "dereverb": "stages.dereverb",
   "analyzing_noise": "stages.analyzing_noise",
   "denoise": "stages.denoise",
+  "ai_denoise": "stages.ai_denoise",
   "spectral_gate": "stages.spectral_gate",
   "analyzing_peaks": "stages.analyzing_peaks",
   "peak_attenuation": "stages.peak_attenuation",

@@ -91,6 +91,7 @@ export default {
   // Processing stages
   processing: "Traitement...",
   stages: {
+    waiting: "En attente d'un creneau...",
     decoding: "Lecture audio...",
     filters: "Coupe des grondements et sifflements...",
     input_gain: "Equilibrage des niveaux...",
@@ -98,6 +99,7 @@ export default {
     dereverb: "Suppression de l'echo de la piece...",
     analyzing_noise: "Recherche du bruit de fond...",
     denoise: "Nettoyage du bruit...",
+    ai_denoise: "Nettoyage IA de la voix...",
     spectral_gate: "Mise en sourdine des parties calmes...",
     analyzing_peaks: "Recherche des tons agressifs...",
     peak_attenuation: "Adoucissement des tons agressifs...",

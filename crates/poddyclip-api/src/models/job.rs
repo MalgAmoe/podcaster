@@ -61,7 +61,7 @@ impl JobProgress {
         Self {
             stage: "queued".to_string(),
             stage_index: 0,
-            total_stages: 24,
+            total_stages: 25, // +1 for "waiting" stage
             percent_complete: 0,
         }
     }

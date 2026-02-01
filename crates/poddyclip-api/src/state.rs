@@ -1,6 +1,7 @@
 use dashmap::DashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tokio::sync::Semaphore;
 use uuid::Uuid;
 
 use crate::models::{Job, JobStatus};
@@ -9,12 +10,17 @@ use crate::webhook::WebhookClient;
 
 const DEFAULT_MAX_FILE_SIZE_MB: usize = 500;
 
+/// Maximum concurrent processing tasks (matches CCX13 2 vCPU)
+const MAX_CONCURRENT_PROCESSING: usize = 2;
+
 #[derive(Clone)]
 pub struct AppState {
     pub jobs: Arc<DashMap<Uuid, Job>>,
     pub config: Arc<AppConfig>,
     pub storage: Option<Arc<Storage>>,
     pub webhook: WebhookClient,
+    /// Semaphore to limit concurrent CPU-bound processing tasks
+    pub processing_semaphore: Arc<Semaphore>,
 }
 
 pub struct AppConfig {
@@ -77,6 +83,7 @@ impl AppState {
             config: Arc::new(config),
             storage: storage.map(Arc::new),
             webhook: WebhookClient::new(),
+            processing_semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_PROCESSING)),
         }
     }
 

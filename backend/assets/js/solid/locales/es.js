@@ -91,6 +91,7 @@ export default {
   // Processing stages
   processing: "Procesando...",
   stages: {
+    waiting: "Esperando turno...",
     decoding: "Leyendo audio...",
     filters: "Cortando ruido y siseo...",
     input_gain: "Equilibrando niveles...",
@@ -98,6 +99,7 @@ export default {
     dereverb: "Eliminando eco de sala...",
     analyzing_noise: "Buscando ruido de fondo...",
     denoise: "Limpiando ruido...",
+    ai_denoise: "Limpieza IA de voz...",
     spectral_gate: "Silenciando partes quietas...",
     analyzing_peaks: "Buscando tonos asperos...",
     peak_attenuation: "Suavizando tonos asperos...",

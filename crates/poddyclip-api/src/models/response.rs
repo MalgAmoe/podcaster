@@ -25,4 +25,6 @@ pub struct HealthResponse {
     pub version: String,
     pub active_jobs: usize,
     pub completed_jobs: usize,
+    /// Number of available processing slots (0 = at capacity)
+    pub available_slots: usize,
 }

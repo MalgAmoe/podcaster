@@ -207,14 +207,32 @@ pub async fn create_s3_job(
     let job_timeout = state.config.job_timeout_seconds;
     let filename_for_upload = filename.clone();
     let webhook_client = state.webhook.clone();
+    let semaphore = state.processing_semaphore.clone();
 
     task::spawn(async move {
+        // Update status to waiting for processing slot
+        state_clone.update_job(&job_id, |j| {
+            j.progress.update("waiting", 0);
+            j.updated_at = now();
+        });
+
+        // Send webhook for waiting status
+        if let Some(job) = state_clone.get_job(&job_id) {
+            webhook_client.notify(&job, None).await;
+        }
+
+        // Acquire permit to limit concurrent processing (prevents CPU thrashing)
+        let _permit = semaphore
+            .acquire_owned()
+            .await
+            .expect("semaphore closed");
+
         let start_time = Instant::now();
 
         // Update status to processing
         state_clone.update_job(&job_id, |j| {
             j.status = JobStatus::Processing;
-            j.progress.update("decoding", 0);
+            j.progress.update("decoding", 1);
             j.updated_at = now();
         });
 
@@ -236,6 +254,7 @@ pub async fn create_s3_job(
                 let (mut samples, metadata) = decode_audio(&audio_bytes, Some(&filename))?;
 
                 // Progress callback that updates job state, sends webhook, and checks for cancellation
+                // Note: index is offset by 1 to account for "waiting" stage (index 0)
                 let progress_callback = Box::new(move |stage: &str, index: u8| -> Result<(), CancelledError> {
                     // Check if job was cancelled
                     if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
@@ -243,9 +262,10 @@ pub async fn create_s3_job(
                         return Err(CancelledError);
                     }
 
-                    debug!("Job {} progress: {} ({}/17)", job_id, stage, index);
+                    let adjusted_index = index + 1; // +1 for "waiting" stage
+                    debug!("Job {} progress: {} ({}/25)", job_id, stage, adjusted_index);
                     progress_state.update_job(&job_id, |j| {
-                        j.progress.update(stage, index);
+                        j.progress.update(stage, adjusted_index);
                         j.updated_at = now();
                     });
 
@@ -322,7 +342,7 @@ pub async fn create_s3_job(
                     }
                     j.result_content_type = Some(content_type);
                     j.result_s3_key = s3_key;
-                    j.progress.update("completed", 24);
+                    j.progress.update("completed", 25);
                     j.updated_at = now();
                 });
 

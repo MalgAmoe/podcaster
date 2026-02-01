@@ -12,5 +12,6 @@ pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
         version: env!("CARGO_PKG_VERSION").to_string(),
         active_jobs: active,
         completed_jobs: completed,
+        available_slots: state.processing_semaphore.available_permits(),
     })
 }
