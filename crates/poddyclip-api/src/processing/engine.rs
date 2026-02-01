@@ -359,13 +359,9 @@ pub fn process_audio(
         deesser.configure(samples);
         if is_stereo {
             let (left, right) = samples.split_at_mut(1);
-            for (l, r) in left[0].iter_mut().zip(right[0].iter_mut()) {
-                deesser.process_stereo(std::slice::from_mut(l), std::slice::from_mut(r));
-            }
+            deesser.process_stereo(&mut left[0], &mut right[0]);
         } else {
-            for s in samples[0].iter_mut() {
-                deesser.process_mono(std::slice::from_mut(s));
-            }
+            deesser.process_mono(&mut samples[0]);
         }
     }
 
