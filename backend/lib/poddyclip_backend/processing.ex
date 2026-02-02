@@ -248,7 +248,8 @@ defmodule PoddyclipBackend.Processing do
           progress: params["progress"] || %{},
           error: params["error"],
           download_url: params["download_url"],
-          result_s3_key: params["result_s3_key"]
+          result_s3_key: params["result_s3_key"],
+          actual_duration_seconds: params["audio_duration_seconds"]
         }
 
         updated_job =
@@ -264,6 +265,11 @@ defmodule PoddyclipBackend.Processing do
         # Refund seconds if job failed (and wasn't already failed)
         if new_status == :failed and old_status != :failed do
           refund_job_seconds(updated_job)
+        end
+
+        # Adjust billing on completion based on actual duration vs estimate
+        if new_status == :completed and old_status != :completed do
+          adjust_billing_on_completion(updated_job)
         end
 
         broadcast_update(updated_job)
@@ -314,6 +320,49 @@ defmodule PoddyclipBackend.Processing do
     Ecto.NoResultsError -> :ok
   end
   defp refund_job_seconds(_), do: :ok
+
+  # Adjust billing based on actual duration vs estimated when job completes
+  # - If actual > estimated: deduct the difference (user underestimated)
+  # - If actual < estimated: refund the difference (user overestimated)
+  defp adjust_billing_on_completion(%Job{actual_duration_seconds: nil}), do: :ok
+  defp adjust_billing_on_completion(%Job{estimated_seconds: nil}), do: :ok
+  defp adjust_billing_on_completion(%Job{
+    actual_duration_seconds: actual,
+    estimated_seconds: estimated,
+    user_id: user_id,
+    id: job_id
+  }) do
+    diff = actual - estimated
+
+    cond do
+      diff > 0 ->
+        # Actual duration longer than estimate - deduct more
+        Logger.info("Billing adjustment: deducting #{diff}s (actual: #{actual}s, estimated: #{estimated}s)",
+          job_id: job_id,
+          user_id: user_id
+        )
+        case Accounts.get_user!(user_id) do
+          user -> Billing.deduct_seconds(user, diff)
+        end
+
+      diff < 0 ->
+        # Actual duration shorter than estimate - refund the difference
+        refund = -diff
+        Logger.info("Billing adjustment: refunding #{refund}s (actual: #{actual}s, estimated: #{estimated}s)",
+          job_id: job_id,
+          user_id: user_id
+        )
+        case Accounts.get_user!(user_id) do
+          user -> Billing.refund_seconds(user, refund)
+        end
+
+      true ->
+        # No difference, no adjustment needed
+        :ok
+    end
+  rescue
+    Ecto.NoResultsError -> :ok
+  end
 
   defp parse_status("queued"), do: :queued
   defp parse_status("processing"), do: :processing

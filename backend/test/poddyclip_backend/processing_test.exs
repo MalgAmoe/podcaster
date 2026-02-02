@@ -154,4 +154,134 @@ defmodule PoddyclipBackend.ProcessingTest do
       assert updated_user.seconds_available == 600
     end
   end
+
+  describe "billing adjustment on completion" do
+    setup do
+      plan = free_plan_fixture()
+      user = user_fixture()
+
+      {:ok, user} =
+        Billing.update_subscription(user, %{
+          plan_id: plan.id,
+          seconds_available: 600
+        })
+
+      %{user: user, plan: plan}
+    end
+
+    test "deducts extra seconds when actual duration > estimated", %{user: user} do
+      # User estimated 100s but actual was 150s
+      job =
+        %Job{}
+        |> Job.changeset(%{
+          filename: "test.mp3",
+          status: :processing,
+          user_id: user.id,
+          estimated_seconds: 100
+        })
+        |> Repo.insert!()
+
+      # Complete with actual duration of 150s (50s more than estimated)
+      {:ok, completed_job} = Processing.update_job_status(job.id, %{
+        "status" => "completed",
+        "audio_duration_seconds" => 150
+      })
+
+      assert completed_job.actual_duration_seconds == 150
+
+      # User should have 50s deducted (600 - 50 = 550)
+      updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
+      assert updated_user.seconds_available == 550
+    end
+
+    test "refunds extra seconds when actual duration < estimated", %{user: user} do
+      # User estimated 200s but actual was 120s
+      job =
+        %Job{}
+        |> Job.changeset(%{
+          filename: "test.mp3",
+          status: :processing,
+          user_id: user.id,
+          estimated_seconds: 200
+        })
+        |> Repo.insert!()
+
+      # Complete with actual duration of 120s (80s less than estimated)
+      {:ok, completed_job} = Processing.update_job_status(job.id, %{
+        "status" => "completed",
+        "audio_duration_seconds" => 120
+      })
+
+      assert completed_job.actual_duration_seconds == 120
+
+      # User should have 80s refunded (600 + 80 = 680)
+      updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
+      assert updated_user.seconds_available == 680
+    end
+
+    test "no adjustment when actual duration == estimated", %{user: user} do
+      job =
+        %Job{}
+        |> Job.changeset(%{
+          filename: "test.mp3",
+          status: :processing,
+          user_id: user.id,
+          estimated_seconds: 300
+        })
+        |> Repo.insert!()
+
+      # Complete with exact same duration
+      {:ok, _} = Processing.update_job_status(job.id, %{
+        "status" => "completed",
+        "audio_duration_seconds" => 300
+      })
+
+      # No change
+      updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
+      assert updated_user.seconds_available == 600
+    end
+
+    test "no adjustment when actual duration not provided", %{user: user} do
+      job =
+        %Job{}
+        |> Job.changeset(%{
+          filename: "test.mp3",
+          status: :processing,
+          user_id: user.id,
+          estimated_seconds: 300
+        })
+        |> Repo.insert!()
+
+      # Complete without actual duration (legacy/fallback)
+      {:ok, _} = Processing.update_job_status(job.id, %{
+        "status" => "completed"
+      })
+
+      # No change - we trust the estimate if no actual provided
+      updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
+      assert updated_user.seconds_available == 600
+    end
+
+    test "no adjustment when estimated_seconds is nil", %{user: user} do
+      job =
+        %Job{}
+        |> Job.changeset(%{
+          filename: "test.mp3",
+          status: :processing,
+          user_id: user.id,
+          estimated_seconds: nil
+        })
+        |> Repo.insert!()
+
+      # Complete with actual duration
+      {:ok, _} = Processing.update_job_status(job.id, %{
+        "status" => "completed",
+        "audio_duration_seconds" => 150
+      })
+
+      # No change - can't compare without estimate
+      updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
+      assert updated_user.seconds_available == 600
+    end
+  end
 end

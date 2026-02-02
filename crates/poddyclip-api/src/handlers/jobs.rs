@@ -253,6 +253,12 @@ pub async fn create_s3_job(
                 // Decode audio
                 let (mut samples, metadata) = decode_audio(&audio_bytes, Some(&filename))?;
 
+                // Calculate and store actual audio duration for billing
+                let audio_duration_seconds = (metadata.duration_samples as f64 / metadata.sample_rate as f64).ceil() as u32;
+                progress_state.update_job(&job_id, |j| {
+                    j.audio_duration_seconds = Some(audio_duration_seconds);
+                });
+
                 // Progress callback that updates job state, sends webhook, and checks for cancellation
                 // Note: index is offset by 1 to account for "waiting" stage (index 0)
                 let progress_callback = Box::new(move |stage: &str, index: u8| -> Result<(), CancelledError> {

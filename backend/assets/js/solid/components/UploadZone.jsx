@@ -107,8 +107,8 @@ export function UploadZone() {
           <p class="font-medium truncate">{store.filename}</p>
           <Show when={store.uploadState === "ready"}>
             <p class="text-sm text-primary">{t("readyToMunch")}</p>
-            <Show when={store.estimatedMinutes}>
-              <p class="text-xs text-base-content/50">{tt("estimatedMinutes", { minutes: store.estimatedMinutes })}</p>
+            <Show when={store.estimatedSeconds}>
+              <p class="text-xs text-base-content/50">{tt("estimatedTime", { time: `${Math.floor(store.estimatedSeconds / 60)}m ${store.estimatedSeconds % 60}s` })}</p>
             </Show>
           </Show>
           <Show when={store.uploadState === "uploading" && store.uploadProgress >= 100}>

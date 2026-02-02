@@ -492,15 +492,15 @@ defmodule PoddyclipBackend.Billing do
 
   defp send_low_seconds_notification(user, plan_seconds) do
     # Check user preferences and spam prevention
-    if User.notification_enabled?(user, :low_minutes) and
-       Accounts.should_send_low_minutes_notification?(user) do
+    if User.notification_enabled?(user, :low_time) and
+       Accounts.should_send_low_time_notification?(user) do
       percent_used = round((plan_seconds - user.seconds_available) / plan_seconds * 100)
       # Convert seconds to minutes for user-friendly notification
       minutes_remaining = div(user.seconds_available, 60)
 
       try do
-        UserNotifier.deliver_low_minutes(user, minutes_remaining, percent_used)
-        Accounts.record_low_minutes_notification(user)
+        UserNotifier.deliver_low_time(user, minutes_remaining, percent_used)
+        Accounts.record_low_time_notification(user)
 
         Logger.info("Low seconds notification sent",
           user_id: user.id,

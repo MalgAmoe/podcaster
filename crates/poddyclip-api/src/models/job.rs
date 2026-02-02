@@ -22,6 +22,8 @@ pub struct Job {
     pub error: Option<String>,
     pub input_filename: String,
     pub input_size_bytes: usize,
+    /// Actual audio duration in seconds (set after decoding)
+    pub audio_duration_seconds: Option<u32>,
     /// User ID (for logging and S3 paths)
     #[serde(skip)]
     pub user_id: Option<i64>,
@@ -93,6 +95,7 @@ impl Job {
             error: None,
             input_filename,
             input_size_bytes,
+            audio_duration_seconds: None,
             user_id: None,
             phoenix_job_id: None,
             webhook_url: None,

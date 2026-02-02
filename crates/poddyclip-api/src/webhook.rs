@@ -21,6 +21,8 @@ pub struct WebhookPayload {
     pub error: Option<String>,
     pub download_url: Option<String>,
     pub result_s3_key: Option<String>,
+    /// Actual audio duration in seconds (for billing)
+    pub audio_duration_seconds: Option<u32>,
 }
 
 /// HTTP client for sending webhooks
@@ -55,6 +57,7 @@ impl WebhookClient {
             error: job.error.clone(),
             download_url,
             result_s3_key: job.result_s3_key.clone(),
+            audio_duration_seconds: job.audio_duration_seconds,
         };
 
         let is_terminal = matches!(payload.status.as_str(), "completed" | "failed");

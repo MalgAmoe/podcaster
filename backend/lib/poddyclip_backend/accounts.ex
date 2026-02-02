@@ -331,21 +331,21 @@ defmodule PoddyclipBackend.Accounts do
   end
 
   @doc """
-  Records that a low minutes notification was sent.
+  Records that a low time notification was sent.
   Prevents spam by tracking last notification time.
   """
-  def record_low_minutes_notification(user) do
+  def record_low_time_notification(user) do
     user
-    |> Ecto.Changeset.change(%{last_low_minutes_notification_at: DateTime.utc_now(:second)})
+    |> Ecto.Changeset.change(%{last_low_time_notification_at: DateTime.utc_now(:second)})
     |> Repo.update()
   end
 
   @doc """
-  Checks if we should send a low minutes notification.
+  Checks if we should send a low time notification.
   Returns false if one was sent in the current billing period.
   """
-  def should_send_low_minutes_notification?(user) do
-    case user.last_low_minutes_notification_at do
+  def should_send_low_time_notification?(user) do
+    case user.last_low_time_notification_at do
       nil ->
         true
 

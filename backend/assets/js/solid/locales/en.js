@@ -5,7 +5,7 @@ export default {
   veryHungry: "She's VERY hungry for your audio",
   nomNomNom: "nom nom nom - WAV, MP3, FLAC",
   readyToMunch: "Ready to munch!",
-  estimatedMinutes: "~{minutes} min",
+  estimatedTime: "~{time}",
   finalizing: "Finalizing...",
   removeFile: "Remove file",
   uploadAudioFile: "Upload audio file. Click or drop a file here.",
@@ -75,7 +75,7 @@ export default {
   unableToConnect: "Unable to connect. Please refresh the page.",
 
   // Billing
-  notEnoughMinutes: "Not enough time available. Upgrade to Pro for more processing time.",
+  notEnoughTime: "Not enough time available. Upgrade to Pro for more processing time.",
   needTime: " You need {needed} but only have {available} available.",
   upgrade: "Upgrade",
 

@@ -5,7 +5,7 @@ export default {
   veryHungry: "Ha MOLTA fame del tuo audio",
   nomNomNom: "gnam gnam gnam - WAV, MP3, FLAC",
   readyToMunch: "Pronta a masticare!",
-  estimatedMinutes: "~{minutes} min",
+  estimatedTime: "~{time}",
   finalizing: "Finalizzazione...",
   removeFile: "Rimuovi file",
   uploadAudioFile: "Carica file audio. Clicca o trascina un file qui.",
@@ -75,7 +75,7 @@ export default {
   unableToConnect: "Impossibile connettersi. Aggiorna la pagina.",
 
   // Billing
-  notEnoughMinutes: "Tempo insufficiente. Passa a Pro per piu tempo di elaborazione.",
+  notEnoughTime: "Tempo insufficiente. Passa a Pro per piu tempo di elaborazione.",
   needTime: " Hai bisogno di {needed} ma ne hai solo {available} disponibili.",
   upgrade: "Passa a Pro",
 

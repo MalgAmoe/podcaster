@@ -52,7 +52,7 @@ defmodule PoddyclipBackendWeb.UserSettingsController do
     new_prefs = %{
       "job_complete" => notification_params["job_complete"] == "true",
       "job_failed" => notification_params["job_failed"] == "true",
-      "low_minutes" => notification_params["low_minutes"] == "true",
+      "low_time" => notification_params["low_time"] == "true",
       "subscription_expiry" => notification_params["subscription_expiry"] == "true"
     }
 
@@ -93,7 +93,7 @@ defmodule PoddyclipBackendWeb.UserSettingsController do
     prefs = user.notification_preferences || %{
       "job_complete" => true,
       "job_failed" => true,
-      "low_minutes" => true,
+      "low_time" => true,
       "subscription_expiry" => true
     }
     assign(conn, :notification_preferences, prefs)

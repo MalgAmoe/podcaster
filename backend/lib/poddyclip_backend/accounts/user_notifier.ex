@@ -151,20 +151,20 @@ defmodule PoddyclipBackend.Accounts.UserNotifier do
   end
 
   @doc """
-  Deliver notification that the user is running low on minutes.
+  Deliver notification that the user is running low on time.
   """
-  def deliver_low_minutes(user, minutes_remaining, percent_used) do
+  def deliver_low_time(user, minutes_remaining, percent_used) do
     app_link = "#{app_url()}/account"
 
-    deliver(user.email, "Running low on minutes", """
+    deliver(user.email, "Running low on processing time", """
 
     ==============================
 
     Hi there,
 
-    You've used #{percent_used}% of your monthly minutes. You have #{minutes_remaining} minutes left.
+    You've used #{percent_used}% of your monthly processing time. You have #{minutes_remaining} minutes left.
 
-    Upgrade to Pro for 900 minutes/month:
+    Upgrade to Pro for 15 hours/month:
     #{app_link}
 
     ==============================

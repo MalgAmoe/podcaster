@@ -21,10 +21,10 @@ defmodule PoddyclipBackend.Accounts.User do
     field :notification_preferences, :map, default: %{
       "job_complete" => true,
       "job_failed" => true,
-      "low_minutes" => true,
+      "low_time" => true,
       "subscription_expiry" => true
     }
-    field :last_low_minutes_notification_at, :utc_datetime
+    field :last_low_time_notification_at, :utc_datetime
     field :expiry_notification_sent_at, :utc_datetime
 
     timestamps(type: :utc_datetime)
@@ -163,7 +163,7 @@ defmodule PoddyclipBackend.Accounts.User do
         changeset
 
       prefs when is_map(prefs) ->
-        valid_keys = MapSet.new(["job_complete", "job_failed", "low_minutes", "subscription_expiry"])
+        valid_keys = MapSet.new(["job_complete", "job_failed", "low_time", "subscription_expiry"])
         pref_keys = MapSet.new(Map.keys(prefs))
 
         if MapSet.subset?(pref_keys, valid_keys) do

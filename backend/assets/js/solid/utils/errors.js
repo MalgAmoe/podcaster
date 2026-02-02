@@ -4,8 +4,8 @@
 export function getErrorKey(error) {
   if (!error) return "unknownError";
 
-  if (error.includes("insufficient_seconds") || error.includes("insufficient_minutes")) {
-    return "notEnoughMinutes";
+  if (error.includes("insufficient_seconds")) {
+    return "notEnoughTime";
   }
   if (error.includes("probe") || error.includes("Unsupported")) {
     return "formatNotSupported";

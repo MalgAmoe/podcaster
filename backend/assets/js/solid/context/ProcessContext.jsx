@@ -19,7 +19,7 @@ export function ProcessProvider(props) {
     filename: null,
     uploadProgress: 0,
     uploadState: "idle", // idle, uploading, ready, error
-    estimatedMinutes: null, // Detected audio duration in minutes
+    estimatedSeconds: null, // Detected audio duration in seconds
     submitting: false, // Prevents double-submit
     // Processing configuration - each category stores its own mode + strength
     processingConfig: {
@@ -160,14 +160,14 @@ export function ProcessProvider(props) {
     }
   });
 
-  // Get audio duration using Web Audio API
-  async function getAudioDuration(file) {
+  // Get audio duration in seconds using Web Audio API
+  async function getAudioDurationSeconds(file) {
     try {
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
       const arrayBuffer = await file.arrayBuffer();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
       audioContext.close();
-      return Math.ceil(audioBuffer.duration / 60); // minutes, rounded up
+      return Math.ceil(audioBuffer.duration); // seconds, rounded up
     } catch (err) {
       if (import.meta.env.DEV) console.error("Failed to detect audio duration:", err);
       return null;
@@ -189,7 +189,7 @@ export function ProcessProvider(props) {
       filename: file.name,
       uploadState: "uploading",
       uploadProgress: 0,
-      estimatedMinutes: null,
+      estimatedSeconds: null,
     });
 
     try {
@@ -232,9 +232,9 @@ export function ProcessProvider(props) {
       setStore({ s3Key: key, uploadState: "ready" });
 
       // Detect audio duration in background (don't block upload completion)
-      getAudioDuration(file).then((minutes) => {
-        if (minutes !== null) {
-          setStore("estimatedMinutes", minutes);
+      getAudioDurationSeconds(file).then((seconds) => {
+        if (seconds !== null) {
+          setStore("estimatedSeconds", seconds);
         }
       });
     } catch (err) {
@@ -290,8 +290,8 @@ export function ProcessProvider(props) {
         strength: catConfig.strength,
         // Only send ai_clean for voice category where it can be toggled
         ai_clean: cat === "voice" ? catConfig.aiClean : undefined,
-        // Send duration for billing (convert minutes to seconds, default to 60s if not detected)
-        duration_seconds: store.estimatedMinutes ? store.estimatedMinutes * 60 : 60
+        // Send duration for billing (default to 60s if not detected)
+        duration_seconds: store.estimatedSeconds || 60
       };
       const job = await api.createJob(store.s3Key, store.filename, config);
       setStore({ job });
@@ -365,7 +365,7 @@ export function ProcessProvider(props) {
       filename: null,
       uploadProgress: 0,
       uploadState: "idle",
-      estimatedMinutes: null,
+      estimatedSeconds: null,
       submitting: false,
       job: null,
     });

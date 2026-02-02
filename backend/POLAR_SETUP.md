@@ -248,7 +248,7 @@ Polar.verify_signature(raw_body, headers, secret)
 | Field | Description |
 |-------|-------------|
 | `plan_id` | Foreign key to plans table |
-| `minutes_available` | Remaining processing minutes |
+| `seconds_available` | Remaining processing seconds |
 | `polar_customer_id` | Polar customer ID for portal access |
 | `polar_subscription_id` | Current subscription ID |
 | `subscription_status` | active, cancelled, past_due, revoked |
