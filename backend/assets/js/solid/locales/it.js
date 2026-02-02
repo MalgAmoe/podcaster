@@ -75,8 +75,8 @@ export default {
   unableToConnect: "Impossibile connettersi. Aggiorna la pagina.",
 
   // Billing
-  notEnoughMinutes: "Minuti non sufficienti. Passa a Pro per piu tempo di elaborazione.",
-  needMinutes: " Hai bisogno di {needed} minuti ma ne hai solo {available} disponibili.",
+  notEnoughMinutes: "Tempo insufficiente. Passa a Pro per piu tempo di elaborazione.",
+  needTime: " Hai bisogno di {needed} ma ne hai solo {available} disponibili.",
   upgrade: "Passa a Pro",
 
   // Error messages

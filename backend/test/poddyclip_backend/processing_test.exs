@@ -8,7 +8,7 @@ defmodule PoddyclipBackend.ProcessingTest do
   import PoddyclipBackend.AccountsFixtures
   import PoddyclipBackend.BillingFixtures
 
-  describe "minute refunds" do
+  describe "seconds refunds" do
     setup do
       plan = free_plan_fixture()
       user = user_fixture()
@@ -16,30 +16,30 @@ defmodule PoddyclipBackend.ProcessingTest do
       {:ok, user} =
         Billing.update_subscription(user, %{
           plan_id: plan.id,
-          minutes_available: 10
+          seconds_available: 600
         })
 
       %{user: user, plan: plan}
     end
 
-    test "update_job_status/2 refunds minutes when job fails", %{user: user} do
-      # Create a job with estimated_minutes
+    test "update_job_status/2 refunds seconds when job fails", %{user: user} do
+      # Create a job with estimated_seconds
       job =
         %Job{}
         |> Job.changeset(%{
           filename: "test.mp3",
           status: :processing,
           user_id: user.id,
-          estimated_minutes: 5
+          estimated_seconds: 300
         })
         |> Repo.insert!()
 
       # Update to failed
       {:ok, _job} = Processing.update_job_status(job.id, %{"status" => "failed", "error" => "Test error"})
 
-      # User should have minutes refunded (10 + 5 = 15)
+      # User should have seconds refunded (600 + 300 = 900)
       updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
-      assert updated_user.minutes_available == 15
+      assert updated_user.seconds_available == 900
     end
 
     test "update_job_status/2 does not refund if job was already failed", %{user: user} do
@@ -50,7 +50,7 @@ defmodule PoddyclipBackend.ProcessingTest do
           filename: "test.mp3",
           status: :failed,
           user_id: user.id,
-          estimated_minutes: 5
+          estimated_seconds: 300
         })
         |> Repo.insert!()
 
@@ -59,7 +59,7 @@ defmodule PoddyclipBackend.ProcessingTest do
 
       # User should NOT get double refund
       updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
-      assert updated_user.minutes_available == 10
+      assert updated_user.seconds_available == 600
     end
 
     test "update_job_status/2 does not refund on completion", %{user: user} do
@@ -69,34 +69,34 @@ defmodule PoddyclipBackend.ProcessingTest do
           filename: "test.mp3",
           status: :processing,
           user_id: user.id,
-          estimated_minutes: 5
+          estimated_seconds: 300
         })
         |> Repo.insert!()
 
       # Update to completed
       {:ok, _job} = Processing.update_job_status(job.id, %{"status" => "completed"})
 
-      # User should NOT have minutes refunded
+      # User should NOT have seconds refunded
       updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
-      assert updated_user.minutes_available == 10
+      assert updated_user.seconds_available == 600
     end
 
-    test "cancel_job/1 refunds minutes for active job", %{user: user} do
+    test "cancel_job/1 refunds seconds for active job", %{user: user} do
       job =
         %Job{}
         |> Job.changeset(%{
           filename: "test.mp3",
           status: :processing,
           user_id: user.id,
-          estimated_minutes: 3
+          estimated_seconds: 180
         })
         |> Repo.insert!()
 
       {:ok, _} = Processing.cancel_job(job.id)
 
-      # User should have minutes refunded (10 + 3 = 13)
+      # User should have seconds refunded (600 + 180 = 780)
       updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
-      assert updated_user.minutes_available == 13
+      assert updated_user.seconds_available == 780
     end
 
     test "cancel_job/1 does not refund for already completed job", %{user: user} do
@@ -106,15 +106,15 @@ defmodule PoddyclipBackend.ProcessingTest do
           filename: "test.mp3",
           status: :completed,
           user_id: user.id,
-          estimated_minutes: 5
+          estimated_seconds: 300
         })
         |> Repo.insert!()
 
       {:ok, _} = Processing.cancel_job(job.id)
 
-      # User should NOT have minutes refunded
+      # User should NOT have seconds refunded
       updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
-      assert updated_user.minutes_available == 10
+      assert updated_user.seconds_available == 600
     end
 
     test "cancel_job/1 does not refund for already failed job", %{user: user} do
@@ -124,34 +124,34 @@ defmodule PoddyclipBackend.ProcessingTest do
           filename: "test.mp3",
           status: :failed,
           user_id: user.id,
-          estimated_minutes: 5
+          estimated_seconds: 300
         })
         |> Repo.insert!()
 
       {:ok, _} = Processing.cancel_job(job.id)
 
-      # User should NOT have minutes refunded (already refunded when it failed)
+      # User should NOT have seconds refunded (already refunded when it failed)
       updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
-      assert updated_user.minutes_available == 10
+      assert updated_user.seconds_available == 600
     end
 
-    test "handles job with nil estimated_minutes gracefully", %{user: user} do
+    test "handles job with nil estimated_seconds gracefully", %{user: user} do
       job =
         %Job{}
         |> Job.changeset(%{
           filename: "test.mp3",
           status: :processing,
           user_id: user.id,
-          estimated_minutes: nil
+          estimated_seconds: nil
         })
         |> Repo.insert!()
 
       # Should not crash
       {:ok, _job} = Processing.update_job_status(job.id, %{"status" => "failed"})
 
-      # User minutes unchanged
+      # User seconds unchanged
       updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
-      assert updated_user.minutes_available == 10
+      assert updated_user.seconds_available == 600
     end
   end
 end

@@ -1,17 +1,17 @@
 defmodule PoddyclipBackend.Billing do
   @moduledoc """
-  The Billing context handles subscription management and minute tracking.
+  The Billing context handles subscription management and seconds tracking.
 
   ## Plans
 
-  - **free**: 15 minutes, no card required
-  - **pro**: $15/mo, 900 minutes (15 hours)
+  - **free**: 900 seconds (15 minutes), no card required
+  - **pro**: $15/mo, 54000 seconds (15 hours)
 
-  ## Minute Management
+  ## Seconds Management
 
-  Users start with minutes based on their plan. Minutes are deducted when
+  Users start with seconds based on their plan. Seconds are deducted when
   processing jobs and refunded if jobs fail. When a subscription renews,
-  minutes are reset to the plan amount.
+  seconds are reset to the plan amount.
   """
 
   import Ecto.Query, warn: false
@@ -69,7 +69,7 @@ defmodule PoddyclipBackend.Billing do
         |> Plan.changeset(%{
           name: "free",
           display_name: "Free",
-          minutes: 15,
+          seconds: 900,
           price_cents: 0
         })
         |> Repo.insert!()
@@ -99,52 +99,52 @@ defmodule PoddyclipBackend.Billing do
     |> Repo.all()
   end
 
-  # ----- Minutes -----
+  # ----- Seconds -----
 
   @doc """
-  Checks if a user has enough minutes for a job.
+  Checks if a user has enough seconds for a job.
 
   ## Examples
 
-      iex> has_minutes?(user, 5)
+      iex> has_seconds?(user, 300)
       true
 
-      iex> has_minutes?(user, 1000)
+      iex> has_seconds?(user, 100000)
       false
   """
-  def has_minutes?(%User{minutes_available: available}, required) do
+  def has_seconds?(%User{seconds_available: available}, required) do
     available >= required
   end
 
   @doc """
-  Deducts minutes from a user's balance.
+  Deducts seconds from a user's balance.
 
-  Returns `{:ok, user}` if successful, `{:error, :insufficient_minutes}` if
-  the user doesn't have enough minutes.
+  Returns `{:ok, user}` if successful, `{:error, :insufficient_seconds}` if
+  the user doesn't have enough seconds.
 
   ## Examples
 
-      iex> deduct_minutes(user, 5)
-      {:ok, %User{minutes_available: 10}}
+      iex> deduct_seconds(user, 300)
+      {:ok, %User{seconds_available: 600}}
 
-      iex> deduct_minutes(user, 1000)
-      {:error, :insufficient_minutes}
+      iex> deduct_seconds(user, 100000)
+      {:error, :insufficient_seconds}
   """
-  def deduct_minutes(%User{minutes_available: available} = user, amount) when amount > 0 do
+  def deduct_seconds(%User{seconds_available: available} = user, amount) when amount > 0 do
     if available >= amount do
       case user
-           |> Ecto.Changeset.change(minutes_available: available - amount)
+           |> Ecto.Changeset.change(seconds_available: available - amount)
            |> Repo.update() do
         {:ok, updated_user} ->
-          Logger.info("Minutes deducted",
+          Logger.info("Seconds deducted",
             user_id: user.id,
             amount: amount,
             previous: available,
-            remaining: updated_user.minutes_available
+            remaining: updated_user.seconds_available
           )
 
           # Check if crossing 80% threshold and send notification
-          maybe_send_low_minutes_notification(updated_user, available, amount)
+          maybe_send_low_seconds_notification(updated_user, available, amount)
 
           {:ok, updated_user}
 
@@ -152,35 +152,35 @@ defmodule PoddyclipBackend.Billing do
           error
       end
     else
-      Logger.warning("Insufficient minutes for deduction",
+      Logger.warning("Insufficient seconds for deduction",
         user_id: user.id,
         requested: amount,
         available: available
       )
-      {:error, :insufficient_minutes}
+      {:error, :insufficient_seconds}
     end
   end
 
   @doc """
-  Refunds minutes to a user's balance.
+  Refunds seconds to a user's balance.
 
-  Used when a job fails and the estimated minutes should be returned.
+  Used when a job fails and the estimated seconds should be returned.
 
   ## Examples
 
-      iex> refund_minutes(user, 5)
-      {:ok, %User{minutes_available: 20}}
+      iex> refund_seconds(user, 300)
+      {:ok, %User{seconds_available: 1200}}
   """
-  def refund_minutes(%User{minutes_available: available} = user, amount) when amount > 0 do
+  def refund_seconds(%User{seconds_available: available} = user, amount) when amount > 0 do
     case user
-         |> Ecto.Changeset.change(minutes_available: available + amount)
+         |> Ecto.Changeset.change(seconds_available: available + amount)
          |> Repo.update() do
       {:ok, updated_user} ->
-        Logger.info("Minutes refunded",
+        Logger.info("Seconds refunded",
           user_id: user.id,
           amount: amount,
           previous: available,
-          new_balance: updated_user.minutes_available
+          new_balance: updated_user.seconds_available
         )
         {:ok, updated_user}
 
@@ -190,21 +190,21 @@ defmodule PoddyclipBackend.Billing do
   end
 
   @doc """
-  Adjusts minutes after job completion.
+  Adjusts seconds after job completion.
 
   If actual usage differs from estimated, adjusts the user's balance.
   Positive adjustment = refund (job used less), negative = deduct more.
 
   ## Examples
 
-      iex> adjust_minutes(user, 2)  # Job used 2 fewer minutes
+      iex> adjust_seconds(user, 120)  # Job used 120 fewer seconds
       {:ok, %User{}}
   """
-  def adjust_minutes(%User{minutes_available: available} = user, adjustment) do
+  def adjust_seconds(%User{seconds_available: available} = user, adjustment) do
     new_balance = max(0, available + adjustment)
 
     user
-    |> Ecto.Changeset.change(minutes_available: new_balance)
+    |> Ecto.Changeset.change(seconds_available: new_balance)
     |> Repo.update()
   end
 
@@ -243,16 +243,16 @@ defmodule PoddyclipBackend.Billing do
   end
 
   @doc """
-  Resets a user's minutes to their plan amount.
+  Resets a user's seconds to their plan amount.
 
   Called when a subscription renews.
   """
-  def reset_subscription_minutes(%User{} = user) do
+  def reset_subscription_seconds(%User{} = user) do
     user = Repo.preload(user, :plan)
 
     if user.plan do
       user
-      |> Ecto.Changeset.change(minutes_available: user.plan.minutes)
+      |> Ecto.Changeset.change(seconds_available: user.plan.seconds)
       |> Repo.update()
     else
       {:error, :no_plan}
@@ -269,7 +269,7 @@ defmodule PoddyclipBackend.Billing do
   - `:polar_subscription_id` - Polar subscription ID
   - `:current_period_ends_at` - When the current billing period ends
   - `:plan_id` - The plan ID
-  - `:minutes_available` - Available minutes (set when upgrading)
+  - `:seconds_available` - Available seconds (set when upgrading)
   """
   def update_subscription(%User{} = user, attrs) do
     case user
@@ -406,10 +406,10 @@ defmodule PoddyclipBackend.Billing do
       plan_id: pro_plan && pro_plan.id
     }
 
-    # If upgrading from free/none, also set minutes
+    # If upgrading from free/none, also set seconds
     attrs =
       if user.subscription_status != "active" && pro_plan do
-        Map.put(attrs, :minutes_available, pro_plan.minutes)
+        Map.put(attrs, :seconds_available, pro_plan.seconds)
       else
         attrs
       end
@@ -456,7 +456,7 @@ defmodule PoddyclipBackend.Billing do
         polar_subscription_id: nil,
         current_period_ends_at: nil,
         plan_id: free_plan.id,
-        minutes_available: free_plan.minutes
+        seconds_available: free_plan.seconds
       })
     else
       {:ok, user}
@@ -471,43 +471,45 @@ defmodule PoddyclipBackend.Billing do
     end
   end
 
-  # ----- Low Minutes Notifications -----
+  # ----- Low Seconds Notifications -----
 
-  @low_minutes_threshold 0.80
+  @low_seconds_threshold 0.80
 
-  defp maybe_send_low_minutes_notification(user, previous_minutes, _deducted_amount) do
+  defp maybe_send_low_seconds_notification(user, previous_seconds, _deducted_amount) do
     # Get user's plan to calculate percentage
     user = Repo.preload(user, :plan)
-    plan_minutes = (user.plan && user.plan.minutes) || 15
+    plan_seconds = (user.plan && user.plan.seconds) || 900
 
     # Calculate usage percentages before and after deduction
-    previous_used_pct = (plan_minutes - previous_minutes) / plan_minutes
-    current_used_pct = (plan_minutes - user.minutes_available) / plan_minutes
+    previous_used_pct = (plan_seconds - previous_seconds) / plan_seconds
+    current_used_pct = (plan_seconds - user.seconds_available) / plan_seconds
 
     # Check if we just crossed the 80% threshold
-    if previous_used_pct < @low_minutes_threshold and current_used_pct >= @low_minutes_threshold do
-      send_low_minutes_notification(user, plan_minutes)
+    if previous_used_pct < @low_seconds_threshold and current_used_pct >= @low_seconds_threshold do
+      send_low_seconds_notification(user, plan_seconds)
     end
   end
 
-  defp send_low_minutes_notification(user, plan_minutes) do
+  defp send_low_seconds_notification(user, plan_seconds) do
     # Check user preferences and spam prevention
     if User.notification_enabled?(user, :low_minutes) and
        Accounts.should_send_low_minutes_notification?(user) do
-      percent_used = round((plan_minutes - user.minutes_available) / plan_minutes * 100)
+      percent_used = round((plan_seconds - user.seconds_available) / plan_seconds * 100)
+      # Convert seconds to minutes for user-friendly notification
+      minutes_remaining = div(user.seconds_available, 60)
 
       try do
-        UserNotifier.deliver_low_minutes(user, user.minutes_available, percent_used)
+        UserNotifier.deliver_low_minutes(user, minutes_remaining, percent_used)
         Accounts.record_low_minutes_notification(user)
 
-        Logger.info("Low minutes notification sent",
+        Logger.info("Low seconds notification sent",
           user_id: user.id,
-          minutes_remaining: user.minutes_available,
+          seconds_remaining: user.seconds_available,
           percent_used: percent_used
         )
       rescue
         e ->
-          Logger.error("Failed to send low minutes notification",
+          Logger.error("Failed to send low seconds notification",
             user_id: user.id,
             error: Exception.message(e)
           )

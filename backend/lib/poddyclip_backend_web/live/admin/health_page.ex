@@ -51,8 +51,8 @@ defmodule PoddyclipBackendWeb.Live.Admin.HealthPage do
         </.card>
       </:col>
       <:col>
-        <.card title="Minutes" inner_title="Available">
-          <%= @user_stats.total_minutes_available %>
+        <.card title="Seconds" inner_title="Available">
+          <%= @user_stats.total_seconds_available %>
         </.card>
       </:col>
     </.row>

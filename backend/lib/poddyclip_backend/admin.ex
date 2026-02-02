@@ -131,8 +131,7 @@ defmodule PoddyclipBackend.Admin do
         total: 150,
         by_plan: %{"free" => 120, "pro" => 30},
         by_subscription: %{"none" => 120, "active" => 25, "cancelled" => 5},
-        total_minutes_used: 4500,
-        total_minutes_available: 12000
+        total_seconds_available: 720000
       }
   """
   def user_stats do
@@ -153,16 +152,16 @@ defmodule PoddyclipBackend.Admin do
       |> Repo.all()
       |> Map.new()
 
-    total_minutes_available =
+    total_seconds_available =
       User
-      |> select([u], sum(u.minutes_available))
+      |> select([u], sum(u.seconds_available))
       |> Repo.one() || 0
 
     %{
       total: total,
       by_plan: by_plan,
       by_subscription: by_subscription,
-      total_minutes_available: total_minutes_available
+      total_seconds_available: total_seconds_available
     }
   end
 

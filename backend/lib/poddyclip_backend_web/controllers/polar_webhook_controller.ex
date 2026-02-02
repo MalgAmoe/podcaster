@@ -116,7 +116,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookController do
 
       case Billing.update_subscription(user, %{
              plan_id: plan.id,
-             minutes_available: plan.minutes,
+             seconds_available: plan.seconds,
              subscription_status: "active",
              polar_customer_id: customer_id,
              polar_subscription_id: subscription_id,
@@ -153,10 +153,10 @@ defmodule PoddyclipBackendWeb.PolarWebhookController do
       updates =
         if is_renewal do
           Logger.info("Subscription renewed for user #{user.id}")
-          # Reset minutes on renewal
+          # Reset seconds on renewal
           user = PoddyclipBackend.Repo.preload(user, :plan)
-          minutes = if user.plan, do: user.plan.minutes, else: user.minutes_available
-          %{current_period_ends_at: period_end, minutes_available: minutes}
+          seconds = if user.plan, do: user.plan.seconds, else: user.seconds_available
+          %{current_period_ends_at: period_end, seconds_available: seconds}
         else
           %{current_period_ends_at: period_end}
         end
@@ -234,7 +234,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookController do
         subscription_status: "none",
         polar_subscription_id: nil,
         current_period_ends_at: nil
-        # Keep minutes_available as is - don't take away remaining time
+        # Keep seconds_available as is - don't take away remaining time
       })
 
       %{status: "ok"}

@@ -34,11 +34,11 @@
         <% end %>
       </div>
 
-      <!-- Minutes Usage -->
+      <!-- Time Usage -->
       <div class="mb-6">
         <div class="flex justify-between text-sm mb-2">
-          <span class="text-base-content/70"><%= gettext("Minutes Used") %></span>
-          <span class="font-medium"><%= @used_minutes %> / <%= @max_minutes %></span>
+          <span class="text-base-content/70"><%= gettext("Time Used") %></span>
+          <span class="font-medium"><%= @used_min %>m <%= @used_sec %>s / <%= @max_minutes %>m 0s</span>
         </div>
         <div class="w-full bg-base-300 rounded-full h-3">
           <div
@@ -47,7 +47,7 @@
           ></div>
         </div>
         <p class="text-xs text-base-content/50 mt-2">
-          <%= ngettext("%{count} minute remaining", "%{count} minutes remaining", @user.minutes_available, count: @user.minutes_available) %>
+          <%= @remaining_min %>m <%= @remaining_sec %>s <%= gettext("remaining") %>
         </p>
       </div>
 

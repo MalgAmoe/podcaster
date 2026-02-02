@@ -94,11 +94,11 @@ defmodule Mix.Tasks.Polar.ImportSubscribers do
       |> Ecto.Changeset.put_change(:subscription_status, "active")
       |> Ecto.Changeset.put_change(:current_period_ends_at, period_end)
       |> Ecto.Changeset.put_change(:plan_id, pro_plan.id)
-      |> Ecto.Changeset.put_change(:minutes_available, pro_plan.minutes)
+      |> Ecto.Changeset.put_change(:seconds_available, pro_plan.seconds)
 
     case Repo.insert(changeset) do
       {:ok, user} ->
-        Mix.shell().info("  ✓ Created user with #{user.minutes_available} minutes")
+        Mix.shell().info("  ✓ Created user with #{user.seconds_available} seconds")
 
       {:error, changeset} ->
         errors = Ecto.Changeset.traverse_errors(changeset, fn {msg, _} -> msg end)
@@ -120,7 +120,7 @@ defmodule Mix.Tasks.Polar.ImportSubscribers do
 
     case Billing.sync_subscription_from_polar(user) do
       {:ok, updated} ->
-        Mix.shell().info("  ✓ Synced: status=#{updated.subscription_status}, minutes=#{updated.minutes_available}")
+        Mix.shell().info("  ✓ Synced: status=#{updated.subscription_status}, seconds=#{updated.seconds_available}")
 
       {:error, reason} ->
         Mix.shell().error("  ✗ Sync failed: #{inspect(reason)}")

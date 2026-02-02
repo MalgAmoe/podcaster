@@ -109,7 +109,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
       # Verify user was updated
       updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
       assert updated_user.plan_id == pro_plan.id
-      assert updated_user.minutes_available == 900
+      assert updated_user.seconds_available == 54000
       assert updated_user.subscription_status == "active"
       assert updated_user.polar_subscription_id == "sub_test_123"
       assert updated_user.polar_customer_id == "cus_test_456"
@@ -146,7 +146,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
       {:ok, user} =
         Billing.update_subscription(user, %{
           plan_id: pro_plan.id,
-          minutes_available: 100,
+          seconds_available: 6000,
           subscription_status: "active",
           polar_subscription_id: "sub_renew_123",
           current_period_ends_at: old_period_end
@@ -174,7 +174,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
 
       # Verify minutes were reset
       updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
-      assert updated_user.minutes_available == 900
+      assert updated_user.seconds_available == 54000
     end
 
     test "doesn't reset minutes for non-renewal update", %{conn: conn, pro_plan: pro_plan} do
@@ -186,7 +186,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
       {:ok, user} =
         Billing.update_subscription(user, %{
           plan_id: pro_plan.id,
-          minutes_available: 500,
+          seconds_available: 30000,
           subscription_status: "active",
           polar_subscription_id: "sub_update_456",
           current_period_ends_at: period_end
@@ -211,7 +211,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
 
       # Minutes should not be reset
       updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
-      assert updated_user.minutes_available == 500
+      assert updated_user.seconds_available == 30000
     end
   end
 
@@ -222,7 +222,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
       {:ok, user} =
         Billing.update_subscription(user, %{
           plan_id: pro_plan.id,
-          minutes_available: 500,
+          seconds_available: 30000,
           subscription_status: "active",
           polar_subscription_id: "sub_cancel_123"
         })
@@ -243,7 +243,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
       assert updated_user.subscription_status == "cancelled"
       # Should keep access until period ends
       assert updated_user.plan_id == pro_plan.id
-      assert updated_user.minutes_available == 500
+      assert updated_user.seconds_available == 30000
     end
   end
 
@@ -254,7 +254,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
       {:ok, user} =
         Billing.update_subscription(user, %{
           plan_id: pro_plan.id,
-          minutes_available: 500,
+          seconds_available: 30000,
           subscription_status: "cancelled",
           polar_subscription_id: "sub_uncancel_123",
           current_period_ends_at: DateTime.utc_now() |> DateTime.add(10, :day) |> DateTime.truncate(:second)
@@ -277,7 +277,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
       assert updated_user.subscription_status == "active"
       # Should keep pro plan and remaining minutes
       assert updated_user.plan_id == pro_plan.id
-      assert updated_user.minutes_available == 500
+      assert updated_user.seconds_available == 30000
     end
   end
 
@@ -288,7 +288,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
       {:ok, user} =
         Billing.update_subscription(user, %{
           plan_id: pro_plan.id,
-          minutes_available: 500,
+          seconds_available: 30000,
           subscription_status: "active",
           polar_subscription_id: "sub_pastdue_123"
         })
@@ -310,7 +310,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
       assert updated_user.subscription_status == "past_due"
       # Should keep access while in grace period
       assert updated_user.plan_id == pro_plan.id
-      assert updated_user.minutes_available == 500
+      assert updated_user.seconds_available == 30000
     end
   end
 
@@ -321,7 +321,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
       {:ok, user} =
         Billing.update_subscription(user, %{
           plan_id: pro_plan.id,
-          minutes_available: 500,
+          seconds_available: 30000,
           subscription_status: "active",
           polar_subscription_id: "sub_revoke_123",
           current_period_ends_at: DateTime.utc_now() |> DateTime.add(30, :day) |> DateTime.truncate(:second)
@@ -343,7 +343,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
       assert updated_user.subscription_status == "none"
       assert updated_user.plan_id == free_plan.id
       # Should keep remaining minutes
-      assert updated_user.minutes_available == 500
+      assert updated_user.seconds_available == 30000
       assert updated_user.polar_subscription_id == nil
     end
   end

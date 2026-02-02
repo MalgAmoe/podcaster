@@ -10,7 +10,7 @@ export class ApiError extends Error {
     this.name = "ApiError";
     this.status = status;
     this.code = data.error;
-    // Preserve extra fields like minutes_available, minutes_needed
+    // Preserve extra fields like seconds_available, seconds_needed
     this.details = data;
   }
 }

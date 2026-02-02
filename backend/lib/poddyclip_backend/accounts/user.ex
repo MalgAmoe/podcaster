@@ -11,7 +11,7 @@ defmodule PoddyclipBackend.Accounts.User do
 
     # Billing fields
     belongs_to :plan, PoddyclipBackend.Billing.Plan
-    field :minutes_available, :integer, default: 15
+    field :seconds_available, :integer, default: 900  # 15 minutes in seconds
     field :subscription_status, :string, default: "none"
     field :polar_customer_id, :string
     field :polar_subscription_id, :string

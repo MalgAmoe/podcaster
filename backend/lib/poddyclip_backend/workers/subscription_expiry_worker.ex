@@ -53,7 +53,7 @@ defmodule PoddyclipBackend.Workers.SubscriptionExpiryWorker do
         polar_subscription_id: nil,
         current_period_ends_at: nil,
         plan_id: nil,
-        minutes_available: 15
+        seconds_available: 900
       })
       |> Repo.update()
     end

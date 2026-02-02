@@ -75,8 +75,8 @@ export default {
   unableToConnect: "Unable to connect. Please refresh the page.",
 
   // Billing
-  notEnoughMinutes: "Not enough minutes available. Upgrade to Pro for more processing time.",
-  needMinutes: " You need {needed} minutes but only have {available} available.",
+  notEnoughMinutes: "Not enough time available. Upgrade to Pro for more processing time.",
+  needTime: " You need {needed} but only have {available} available.",
   upgrade: "Upgrade",
 
   // Error messages

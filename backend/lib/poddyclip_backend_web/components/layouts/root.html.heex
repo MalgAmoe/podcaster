@@ -90,7 +90,9 @@
               </li>
               <%= if @current_scope.user.subscription_status != "active" do %>
                 <li class="text-xs text-base-content/50 px-4 py-1">
-                  <%= ngettext("%{count} min remaining", "%{count} min remaining", @current_scope.user.minutes_available, count: @current_scope.user.minutes_available) %>
+                  <% mins = div(@current_scope.user.seconds_available, 60) %>
+                  <% secs = rem(@current_scope.user.seconds_available, 60) %>
+                  <%= "#{mins}m #{secs}s" %> <%= gettext("remaining") %>
                 </li>
               <% end %>
               <li><.link href={locale_path(@locale, "/account")}><%= gettext("Account") %></.link></li>

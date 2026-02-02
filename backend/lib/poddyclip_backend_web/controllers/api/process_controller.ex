@@ -77,8 +77,8 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   Request: {"s3_key": "...", "filename": "...", "category": "voice", "mode": "natural", "strength": 3, "duration_seconds": 300}
   Response: {"id": 123, "status": "queued", "filename": "..."}
 
-  The duration_seconds parameter is used to estimate minutes needed. If not provided,
-  defaults to 1 minute as a conservative estimate.
+  The duration_seconds parameter is used to estimate seconds needed. If not provided,
+  defaults to 60 seconds as a conservative estimate.
   """
   def create_job(conn, %{"s3_key" => s3_key, "filename" => filename} = params) do
     user = conn.assigns.current_user
@@ -86,9 +86,8 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
     # Check if cancelled subscription has expired
     {:ok, user} = Billing.check_subscription_expiry(user)
 
-    # Estimate minutes from duration (rounded up)
-    duration_seconds = params["duration_seconds"] || 60
-    estimated_minutes = ceil(duration_seconds / 60)
+    # Use exact seconds from duration
+    estimated_seconds = params["duration_seconds"] || 60
 
     # Build job options
     opts = [
@@ -96,15 +95,15 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
       mode: params["mode"] || "natural",
       strength: params["strength"] || 3,
       ai_clean: params["ai_clean"],
-      estimated_minutes: estimated_minutes
+      estimated_seconds: estimated_seconds
     ]
 
-    # Use Ecto.Multi to ensure atomicity: minutes are only deducted if job creation succeeds.
-    # If job submission fails, the transaction rolls back and minutes are not lost.
+    # Use Ecto.Multi to ensure atomicity: seconds are only deducted if job creation succeeds.
+    # If job submission fails, the transaction rolls back and seconds are not lost.
     result =
       Multi.new()
-      |> Multi.run(:deduct_minutes, fn _repo, _changes ->
-        Billing.deduct_minutes(user, estimated_minutes)
+      |> Multi.run(:deduct_seconds, fn _repo, _changes ->
+        Billing.deduct_seconds(user, estimated_seconds)
       end)
       |> Multi.run(:submit_job, fn _repo, _changes ->
         Processing.submit_job_from_s3(s3_key, filename, user.id, opts)
@@ -119,13 +118,13 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
           filename: job.filename
         })
 
-      {:error, :deduct_minutes, :insufficient_minutes, _changes} ->
+      {:error, :deduct_seconds, :insufficient_seconds, _changes} ->
         conn
         |> put_status(:payment_required)
         |> json(%{
-          error: "insufficient_minutes",
-          minutes_available: user.minutes_available,
-          minutes_needed: estimated_minutes
+          error: "insufficient_seconds",
+          seconds_available: user.seconds_available,
+          seconds_needed: estimated_seconds
         })
 
       {:error, :submit_job, {:http_error, status, %{"error" => %{"message" => msg}}}, _changes} ->
@@ -369,8 +368,8 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   Response: {
     "id": 123,
     "email": "user@example.com",
-    "plan": {"name": "free", "display_name": "Free", "minutes": 15},
-    "minutes_available": 12,
+    "plan": {"name": "free", "display_name": "Free", "seconds": 900},
+    "seconds_available": 720,
     "subscription_status": "none"
   }
   """
@@ -386,14 +385,14 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
         %{
           name: user.plan.name,
           display_name: user.plan.display_name,
-          minutes: user.plan.minutes
+          seconds: user.plan.seconds
         }
       else
         # Fallback for users without a plan (shouldn't happen but be safe)
         %{
           name: "free",
           display_name: "Free",
-          minutes: 15
+          seconds: 900
         }
       end
 
@@ -401,7 +400,7 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
       id: user.id,
       email: user.email,
       plan: plan_info,
-      minutes_available: user.minutes_available,
+      seconds_available: user.seconds_available,
       subscription_status: user.subscription_status
     })
   end

@@ -297,11 +297,17 @@ export function ProcessProvider(props) {
       setStore({ job });
     } catch (err) {
       // Billing errors get persistent notification with upgrade action
-      if (err instanceof ApiError && err.code === "insufficient_minutes") {
+      if (err instanceof ApiError && err.code === "insufficient_seconds") {
         const details = err.details;
         let message = t(getErrorKey(err.code));
-        if (details?.minutes_available !== undefined && details?.minutes_needed !== undefined) {
-          message += tt("needMinutes", { needed: details.minutes_needed, available: details.minutes_available });
+        if (details?.seconds_available !== undefined && details?.seconds_needed !== undefined) {
+          // Format as Xm Ys
+          const formatTime = (secs) => {
+            const m = Math.floor(secs / 60);
+            const s = secs % 60;
+            return `${m}m ${s}s`;
+          };
+          message += tt("needTime", { needed: formatTime(details.seconds_needed), available: formatTime(details.seconds_available) });
         }
         // Get locale for locale-aware redirect
         const locale = document.documentElement.lang || "en";

@@ -136,7 +136,7 @@ defmodule PoddyclipBackendWeb.AdminApiControllerTest do
                  "users" => %{
                    "total" => total,
                    "by_subscription" => _,
-                   "total_minutes_available" => _
+                   "total_seconds_available" => _
                  },
                  "timestamp" => _
                } = json_response(conn, 200)

@@ -75,8 +75,8 @@ export default {
   unableToConnect: "No se puede conectar. Por favor actualiza la pagina.",
 
   // Billing
-  notEnoughMinutes: "No tienes suficientes minutos. Actualiza a Pro para mas tiempo de procesamiento.",
-  needMinutes: " Necesitas {needed} minutos pero solo tienes {available} disponibles.",
+  notEnoughMinutes: "No tienes suficiente tiempo. Actualiza a Pro para mas tiempo de procesamiento.",
+  needTime: " Necesitas {needed} pero solo tienes {available} disponibles.",
   upgrade: "Actualizar",
 
   // Error messages

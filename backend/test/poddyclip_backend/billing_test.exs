@@ -19,7 +19,7 @@ defmodule PoddyclipBackend.BillingTest do
     test "get_or_create_free_plan/0 creates free plan if not exists" do
       plan = Billing.get_or_create_free_plan()
       assert plan.name == "free"
-      assert plan.minutes == 15
+      assert plan.seconds == 900
       assert plan.price_cents == 0
     end
 
@@ -39,56 +39,56 @@ defmodule PoddyclipBackend.BillingTest do
     end
   end
 
-  describe "minutes" do
+  describe "seconds" do
     setup do
       plan = free_plan_fixture()
       user = user_fixture()
-      # Update user with plan and minutes
+      # Update user with plan and seconds
       {:ok, user} =
         user
-        |> Ecto.Changeset.change(plan_id: plan.id, minutes_available: 15)
+        |> Ecto.Changeset.change(plan_id: plan.id, seconds_available: 900)
         |> Repo.update()
 
       %{user: user, plan: plan}
     end
 
-    test "has_minutes?/2 returns true when user has enough minutes", %{user: user} do
-      assert Billing.has_minutes?(user, 5)
-      assert Billing.has_minutes?(user, 15)
+    test "has_seconds?/2 returns true when user has enough seconds", %{user: user} do
+      assert Billing.has_seconds?(user, 300)
+      assert Billing.has_seconds?(user, 900)
     end
 
-    test "has_minutes?/2 returns false when user doesn't have enough", %{user: user} do
-      refute Billing.has_minutes?(user, 16)
-      refute Billing.has_minutes?(user, 100)
+    test "has_seconds?/2 returns false when user doesn't have enough", %{user: user} do
+      refute Billing.has_seconds?(user, 901)
+      refute Billing.has_seconds?(user, 6000)
     end
 
-    test "deduct_minutes/2 subtracts from available minutes", %{user: user} do
-      assert {:ok, updated} = Billing.deduct_minutes(user, 5)
-      assert updated.minutes_available == 10
+    test "deduct_seconds/2 subtracts from available seconds", %{user: user} do
+      assert {:ok, updated} = Billing.deduct_seconds(user, 300)
+      assert updated.seconds_available == 600
     end
 
-    test "deduct_minutes/2 returns error when insufficient", %{user: user} do
-      assert {:error, :insufficient_minutes} = Billing.deduct_minutes(user, 100)
+    test "deduct_seconds/2 returns error when insufficient", %{user: user} do
+      assert {:error, :insufficient_seconds} = Billing.deduct_seconds(user, 6000)
     end
 
-    test "refund_minutes/2 adds to available minutes", %{user: user} do
-      assert {:ok, updated} = Billing.refund_minutes(user, 5)
-      assert updated.minutes_available == 20
+    test "refund_seconds/2 adds to available seconds", %{user: user} do
+      assert {:ok, updated} = Billing.refund_seconds(user, 300)
+      assert updated.seconds_available == 1200
     end
 
-    test "adjust_minutes/2 adjusts balance", %{user: user} do
+    test "adjust_seconds/2 adjusts balance", %{user: user} do
       # Positive adjustment (refund)
-      assert {:ok, updated} = Billing.adjust_minutes(user, 5)
-      assert updated.minutes_available == 20
+      assert {:ok, updated} = Billing.adjust_seconds(user, 300)
+      assert updated.seconds_available == 1200
 
       # Negative adjustment (deduct more)
-      assert {:ok, updated2} = Billing.adjust_minutes(updated, -10)
-      assert updated2.minutes_available == 10
+      assert {:ok, updated2} = Billing.adjust_seconds(updated, -600)
+      assert updated2.seconds_available == 600
     end
 
-    test "adjust_minutes/2 doesn't go below zero", %{user: user} do
-      assert {:ok, updated} = Billing.adjust_minutes(user, -100)
-      assert updated.minutes_available == 0
+    test "adjust_seconds/2 doesn't go below zero", %{user: user} do
+      assert {:ok, updated} = Billing.adjust_seconds(user, -6000)
+      assert updated.seconds_available == 0
     end
   end
 
@@ -100,7 +100,7 @@ defmodule PoddyclipBackend.BillingTest do
 
       {:ok, user} =
         user
-        |> Ecto.Changeset.change(plan_id: free_plan.id, minutes_available: 15)
+        |> Ecto.Changeset.change(plan_id: free_plan.id, seconds_available: 900)
         |> Repo.update()
 
       %{user: user, free_plan: free_plan, pro_plan: pro_plan}
@@ -112,7 +112,7 @@ defmodule PoddyclipBackend.BillingTest do
       assert {:ok, updated} =
                Billing.update_subscription(user, %{
                  plan_id: pro_plan.id,
-                 minutes_available: pro_plan.minutes,
+                 seconds_available: pro_plan.seconds,
                  subscription_status: "active",
                  polar_customer_id: "cus_123",
                  polar_subscription_id: "sub_456",
@@ -120,24 +120,24 @@ defmodule PoddyclipBackend.BillingTest do
                })
 
       assert updated.plan_id == pro_plan.id
-      assert updated.minutes_available == 900
+      assert updated.seconds_available == 54000
       assert updated.subscription_status == "active"
       assert updated.polar_customer_id == "cus_123"
       assert updated.polar_subscription_id == "sub_456"
       assert DateTime.compare(updated.current_period_ends_at, period_end) == :eq
     end
 
-    test "reset_subscription_minutes/1 resets to plan amount", %{user: user, pro_plan: pro_plan} do
+    test "reset_subscription_seconds/1 resets to plan amount", %{user: user, pro_plan: pro_plan} do
       # First upgrade to pro
       {:ok, user} =
         Billing.update_subscription(user, %{
           plan_id: pro_plan.id,
-          minutes_available: 100
+          seconds_available: 6000
         })
 
       # Now reset
-      assert {:ok, updated} = Billing.reset_subscription_minutes(user)
-      assert updated.minutes_available == 900
+      assert {:ok, updated} = Billing.reset_subscription_seconds(user)
+      assert updated.seconds_available == 54000
     end
 
     test "get_user_by_subscription_id/1 finds user", %{user: user} do
@@ -162,7 +162,7 @@ defmodule PoddyclipBackend.BillingTest do
       {:ok, user} =
         Billing.update_subscription(user, %{
           plan_id: pro_plan.id,
-          minutes_available: 500,
+          seconds_available: 30000,
           subscription_status: "cancelled",
           polar_subscription_id: "sub_expiry_test"
         })
@@ -180,8 +180,8 @@ defmodule PoddyclipBackend.BillingTest do
       assert updated.plan_id == free_plan.id
       assert updated.subscription_status == "none"
       assert updated.polar_subscription_id == nil
-      # Should keep remaining minutes
-      assert updated.minutes_available == 500
+      # Should keep remaining seconds
+      assert updated.seconds_available == 30000
     end
 
     test "check_subscription_expiry/1 keeps active cancelled subscription", %{user: user, pro_plan: pro_plan} do

@@ -13,7 +13,7 @@ defmodule PoddyclipBackend.BillingFixtures do
         Enum.into(attrs, %{
           name: "free",
           display_name: "Free",
-          minutes: 15,
+          seconds: 900,
           price_cents: 0,
           active: true
         })
@@ -34,7 +34,7 @@ defmodule PoddyclipBackend.BillingFixtures do
         Enum.into(attrs, %{
           name: "pro",
           display_name: "Pro",
-          minutes: 900,
+          seconds: 54000,
           price_cents: 1500,
           polar_product_id: "prod_test_123",
           active: true
@@ -57,7 +57,7 @@ defmodule PoddyclipBackend.BillingFixtures do
         Enum.into(attrs, %{
           name: name,
           display_name: String.capitalize(name),
-          minutes: 100,
+          seconds: 6000,
           price_cents: 1000,
           active: true
         })

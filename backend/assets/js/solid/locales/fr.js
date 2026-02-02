@@ -75,8 +75,8 @@ export default {
   unableToConnect: "Impossible de se connecter. Veuillez rafraichir la page.",
 
   // Billing
-  notEnoughMinutes: "Minutes insuffisantes. Passez a Pro pour plus de temps de traitement.",
-  needMinutes: " Vous avez besoin de {needed} minutes mais n'en avez que {available} disponibles.",
+  notEnoughMinutes: "Temps insuffisant. Passez a Pro pour plus de temps de traitement.",
+  needTime: " Vous avez besoin de {needed} mais n'en avez que {available} disponibles.",
   upgrade: "Passer a Pro",
 
   // Error messages

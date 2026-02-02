@@ -58,7 +58,7 @@ defmodule Mix.Tasks.SyncSubscriptions do
 
     case Billing.sync_subscription_from_polar(user) do
       {:ok, updated} ->
-        Mix.shell().info("  ✓ status=#{updated.subscription_status}, minutes=#{updated.minutes_available}")
+        Mix.shell().info("  ✓ status=#{updated.subscription_status}, seconds=#{updated.seconds_available}")
 
       {:error, :no_access_token} ->
         Mix.shell().error("  ✗ POLAR_ACCESS_TOKEN not configured")
