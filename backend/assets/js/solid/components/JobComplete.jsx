@@ -42,9 +42,30 @@ export function JobComplete() {
     return activeTrack() === "original" ? originalUrl() : store.job?.download_url;
   });
 
+  // Validate download URL to prevent open redirects
+  function isValidDownloadUrl(url) {
+    try {
+      const parsed = new URL(url, window.location.origin);
+      // Allow same-origin, localhost (dev), or trusted S3 domains
+      return (
+        parsed.origin === window.location.origin ||
+        parsed.hostname === "localhost" ||
+        parsed.hostname === "127.0.0.1" ||
+        parsed.hostname.endsWith(".amazonaws.com") ||
+        parsed.hostname.endsWith(".r2.cloudflarestorage.com") ||
+        parsed.hostname.endsWith(".digitaloceanspaces.com")
+      );
+    } catch {
+      return false;
+    }
+  }
+
   function handleDownload() {
-    if (store.job?.download_url) {
-      window.location.href = store.job.download_url;
+    const url = store.job?.download_url;
+    if (url && isValidDownloadUrl(url)) {
+      window.location.href = url;
+    } else if (url) {
+      console.error("Invalid download URL origin:", url);
     }
   }
 

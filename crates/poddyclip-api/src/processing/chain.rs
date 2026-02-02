@@ -310,8 +310,32 @@ fn default_radio_amount() -> f32 {
     1.0
 }
 
+/// Validate chain name to prevent path traversal attacks.
+/// Only allows alphanumeric characters, dashes, and underscores.
+fn validate_chain_name(name: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err("Chain name cannot be empty".to_string());
+    }
+    if name.len() > 64 {
+        return Err("Chain name too long".to_string());
+    }
+    if !name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err(format!(
+            "Invalid chain name '{}': only alphanumeric, dash, and underscore allowed",
+            name
+        ));
+    }
+    Ok(())
+}
+
 /// Load a chain preset by name from the given directory
 pub fn load_chain(name: &str, chains_dir: &Path) -> Result<ChainPreset, String> {
+    // Validate chain name to prevent path traversal
+    validate_chain_name(name)?;
+
     let path = chains_dir.join(format!("{}.toml", name));
 
     if !path.exists() {

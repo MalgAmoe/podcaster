@@ -12,6 +12,11 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   alias PoddyclipBackend.Storage
   alias Ecto.Multi
 
+  # Valid parameter values for security validation
+  @valid_categories ~w(voice mixed)
+  @valid_modes ~w(natural studio repair)
+  @valid_strengths 1..5
+
   @doc """
   GET /api/presets - List available processing presets.
   """
@@ -83,17 +88,44 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   def create_job(conn, %{"s3_key" => s3_key, "filename" => filename} = params) do
     user = conn.assigns.current_user
 
+    # Validate processing parameters against whitelist
+    category = params["category"] || "voice"
+    mode = params["mode"] || "natural"
+    strength = params["strength"] || 3
+
+    with :ok <- validate_category(category),
+         :ok <- validate_mode(mode),
+         :ok <- validate_strength(strength) do
+      create_job_validated(conn, user, s3_key, filename, params, category, mode, strength)
+    else
+      {:error, msg} ->
+        conn
+        |> put_status(400)
+        |> json(%{error: msg})
+    end
+  end
+
+  defp validate_category(cat) when cat in @valid_categories, do: :ok
+  defp validate_category(cat), do: {:error, "Invalid category: #{inspect(cat)}"}
+
+  defp validate_mode(mode) when mode in @valid_modes, do: :ok
+  defp validate_mode(mode), do: {:error, "Invalid mode: #{inspect(mode)}"}
+
+  defp validate_strength(strength) when strength in @valid_strengths, do: :ok
+  defp validate_strength(strength), do: {:error, "Invalid strength: #{inspect(strength)}"}
+
+  defp create_job_validated(conn, user, s3_key, filename, params, category, mode, strength) do
     # Check if cancelled subscription has expired
     {:ok, user} = Billing.check_subscription_expiry(user)
 
     # Use exact seconds from duration
     estimated_seconds = params["duration_seconds"] || 60
 
-    # Build job options
+    # Build job options with validated parameters
     opts = [
-      category: params["category"] || "voice",
-      mode: params["mode"] || "natural",
-      strength: params["strength"] || 3,
+      category: category,
+      mode: mode,
+      strength: strength,
       ai_clean: params["ai_clean"],
       estimated_seconds: estimated_seconds
     ]

@@ -85,8 +85,15 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
 
   describe "subscription.active" do
     test "activates pro subscription for existing user", %{conn: conn, pro_plan: pro_plan} do
+      # Create user and link to Polar customer_id (simulates checkout flow)
+      customer_id = "cus_test_#{System.unique_integer([:positive])}"
       user = user_fixture()
-      email = user.email
+
+      # Set polar_customer_id to simulate user who completed checkout
+      {:ok, user} =
+        user
+        |> Ecto.Changeset.change(%{polar_customer_id: customer_id})
+        |> Repo.update()
 
       body =
         Jason.encode!(%{
@@ -95,8 +102,8 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
           data: %{
             subscription: %{
               id: "sub_test_123",
-              customer_id: "cus_test_456",
-              customer: %{email: email},
+              customer_id: customer_id,
+              customer: %{email: user.email},
               product: %{id: pro_plan.polar_product_id},
               current_period_end: System.system_time(:second) + 86400 * 30
             }
@@ -112,7 +119,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
       assert updated_user.seconds_available == 54000
       assert updated_user.subscription_status == "active"
       assert updated_user.polar_subscription_id == "sub_test_123"
-      assert updated_user.polar_customer_id == "cus_test_456"
+      assert updated_user.polar_customer_id == customer_id
     end
 
     test "handles user not found", %{conn: conn, pro_plan: pro_plan} do

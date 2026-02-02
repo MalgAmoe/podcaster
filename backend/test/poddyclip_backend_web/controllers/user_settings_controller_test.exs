@@ -24,7 +24,7 @@ defmodule PoddyclipBackendWeb.UserSettingsControllerTest do
       conn = get(conn, ~p"/users/settings")
       assert redirected_to(conn) == ~p"/users/log-in"
 
-      assert Phoenix.Flash.get(conn.assigns.flash, :error) ==
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) ==
                "You must re-authenticate to access this page."
     end
   end

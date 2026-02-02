@@ -13,7 +13,10 @@ defmodule PoddyclipBackendWeb.Plugs.BasicAuth do
 
   def init(opts), do: opts
 
+  # Allow health checks and internal API (webhooks from Rust API)
   def call(%{request_path: "/health"} = conn, _opts), do: conn
+  def call(%{request_path: "/api/internal/" <> _} = conn, _opts), do: conn
+  def call(%{request_path: "/api/webhooks/" <> _} = conn, _opts), do: conn
 
   def call(conn, _opts) do
     case Application.get_env(:poddyclip_backend, :site_password) do

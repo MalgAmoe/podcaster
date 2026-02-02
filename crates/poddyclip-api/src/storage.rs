@@ -66,6 +66,23 @@ impl Storage {
         })
     }
 
+    /// Sanitize filename to prevent path traversal and special characters.
+    /// Only allows alphanumeric, dots, dashes, underscores.
+    fn sanitize_filename(filename: &str) -> String {
+        let sanitized: String = filename
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric() || *c == '.' || *c == '-' || *c == '_')
+            .collect();
+
+        // Ensure we have a valid filename
+        if sanitized.is_empty() || sanitized.starts_with('.') {
+            "audio".to_string()
+        } else {
+            // Limit length to prevent issues
+            sanitized.chars().take(128).collect()
+        }
+    }
+
     /// Upload processed audio to S3
     /// Returns the object key
     ///
@@ -79,11 +96,12 @@ impl Storage {
         filename: &str,
         extension: &str,
     ) -> Result<String> {
-        // Extract stem from original filename, fallback to "audio"
-        let stem = std::path::Path::new(filename)
+        // Extract stem from original filename, sanitize, fallback to "audio"
+        let raw_stem = std::path::Path::new(filename)
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("audio");
+        let stem = Self::sanitize_filename(raw_stem);
 
         let key = format!("results/{}/{}/{}_processed{}", user_id, job_id, stem, extension);
 
@@ -146,6 +164,27 @@ impl Storage {
         );
 
         Ok(response.bytes().to_vec())
+    }
+
+    /// Get object metadata (Content-Length) without downloading
+    /// Returns the size in bytes
+    pub async fn head_object(&self, key: &str) -> Result<u64> {
+        let (head, _) = self
+            .bucket
+            .head_object(key)
+            .await
+            .context("Failed to get object metadata from S3")?;
+
+        let content_length = head.content_length.unwrap_or(0) as u64;
+
+        debug!(
+            "HEAD s3://{}/{} -> {} bytes",
+            self.bucket.name(),
+            key,
+            content_length
+        );
+
+        Ok(content_length)
     }
 
     /// Check if storage is available

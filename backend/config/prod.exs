@@ -14,7 +14,7 @@ config :poddyclip_backend, PoddyclipBackendWeb.Endpoint,
 config :poddyclip_backend, PoddyclipBackendWeb.Endpoint,
   force_ssl: [
     rewrite_on: [:x_forwarded_proto],
-    exclude: ["localhost"]
+    exclude: ["localhost", "phoenix", "backend", "127.0.0.1"]
   ]
 
 # Do not print debug messages in production

@@ -37,13 +37,33 @@ export function PastMunchingsPage() {
 
   const [downloading, setDownloading] = createSignal(null);
 
+  // Validate download URL to prevent open redirects
+  function isValidDownloadUrl(url) {
+    try {
+      const parsed = new URL(url, window.location.origin);
+      // Allow same-origin, localhost (dev), or trusted S3 domains
+      return (
+        parsed.origin === window.location.origin ||
+        parsed.hostname === "localhost" ||
+        parsed.hostname === "127.0.0.1" ||
+        parsed.hostname.endsWith(".amazonaws.com") ||
+        parsed.hostname.endsWith(".r2.cloudflarestorage.com") ||
+        parsed.hostname.endsWith(".digitaloceanspaces.com")
+      );
+    } catch {
+      return false;
+    }
+  }
+
   async function handleDownload(jobId, filename) {
     if (downloading()) return;
     setDownloading(jobId);
     try {
       const response = await api.getDownloadUrl(jobId);
-      if (response?.url) {
+      if (response?.url && isValidDownloadUrl(response.url)) {
         window.location.href = response.url;
+      } else if (response?.url) {
+        console.error("Invalid download URL origin:", response.url);
       } else {
         console.error("No URL in response:", response);
       }

@@ -20,7 +20,6 @@ defmodule PoddyclipBackendWeb.PolarWebhookController do
   use PoddyclipBackendWeb, :controller
 
   alias PoddyclipBackend.{Billing, Polar}
-  alias PoddyclipBackend.Accounts
 
   require Logger
 
@@ -276,14 +275,12 @@ defmodule PoddyclipBackendWeb.PolarWebhookController do
   defp find_user_for_subscription(subscription) do
     subscription_id = subscription["id"]
     customer_id = get_customer_id(subscription)
-    customer_email = get_in(subscription, ["customer", "email"])
 
     # Try finding by subscription ID first (if already linked)
+    # Then by customer ID - DO NOT fall back to email lookup for security
+    # (prevents account takeover if attacker controls email in subscription)
     Billing.get_user_by_subscription_id(subscription_id) ||
-      # Then by customer ID
-      (customer_id && Billing.get_user_by_customer_id(customer_id)) ||
-      # Finally by email
-      (customer_email && Accounts.get_user_by_email(customer_email))
+      (customer_id && Billing.get_user_by_customer_id(customer_id))
   end
 
   defp get_plan_for_product(product) do

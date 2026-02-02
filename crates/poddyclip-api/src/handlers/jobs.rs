@@ -100,6 +100,38 @@ fn default_mp3_bitrate() -> u32 {
     192
 }
 
+/// Validate S3 key format for security.
+/// Input keys must match pattern: inputs/{user_id}/{filename}
+fn validate_s3_key(key: &str, expected_user_id: Option<i64>) -> Result<(), String> {
+    // Basic format validation
+    let parts: Vec<&str> = key.split('/').collect();
+    if parts.len() < 3 {
+        return Err("Invalid S3 key format".to_string());
+    }
+
+    // Must start with "inputs/"
+    if parts[0] != "inputs" {
+        return Err("S3 key must be in inputs/ prefix".to_string());
+    }
+
+    // If user_id provided, verify it matches the key
+    if let Some(user_id) = expected_user_id {
+        let key_user_id: i64 = parts[1]
+            .parse()
+            .map_err(|_| "Invalid user ID in S3 key".to_string())?;
+        if key_user_id != user_id {
+            return Err("S3 key user ID mismatch".to_string());
+        }
+    }
+
+    // Validate no path traversal
+    if key.contains("..") {
+        return Err("Path traversal not allowed".to_string());
+    }
+
+    Ok(())
+}
+
 /// POST /jobs - Create a job from S3 input
 pub async fn create_s3_job(
     State(state): State<AppState>,
@@ -110,6 +142,31 @@ pub async fn create_s3_job(
         .storage
         .as_ref()
         .ok_or_else(|| ApiError::Internal("S3 storage not configured".to_string()))?;
+
+    // Validate S3 key format (security check)
+    validate_s3_key(&req.input_s3_key, req.user_id).map_err(|e| {
+        warn!(
+            user_id = req.user_id.unwrap_or(-1),
+            input_key = %req.input_s3_key,
+            error = %e,
+            "Invalid S3 key rejected"
+        );
+        ApiError::InvalidRequest(format!("Invalid input key: {}", e))
+    })?;
+
+    // Check file size before downloading (prevent memory exhaustion)
+    let content_length = storage
+        .head_object(&req.input_s3_key)
+        .await
+        .map_err(|e| ApiError::InvalidRequest(format!("Failed to check file: {}", e)))?;
+
+    let size_mb = content_length / (1024 * 1024);
+    if size_mb > state.config.max_file_size_mb as u64 {
+        return Err(ApiError::FileTooLarge(
+            size_mb as usize,
+            state.config.max_file_size_mb,
+        ));
+    }
 
     // Download input file from S3
     info!(
@@ -130,12 +187,6 @@ pub async fn create_s3_job(
             .unwrap_or("audio.wav")
             .to_string()
     });
-
-    // Check file size
-    let size_mb = audio_bytes.len() / (1024 * 1024);
-    if size_mb > state.config.max_file_size_mb {
-        return Err(ApiError::FileTooLarge(size_mb, state.config.max_file_size_mb));
-    }
 
     // Build ProcessConfig from request
     // If category/mode/strength are provided, use dynamic builder
@@ -165,7 +216,8 @@ pub async fn create_s3_job(
         Some("wav") => OutputFormat::Wav,
         _ => OutputFormat::Mp3,
     };
-    config.mp3_bitrate = req.mp3_bitrate;
+    // Clamp MP3 bitrate to valid range (128-320 kbps)
+    config.mp3_bitrate = req.mp3_bitrate.clamp(128, 320);
 
     // Allow explicit override of ai_denoise
     if let Some(ai_clean) = req.ai_clean {
@@ -442,12 +494,28 @@ fn now() -> u64 {
         .as_secs()
 }
 
+/// Allowed Docker/k8s service names for internal webhooks
+const ALLOWED_INTERNAL_SERVICES: &[&str] = &["phoenix", "rust-api", "backend", "api"];
+
+/// Dangerous ports that should never be accessed via webhook
+const BLOCKED_PORTS: &[u16] = &[
+    6379,  // Redis
+    5432,  // PostgreSQL
+    3306,  // MySQL
+    27017, // MongoDB
+    9200,  // Elasticsearch
+    11211, // Memcached
+    2375,  // Docker API
+    2376,  // Docker API (TLS)
+];
+
 /// Validate webhook URL to prevent SSRF attacks.
 ///
 /// Security model:
 /// - Internal URLs (localhost, private IPs): Allow HTTP (trusted internal network)
 /// - External URLs: Require HTTPS (untrusted)
-/// - Always block dangerous endpoints (cloud metadata, etc.)
+/// - Always block dangerous endpoints (cloud metadata, dangerous ports)
+/// - Only allow whitelisted Docker service names
 fn validate_webhook_url(url_str: &str) -> Result<(), &'static str> {
     let parsed = Url::parse(url_str).map_err(|_| "Invalid webhook URL")?;
 
@@ -456,27 +524,39 @@ fn validate_webhook_url(url_str: &str) -> Result<(), &'static str> {
         return Err("Webhook URL must use HTTP or HTTPS");
     }
 
+    // Check for blocked ports
+    let port = parsed.port().unwrap_or(if parsed.scheme() == "https" { 443 } else { 80 });
+    if BLOCKED_PORTS.contains(&port) {
+        return Err("Webhook URL uses a blocked port");
+    }
+
     // Check host
     let host = parsed.host_str().ok_or("Webhook URL must have a host")?;
     let host_lower = host.to_lowercase();
 
-    // Always block cloud metadata endpoints (SSRF to steal credentials)
+    // Always block cloud metadata endpoints and dangerous IPs
     if let Ok(ip) = host.parse::<IpAddr>() {
-        if is_metadata_ip(&ip) {
-            return Err("Webhook URL cannot point to cloud metadata endpoints");
+        if is_dangerous_ip(&ip) {
+            return Err("Webhook URL cannot point to cloud metadata or dangerous endpoints");
         }
     }
 
     // Check if this is an internal/trusted URL
-    // Docker/k8s service names don't have dots (e.g., "phoenix", "rust-api")
-    let is_docker_service = !host_lower.contains('.') && host.parse::<IpAddr>().is_err();
+    // Only allow whitelisted Docker/k8s service names (not any hostname without dots)
+    let is_allowed_service = !host_lower.contains('.')
+        && host.parse::<IpAddr>().is_err()
+        && ALLOWED_INTERNAL_SERVICES.contains(&host_lower.as_str());
+
     let is_internal = host_lower == "localhost"
         || host_lower == "127.0.0.1"
         || host_lower == "::1"
         || host_lower.ends_with(".local")
         || host_lower.ends_with(".localhost")
-        || is_docker_service
-        || host.parse::<IpAddr>().map(|ip| is_private_ip(&ip)).unwrap_or(false);
+        || is_allowed_service
+        || host
+            .parse::<IpAddr>()
+            .map(|ip| is_safe_private_ip(&ip))
+            .unwrap_or(false);
 
     // External URLs must use HTTPS
     if !is_internal && parsed.scheme() != "https" {
@@ -486,28 +566,40 @@ fn validate_webhook_url(url_str: &str) -> Result<(), &'static str> {
     Ok(())
 }
 
-/// Check if an IP address is in a private/internal range (trusted for HTTP)
-fn is_private_ip(ip: &IpAddr) -> bool {
+/// Check if an IP address is in a safe private/internal range (trusted for HTTP)
+fn is_safe_private_ip(ip: &IpAddr) -> bool {
     match ip {
         IpAddr::V4(ipv4) => {
-            ipv4.is_loopback()          // 127.0.0.0/8
-                || ipv4.is_private()    // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
-                || ipv4.is_link_local() // 169.254.0.0/16 (except metadata)
+            // Allow loopback and standard private ranges
+            ipv4.is_loopback() // 127.0.0.0/8
+                || ipv4.is_private() // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+            // Explicitly NOT allowing link-local (169.254.x.x) due to metadata risk
         }
         IpAddr::V6(ipv6) => {
+            // Allow only loopback for IPv6
             ipv6.is_loopback()
+            // Explicitly NOT allowing link-local (fe80::) or unique local (fc00::/fd00::)
         }
     }
 }
 
-/// Check if an IP is a cloud metadata endpoint (always block - credential theft risk)
-fn is_metadata_ip(ip: &IpAddr) -> bool {
+/// Check if an IP is dangerous (metadata endpoints, etc.)
+fn is_dangerous_ip(ip: &IpAddr) -> bool {
     match ip {
         IpAddr::V4(ipv4) => {
+            let octets = ipv4.octets();
             // AWS/GCP/Azure metadata endpoint
-            ipv4.octets() == [169, 254, 169, 254]
+            octets == [169, 254, 169, 254]
+                // Block all link-local (169.254.0.0/16) to be safe
+                || (octets[0] == 169 && octets[1] == 254)
         }
-        IpAddr::V6(_) => false,
+        IpAddr::V6(ipv6) => {
+            let segments = ipv6.segments();
+            // Block IPv6 link-local (fe80::/10)
+            (segments[0] & 0xffc0) == 0xfe80
+                // Block IPv6 unique local (fc00::/7 = fc00:: and fd00::)
+                || (segments[0] & 0xfe00) == 0xfc00
+        }
     }
 }
 

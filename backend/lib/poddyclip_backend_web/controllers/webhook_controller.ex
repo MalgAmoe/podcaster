@@ -16,6 +16,7 @@ defmodule PoddyclipBackendWeb.WebhookController do
   }
   """
   def job_status(conn, %{"job_id" => job_id} = params) do
+    Logger.info("Webhook request received", job_id: job_id, path: conn.request_path)
     Logger.metadata(job_id: job_id)
 
     with :ok <- verify_webhook_secret(conn),
@@ -53,6 +54,12 @@ defmodule PoddyclipBackendWeb.WebhookController do
   defp verify_webhook_secret(conn) do
     expected = Application.get_env(:poddyclip_backend, :webhook_secret)
     provided = get_req_header(conn, "x-webhook-secret") |> List.first()
+
+    Logger.debug("Webhook auth check",
+      expected_set: not is_nil(expected) and expected != "",
+      provided_set: not is_nil(provided) and provided != "",
+      match: expected && provided && Plug.Crypto.secure_compare(expected, provided)
+    )
 
     cond do
       # Secret matches
