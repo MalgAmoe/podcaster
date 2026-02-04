@@ -48,6 +48,12 @@ spec:
           value: "openobserve-data"
         - name: ZO_S3_REGION_NAME
           value: "auto"
+        - name: ZO_LOCAL_MODE_STORAGE
+          value: "s3"
+        - name: ZO_S3_PROVIDER
+          value: "s3"
+        - name: ZO_COMPACT_DATA_RETENTION_DAYS
+          value: "30"
         resources:
           requests:
             memory: "512Mi"
