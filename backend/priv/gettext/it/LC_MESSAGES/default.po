@@ -326,7 +326,7 @@ msgstr "Scaduto"
 #: lib/poddyclip_backend_web/components/layouts/root.html.heex:45
 #, elixir-autogen, elixir-format
 msgid "Past Munchings"
-msgstr "Elaborazioni Precedenti"
+msgstr "Masticamenti Precedenti"
 
 #: lib/poddyclip_backend_web/components/layouts/root.html.heex:95
 #: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:75

@@ -42,7 +42,7 @@ export default {
   munchIt: "MASTICALO!",
 
   // Job progress
-  munchMunchMunch: "*munch munch munch*",
+  munchMunchMunch: "*ñam ñam ñam*",
   munching: "Masticando...",
   cancel: "Cancelar",
 
@@ -62,9 +62,9 @@ export default {
   feedHerAgain: "Alimentala de nuevo",
 
   // Past munchings
-  pastMunchings: "Procesamientos Anteriores",
-  pastDescription: "Tus archivos procesados de los ultimos 7 dias.",
-  noMunchingsYet: "Aun no hay procesamientos. Tus archivos procesados apareceran aqui por 7 dias.",
+  pastMunchings: "Masticaciones Anteriores",
+  pastDescription: "Tus archivos masticados de los ultimos 7 dias.",
+  noMunchingsYet: "Aun no hay masticaciones. Tus archivos masticados apareceran aqui por 7 dias.",
   today: "Hoy a las {time}",
   yesterday: "Ayer a las {time}",
   daysAgo: "Hace {count} dias a las {time}",

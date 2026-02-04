@@ -62,9 +62,9 @@ export default {
   feedHerAgain: "Nourrissez-la a nouveau",
 
   // Past munchings
-  pastMunchings: "Traitements Precedents",
-  pastDescription: "Vos fichiers traites des 7 derniers jours.",
-  noMunchingsYet: "Pas encore de traitements. Vos fichiers traites apparaitront ici pendant 7 jours.",
+  pastMunchings: "Mâchages Précédents",
+  pastDescription: "Vos fichiers mâchés des 7 derniers jours.",
+  noMunchingsYet: "Pas encore de mâchages. Vos fichiers mâchés apparaîtront ici pendant 7 jours.",
   today: "Aujourd'hui a {time}",
   yesterday: "Hier a {time}",
   daysAgo: "Il y a {count} jours a {time}",

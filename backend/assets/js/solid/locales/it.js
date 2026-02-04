@@ -62,9 +62,9 @@ export default {
   feedHerAgain: "Dalla di nuovo",
 
   // Past munchings
-  pastMunchings: "Elaborazioni Precedenti",
-  pastDescription: "I tuoi file elaborati degli ultimi 7 giorni.",
-  noMunchingsYet: "Ancora nessuna elaborazione. I tuoi file elaborati appariranno qui per 7 giorni.",
+  pastMunchings: "Masticamenti Precedenti",
+  pastDescription: "I tuoi file masticati degli ultimi 7 giorni.",
+  noMunchingsYet: "Ancora nessun masticamento. I tuoi file masticati appariranno qui per 7 giorni.",
   today: "Oggi alle {time}",
   yesterday: "Ieri alle {time}",
   daysAgo: "{count} giorni fa alle {time}",

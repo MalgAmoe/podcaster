@@ -326,7 +326,7 @@ msgstr "En retard"
 #: lib/poddyclip_backend_web/components/layouts/root.html.heex:45
 #, elixir-autogen, elixir-format
 msgid "Past Munchings"
-msgstr "Traitements Précédents"
+msgstr "Mâchages Précédents"
 
 #: lib/poddyclip_backend_web/components/layouts/root.html.heex:95
 #: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:75
