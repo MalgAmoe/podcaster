@@ -104,7 +104,7 @@ msgstr ""
 
 #: lib/poddyclip_backend_web/controllers/user_session_controller.ex:64
 #, elixir-autogen, elixir-format
-msgid "Check your email for a sign-in link."
+msgid "Check your email for a sign-in link. (Check spam if you don't see it)"
 msgstr ""
 
 #: lib/poddyclip_backend_web/components/layouts/root.html.heex:6

@@ -104,8 +104,8 @@ msgstr "Cancellato"
 
 #: lib/poddyclip_backend_web/controllers/user_session_controller.ex:64
 #, elixir-autogen, elixir-format
-msgid "Check your email for a sign-in link."
-msgstr "Controlla la tua email per il link di accesso."
+msgid "Check your email for a sign-in link. (Check spam if you don't see it)"
+msgstr "Controlla la tua email per il link di accesso. (Controlla lo spam se non lo vedi)"
 
 #: lib/poddyclip_backend_web/components/layouts/root.html.heex:6
 #, elixir-autogen, elixir-format

@@ -61,7 +61,7 @@ defmodule PoddyclipBackendWeb.UserSessionController do
 
     # Same message whether new or existing (prevents email enumeration)
     conn
-    |> put_flash(:info, gettext("Check your email for a sign-in link."))
+    |> put_flash(:info, gettext("Check your email for a sign-in link. (Check spam if you don't see it)"))
     |> redirect(to: LocaleHelpers.locale_path(locale, "/users/log-in"))
   end
 

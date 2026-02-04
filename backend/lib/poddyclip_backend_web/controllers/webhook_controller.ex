@@ -2,6 +2,8 @@ defmodule PoddyclipBackendWeb.WebhookController do
   use PoddyclipBackendWeb, :controller
   require Logger
 
+  alias PoddyclipBackend.Accounts
+  alias PoddyclipBackend.Billing
   alias PoddyclipBackend.Processing
 
   @doc """
@@ -48,6 +50,46 @@ defmodule PoddyclipBackendWeb.WebhookController do
         conn
         |> put_status(:unprocessable_entity)
         |> json(%{error: inspect(reason)})
+    end
+  end
+
+  @doc """
+  Check if a user has enough seconds for processing.
+  Called by Rust API before starting audio processing.
+
+  GET /api/internal/users/:user_id/check_seconds?seconds=300
+
+  Response: {"ok": true, "available": 1000} or {"ok": false, "available": 50}
+  """
+  def check_seconds(conn, %{"user_id" => user_id, "seconds" => seconds_str}) do
+    with :ok <- verify_webhook_secret(conn),
+         {seconds, ""} <- Integer.parse(seconds_str),
+         user when not is_nil(user) <- Accounts.get_user(user_id) do
+      has_enough = Billing.has_seconds?(user, seconds)
+
+      Logger.info("Seconds check",
+        user_id: user_id,
+        requested: seconds,
+        available: user.seconds_available,
+        has_enough: has_enough
+      )
+
+      json(conn, %{ok: has_enough, available: user.seconds_available})
+    else
+      :unauthorized ->
+        conn
+        |> put_status(:unauthorized)
+        |> json(%{error: "Invalid webhook secret"})
+
+      nil ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "User not found"})
+
+      _ ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: "Invalid seconds parameter"})
     end
   end
 

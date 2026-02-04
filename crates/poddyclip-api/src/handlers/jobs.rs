@@ -311,6 +311,27 @@ pub async fn create_s3_job(
                     j.audio_duration_seconds = Some(audio_duration_seconds);
                 });
 
+                // Check if user has enough seconds before processing
+                if let Some(job) = progress_state.get_job(&job_id) {
+                    if let (Some(ref webhook_url), Some(user_id)) = (&job.webhook_url, job.user_id) {
+                        let webhook = progress_webhook.clone();
+                        let url = webhook_url.clone();
+                        let secret = job.webhook_secret.clone();
+
+                        let check_result = runtime_handle.block_on(async move {
+                            webhook.check_seconds(&url, secret.as_deref(), user_id, audio_duration_seconds).await
+                        });
+
+                        if let Err(e) = check_result {
+                            return Err(anyhow::anyhow!(
+                                "Insufficient processing time: need {} seconds but only {} available",
+                                e.required,
+                                e.available
+                            ));
+                        }
+                    }
+                }
+
                 // Progress callback that updates job state, sends webhook, and checks for cancellation
                 // Note: index is offset by 1 to account for "waiting" stage (index 0)
                 let progress_callback = Box::new(move |stage: &str, index: u8| -> Result<(), CancelledError> {

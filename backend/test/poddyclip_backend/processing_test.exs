@@ -8,7 +8,7 @@ defmodule PoddyclipBackend.ProcessingTest do
   import PoddyclipBackend.AccountsFixtures
   import PoddyclipBackend.BillingFixtures
 
-  describe "seconds refunds" do
+  describe "billing on completion" do
     setup do
       plan = free_plan_fixture()
       user = user_fixture()
@@ -22,8 +22,68 @@ defmodule PoddyclipBackend.ProcessingTest do
       %{user: user, plan: plan}
     end
 
-    test "update_job_status/2 refunds seconds when job fails", %{user: user} do
-      # Create a job with estimated_seconds
+    test "deducts actual seconds on completion", %{user: user} do
+      job =
+        %Job{}
+        |> Job.changeset(%{
+          filename: "test.mp3",
+          status: :processing,
+          user_id: user.id,
+          estimated_seconds: 100
+        })
+        |> Repo.insert!()
+
+      # Complete with actual duration of 150s
+      {:ok, completed_job} = Processing.update_job_status(job.id, %{
+        "status" => "completed",
+        "audio_duration_seconds" => 150
+      })
+
+      assert completed_job.actual_duration_seconds == 150
+
+      # User should have actual seconds deducted (600 - 150 = 450)
+      updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
+      assert updated_user.seconds_available == 450
+    end
+
+    test "no deduction when actual duration not provided", %{user: user} do
+      job =
+        %Job{}
+        |> Job.changeset(%{
+          filename: "test.mp3",
+          status: :processing,
+          user_id: user.id,
+          estimated_seconds: 300
+        })
+        |> Repo.insert!()
+
+      # Complete without actual duration (legacy/fallback)
+      {:ok, _} = Processing.update_job_status(job.id, %{
+        "status" => "completed"
+      })
+
+      # No change - nothing to deduct without actual duration
+      updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
+      assert updated_user.seconds_available == 600
+    end
+  end
+
+  describe "no billing on failure" do
+    setup do
+      plan = free_plan_fixture()
+      user = user_fixture()
+
+      {:ok, user} =
+        Billing.update_subscription(user, %{
+          plan_id: plan.id,
+          seconds_available: 600
+        })
+
+      %{user: user, plan: plan}
+    end
+
+    test "no seconds change when job fails", %{user: user} do
+      # Create a job (no seconds deducted upfront anymore)
       job =
         %Job{}
         |> Job.changeset(%{
@@ -37,12 +97,12 @@ defmodule PoddyclipBackend.ProcessingTest do
       # Update to failed
       {:ok, _job} = Processing.update_job_status(job.id, %{"status" => "failed", "error" => "Test error"})
 
-      # User should have seconds refunded (600 + 300 = 900)
+      # User seconds should be unchanged (nothing was deducted, nothing to refund)
       updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
-      assert updated_user.seconds_available == 900
+      assert updated_user.seconds_available == 600
     end
 
-    test "update_job_status/2 does not refund if job was already failed", %{user: user} do
+    test "no seconds change on duplicate failure status", %{user: user} do
       # Create a job that's already failed
       job =
         %Job{}
@@ -57,80 +117,7 @@ defmodule PoddyclipBackend.ProcessingTest do
       # Update to failed again (webhook retry)
       {:ok, _job} = Processing.update_job_status(job.id, %{"status" => "failed", "error" => "Test error"})
 
-      # User should NOT get double refund
-      updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
-      assert updated_user.seconds_available == 600
-    end
-
-    test "update_job_status/2 does not refund on completion", %{user: user} do
-      job =
-        %Job{}
-        |> Job.changeset(%{
-          filename: "test.mp3",
-          status: :processing,
-          user_id: user.id,
-          estimated_seconds: 300
-        })
-        |> Repo.insert!()
-
-      # Update to completed
-      {:ok, _job} = Processing.update_job_status(job.id, %{"status" => "completed"})
-
-      # User should NOT have seconds refunded
-      updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
-      assert updated_user.seconds_available == 600
-    end
-
-    test "cancel_job/1 refunds seconds for active job", %{user: user} do
-      job =
-        %Job{}
-        |> Job.changeset(%{
-          filename: "test.mp3",
-          status: :processing,
-          user_id: user.id,
-          estimated_seconds: 180
-        })
-        |> Repo.insert!()
-
-      {:ok, _} = Processing.cancel_job(job.id)
-
-      # User should have seconds refunded (600 + 180 = 780)
-      updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
-      assert updated_user.seconds_available == 780
-    end
-
-    test "cancel_job/1 does not refund for already completed job", %{user: user} do
-      job =
-        %Job{}
-        |> Job.changeset(%{
-          filename: "test.mp3",
-          status: :completed,
-          user_id: user.id,
-          estimated_seconds: 300
-        })
-        |> Repo.insert!()
-
-      {:ok, _} = Processing.cancel_job(job.id)
-
-      # User should NOT have seconds refunded
-      updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
-      assert updated_user.seconds_available == 600
-    end
-
-    test "cancel_job/1 does not refund for already failed job", %{user: user} do
-      job =
-        %Job{}
-        |> Job.changeset(%{
-          filename: "test.mp3",
-          status: :failed,
-          user_id: user.id,
-          estimated_seconds: 300
-        })
-        |> Repo.insert!()
-
-      {:ok, _} = Processing.cancel_job(job.id)
-
-      # User should NOT have seconds refunded (already refunded when it failed)
+      # User seconds unchanged
       updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
       assert updated_user.seconds_available == 600
     end
@@ -155,7 +142,7 @@ defmodule PoddyclipBackend.ProcessingTest do
     end
   end
 
-  describe "billing adjustment on completion" do
+  describe "no billing on cancel" do
     setup do
       plan = free_plan_fixture()
       user = user_fixture()
@@ -169,117 +156,56 @@ defmodule PoddyclipBackend.ProcessingTest do
       %{user: user, plan: plan}
     end
 
-    test "deducts extra seconds when actual duration > estimated", %{user: user} do
-      # User estimated 100s but actual was 150s
+    test "no seconds change when active job is cancelled", %{user: user} do
       job =
         %Job{}
         |> Job.changeset(%{
           filename: "test.mp3",
           status: :processing,
           user_id: user.id,
-          estimated_seconds: 100
+          estimated_seconds: 180
         })
         |> Repo.insert!()
 
-      # Complete with actual duration of 150s (50s more than estimated)
-      {:ok, completed_job} = Processing.update_job_status(job.id, %{
-        "status" => "completed",
-        "audio_duration_seconds" => 150
-      })
+      {:ok, _} = Processing.cancel_job(job.id)
 
-      assert completed_job.actual_duration_seconds == 150
-
-      # User should have 50s deducted (600 - 50 = 550)
+      # User seconds unchanged (nothing was deducted upfront)
       updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
-      assert updated_user.seconds_available == 550
+      assert updated_user.seconds_available == 600
     end
 
-    test "refunds extra seconds when actual duration < estimated", %{user: user} do
-      # User estimated 200s but actual was 120s
+    test "no seconds change when completed job is cleaned up", %{user: user} do
       job =
         %Job{}
         |> Job.changeset(%{
           filename: "test.mp3",
-          status: :processing,
-          user_id: user.id,
-          estimated_seconds: 200
-        })
-        |> Repo.insert!()
-
-      # Complete with actual duration of 120s (80s less than estimated)
-      {:ok, completed_job} = Processing.update_job_status(job.id, %{
-        "status" => "completed",
-        "audio_duration_seconds" => 120
-      })
-
-      assert completed_job.actual_duration_seconds == 120
-
-      # User should have 80s refunded (600 + 80 = 680)
-      updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
-      assert updated_user.seconds_available == 680
-    end
-
-    test "no adjustment when actual duration == estimated", %{user: user} do
-      job =
-        %Job{}
-        |> Job.changeset(%{
-          filename: "test.mp3",
-          status: :processing,
+          status: :completed,
           user_id: user.id,
           estimated_seconds: 300
         })
         |> Repo.insert!()
 
-      # Complete with exact same duration
-      {:ok, _} = Processing.update_job_status(job.id, %{
-        "status" => "completed",
-        "audio_duration_seconds" => 300
-      })
+      {:ok, _} = Processing.cancel_job(job.id)
 
-      # No change
+      # User seconds unchanged
       updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
       assert updated_user.seconds_available == 600
     end
 
-    test "no adjustment when actual duration not provided", %{user: user} do
+    test "no seconds change when failed job is cleaned up", %{user: user} do
       job =
         %Job{}
         |> Job.changeset(%{
           filename: "test.mp3",
-          status: :processing,
+          status: :failed,
           user_id: user.id,
           estimated_seconds: 300
         })
         |> Repo.insert!()
 
-      # Complete without actual duration (legacy/fallback)
-      {:ok, _} = Processing.update_job_status(job.id, %{
-        "status" => "completed"
-      })
+      {:ok, _} = Processing.cancel_job(job.id)
 
-      # No change - we trust the estimate if no actual provided
-      updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
-      assert updated_user.seconds_available == 600
-    end
-
-    test "no adjustment when estimated_seconds is nil", %{user: user} do
-      job =
-        %Job{}
-        |> Job.changeset(%{
-          filename: "test.mp3",
-          status: :processing,
-          user_id: user.id,
-          estimated_seconds: nil
-        })
-        |> Repo.insert!()
-
-      # Complete with actual duration
-      {:ok, _} = Processing.update_job_status(job.id, %{
-        "status" => "completed",
-        "audio_duration_seconds" => 150
-      })
-
-      # No change - can't compare without estimate
+      # User seconds unchanged
       updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
       assert updated_user.seconds_available == 600
     end

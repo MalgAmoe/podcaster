@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use reqwest::Client;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, warn};
 
 use crate::models::{Job, JobProgress, JobStatus};
@@ -25,6 +25,20 @@ pub struct WebhookPayload {
     pub audio_duration_seconds: Option<u32>,
 }
 
+/// Response from Phoenix check_seconds endpoint
+#[derive(Debug, Deserialize)]
+pub struct CheckSecondsResponse {
+    pub ok: bool,
+    pub available: i64,
+}
+
+/// Error when user has insufficient seconds
+#[derive(Debug)]
+pub struct InsufficientSecondsError {
+    pub required: u32,
+    pub available: i64,
+}
+
 /// HTTP client for sending webhooks
 #[derive(Clone)]
 pub struct WebhookClient {
@@ -35,6 +49,74 @@ impl WebhookClient {
     pub fn new() -> Self {
         Self {
             client: Client::new(),
+        }
+    }
+
+    /// Check if a user has enough seconds for processing.
+    /// Returns Ok(()) if sufficient, Err with details if not.
+    pub async fn check_seconds(
+        &self,
+        webhook_url: &str,
+        webhook_secret: Option<&str>,
+        user_id: i64,
+        seconds: u32,
+    ) -> Result<(), InsufficientSecondsError> {
+        // Build URL: webhook_url is like "http://phoenix:4000/api/internal/jobs"
+        // We need "http://phoenix:4000/api/internal/users/{user_id}/check_seconds?seconds={seconds}"
+        let base_url = webhook_url.trim_end_matches("/jobs");
+        let url = format!("{}/users/{}/check_seconds?seconds={}", base_url, user_id, seconds);
+
+        let mut request = self.client.get(&url);
+        if let Some(secret) = webhook_secret {
+            request = request.header("X-Webhook-Secret", secret);
+        }
+
+        match request.send().await {
+            Ok(response) if response.status().is_success() => {
+                match response.json::<CheckSecondsResponse>().await {
+                    Ok(check) => {
+                        if check.ok {
+                            info!(
+                                user_id = user_id,
+                                seconds_requested = seconds,
+                                seconds_available = check.available,
+                                "User has sufficient seconds"
+                            );
+                            Ok(())
+                        } else {
+                            warn!(
+                                user_id = user_id,
+                                seconds_requested = seconds,
+                                seconds_available = check.available,
+                                "User has insufficient seconds"
+                            );
+                            Err(InsufficientSecondsError {
+                                required: seconds,
+                                available: check.available,
+                            })
+                        }
+                    }
+                    Err(e) => {
+                        error!(user_id = user_id, error = %e, "Failed to parse check_seconds response");
+                        // Allow processing to continue if we can't parse - billing will handle it
+                        Ok(())
+                    }
+                }
+            }
+            Ok(response) => {
+                error!(
+                    user_id = user_id,
+                    http_status = %response.status(),
+                    "check_seconds request failed"
+                );
+                // Allow processing to continue on HTTP error - billing will handle it
+                Ok(())
+            }
+            Err(e) => {
+                error!(user_id = user_id, error = %e, "check_seconds request error");
+                // Allow processing to continue on network error - billing will handle it
+                Ok(())
+            }
         }
     }
 

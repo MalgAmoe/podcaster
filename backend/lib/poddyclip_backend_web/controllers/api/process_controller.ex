@@ -8,9 +8,7 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   alias PoddyclipBackend.Processing
   alias PoddyclipBackend.Processing.Client
   alias PoddyclipBackend.Processing.Job
-  alias PoddyclipBackend.Repo
   alias PoddyclipBackend.Storage
-  alias Ecto.Multi
 
   # Valid parameter values for security validation
   @valid_categories ~w(voice mixed)
@@ -118,71 +116,56 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
     # Check if cancelled subscription has expired
     {:ok, user} = Billing.check_subscription_expiry(user)
 
-    # Use exact seconds from duration
+    # Use exact seconds from duration for validation (actual deduction happens on completion)
     estimated_seconds = params["duration_seconds"] || 60
 
-    # Build job options with validated parameters
-    opts = [
-      category: category,
-      mode: mode,
-      strength: strength,
-      ai_clean: params["ai_clean"],
-      estimated_seconds: estimated_seconds
-    ]
+    # Validate user has enough seconds (but don't deduct - Rust will check again before processing)
+    if not Billing.has_seconds?(user, estimated_seconds) do
+      conn
+      |> put_status(:payment_required)
+      |> json(%{
+        error: "insufficient_seconds",
+        seconds_available: user.seconds_available,
+        seconds_needed: estimated_seconds
+      })
+    else
+      # Build job options with validated parameters
+      opts = [
+        category: category,
+        mode: mode,
+        strength: strength,
+        ai_clean: params["ai_clean"],
+        estimated_seconds: estimated_seconds
+      ]
 
-    # Use Ecto.Multi to ensure atomicity: seconds are only deducted if job creation succeeds.
-    # If job submission fails, the transaction rolls back and seconds are not lost.
-    result =
-      Multi.new()
-      |> Multi.run(:deduct_seconds, fn _repo, _changes ->
-        Billing.deduct_seconds(user, estimated_seconds)
-      end)
-      |> Multi.run(:submit_job, fn _repo, _changes ->
-        Processing.submit_job_from_s3(s3_key, filename, user.id, opts)
-      end)
-      |> Repo.transaction()
+      case Processing.submit_job_from_s3(s3_key, filename, user.id, opts) do
+        {:ok, job} ->
+          json(conn, %{
+            id: job.id,
+            status: Atom.to_string(job.status),
+            filename: job.filename
+          })
 
-    case result do
-      {:ok, %{submit_job: job}} ->
-        json(conn, %{
-          id: job.id,
-          status: Atom.to_string(job.status),
-          filename: job.filename
-        })
+        {:error, {:http_error, status, %{"error" => %{"message" => msg}}}} ->
+          conn
+          |> put_status(status)
+          |> json(%{error: msg})
 
-      {:error, :deduct_seconds, :insufficient_seconds, _changes} ->
-        conn
-        |> put_status(:payment_required)
-        |> json(%{
-          error: "insufficient_seconds",
-          seconds_available: user.seconds_available,
-          seconds_needed: estimated_seconds
-        })
+        {:error, {:http_error, status, body}} when is_binary(body) ->
+          conn
+          |> put_status(status)
+          |> json(%{error: body})
 
-      {:error, :submit_job, {:http_error, status, %{"error" => %{"message" => msg}}}, _changes} ->
-        conn
-        |> put_status(status)
-        |> json(%{error: msg})
+        {:error, reason} when is_binary(reason) ->
+          conn
+          |> put_status(422)
+          |> json(%{error: reason})
 
-      {:error, :submit_job, {:http_error, status, body}, _changes} when is_binary(body) ->
-        conn
-        |> put_status(status)
-        |> json(%{error: body})
-
-      {:error, :submit_job, reason, _changes} when is_binary(reason) ->
-        conn
-        |> put_status(422)
-        |> json(%{error: reason})
-
-      {:error, :submit_job, reason, _changes} ->
-        conn
-        |> put_status(500)
-        |> json(%{error: "Failed to start processing: #{inspect(reason)}"})
-
-      {:error, _step, reason, _changes} ->
-        conn
-        |> put_status(500)
-        |> json(%{error: "Failed to process request: #{inspect(reason)}"})
+        {:error, reason} ->
+          conn
+          |> put_status(500)
+          |> json(%{error: "Failed to start processing: #{inspect(reason)}"})
+      end
     end
   end
 

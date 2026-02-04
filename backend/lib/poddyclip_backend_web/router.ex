@@ -158,6 +158,7 @@ defmodule PoddyclipBackendWeb.Router do
     pipe_through :api
 
     post "/jobs/:job_id/status", WebhookController, :job_status
+    get "/users/:user_id/check_seconds", WebhookController, :check_seconds
   end
 
   # Polar billing webhooks

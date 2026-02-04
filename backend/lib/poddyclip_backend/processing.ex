@@ -111,7 +111,7 @@ defmodule PoddyclipBackend.Processing do
   @doc """
   Mark a job as failed with the given error message.
   Called by ProcessingWorker when the Rust API rejects the job.
-  Automatically refunds estimated seconds to the user.
+  No refund needed - seconds are only deducted on successful completion.
   """
   def mark_failed(job_id, error) do
     case get_job(job_id) do
@@ -131,7 +131,6 @@ defmodule PoddyclipBackend.Processing do
         )
 
         broadcast_update(updated_job)
-        refund_job_seconds(updated_job)
         {:ok, updated_job}
     end
   end
@@ -262,14 +261,9 @@ defmodule PoddyclipBackend.Processing do
           log_status_change(updated_job, old_status, new_status, params["error"])
         end
 
-        # Refund seconds if job failed (and wasn't already failed)
-        if new_status == :failed and old_status != :failed do
-          refund_job_seconds(updated_job)
-        end
-
-        # Adjust billing on completion based on actual duration vs estimate
+        # Deduct actual seconds on completion (no refunds needed - we only charge on success)
         if new_status == :completed and old_status != :completed do
-          adjust_billing_on_completion(updated_job)
+          deduct_actual_seconds(updated_job)
         end
 
         broadcast_update(updated_job)
@@ -310,59 +304,28 @@ defmodule PoddyclipBackend.Processing do
     )
   end
 
-  # Refund estimated seconds to user when job fails or is cancelled
-  defp refund_job_seconds(%Job{estimated_seconds: nil}), do: :ok
-  defp refund_job_seconds(%Job{estimated_seconds: seconds, user_id: user_id}) when seconds > 0 do
-    case Accounts.get_user!(user_id) do
-      user -> Billing.refund_seconds(user, seconds)
-    end
-  rescue
-    Ecto.NoResultsError -> :ok
+  # Deduct actual seconds when job completes successfully
+  defp deduct_actual_seconds(%Job{actual_duration_seconds: nil, id: job_id}) do
+    Logger.warning("Job completed without actual_duration_seconds", job_id: job_id)
+    :ok
   end
-  defp refund_job_seconds(_), do: :ok
-
-  # Adjust billing based on actual duration vs estimated when job completes
-  # - If actual > estimated: deduct the difference (user underestimated)
-  # - If actual < estimated: refund the difference (user overestimated)
-  defp adjust_billing_on_completion(%Job{actual_duration_seconds: nil}), do: :ok
-  defp adjust_billing_on_completion(%Job{estimated_seconds: nil}), do: :ok
-  defp adjust_billing_on_completion(%Job{
+  defp deduct_actual_seconds(%Job{
     actual_duration_seconds: actual,
-    estimated_seconds: estimated,
     user_id: user_id,
     id: job_id
-  }) do
-    diff = actual - estimated
-
-    cond do
-      diff > 0 ->
-        # Actual duration longer than estimate - deduct more
-        Logger.info("Billing adjustment: deducting #{diff}s (actual: #{actual}s, estimated: #{estimated}s)",
-          job_id: job_id,
-          user_id: user_id
-        )
-        case Accounts.get_user!(user_id) do
-          user -> Billing.deduct_seconds(user, diff)
-        end
-
-      diff < 0 ->
-        # Actual duration shorter than estimate - refund the difference
-        refund = -diff
-        Logger.info("Billing adjustment: refunding #{refund}s (actual: #{actual}s, estimated: #{estimated}s)",
-          job_id: job_id,
-          user_id: user_id
-        )
-        case Accounts.get_user!(user_id) do
-          user -> Billing.refund_seconds(user, refund)
-        end
-
-      true ->
-        # No difference, no adjustment needed
-        :ok
+  }) when actual > 0 do
+    Logger.info("Deducting seconds for completed job",
+      job_id: job_id,
+      user_id: user_id,
+      seconds: actual
+    )
+    case Accounts.get_user!(user_id) do
+      user -> Billing.deduct_seconds(user, actual)
     end
   rescue
     Ecto.NoResultsError -> :ok
   end
+  defp deduct_actual_seconds(_), do: :ok
 
   defp parse_status("queued"), do: :queued
   defp parse_status("processing"), do: :processing
@@ -419,7 +382,7 @@ defmodule PoddyclipBackend.Processing do
   Cancel a job if possible.
   Marks the job as failed and attempts to delete from Rust API.
   For already-failed jobs, deletes them from the database (cleanup).
-  Refunds estimated minutes when cancelling an active job.
+  No refund needed - seconds are only deducted on successful completion.
   """
   def cancel_job(job_id) do
     case get_job(job_id) do
@@ -428,7 +391,6 @@ defmodule PoddyclipBackend.Processing do
 
       %{status: status} = job when status in [:failed, :completed] ->
         # Already finished, just delete from database (cleanup)
-        # No refund needed - failed jobs already refunded, completed jobs used the time
         Logger.info("Cleaning up finished job",
           job_id: job.id,
           user_id: job.user_id,
@@ -440,8 +402,7 @@ defmodule PoddyclipBackend.Processing do
         Logger.info("Job cancelled by user",
           job_id: job.id,
           user_id: job.user_id,
-          prev_status: job.status,
-          estimated_seconds: job.estimated_seconds
+          prev_status: job.status
         )
 
         # Try to delete from Rust API (best effort)
@@ -449,10 +410,7 @@ defmodule PoddyclipBackend.Processing do
           Client.delete_job(job.rust_job_id)
         end
 
-        # Refund seconds before marking as failed
-        refund_job_seconds(job)
-
-        # Mark as failed
+        # Mark as failed (no refund needed - seconds only deducted on completion)
         job
         |> Job.changeset(%{status: :failed, error: "Cancelled by user"})
         |> Repo.update()
