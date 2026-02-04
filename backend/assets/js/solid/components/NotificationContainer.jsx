@@ -105,7 +105,7 @@ export function NotificationContainer() {
   return (
     <Portal>
       <div
-        class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-md w-full pointer-events-none"
+        class="fixed top-20 right-4 z-50 flex flex-col gap-2 max-w-md w-full pointer-events-none"
         aria-live="polite"
         aria-label="Notifications"
       >
