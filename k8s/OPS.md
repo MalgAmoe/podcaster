@@ -140,3 +140,64 @@ curl http://phoenix:4000/health
 ```bash
 kubectl top pods  # requires metrics-server
 ```
+
+## OpenObserve (Observability)
+
+OpenObserve is deployed for internal logs/metrics. No external access - use SSH port-forward.
+
+### Deploy (first time)
+
+```bash
+# 1. Create bucket 'openobserve-data' in Cloudflare R2
+
+# 2. Create .env.openobserve with:
+#    ZO_ROOT_USER_EMAIL=admin@yourdomain.com
+#    ZO_ROOT_USER_PASSWORD=YourSecurePassword
+#    ZO_S3_SERVER_URL=https://your-account.r2.cloudflarestorage.com
+#    ZO_S3_ACCESS_KEY=your-r2-access-key
+#    ZO_S3_SECRET_KEY=your-r2-secret-key
+
+# 3. Create secret and deploy
+kubectl create secret generic openobserve-secrets --from-env-file=.env.openobserve
+kubectl apply -f k8s/openobserve.yaml
+
+# 4. Verify
+kubectl get pods -l app=openobserve
+kubectl logs -l app=openobserve
+```
+
+### Access UI
+
+```bash
+# Option 1: From server
+kubectl port-forward svc/openobserve 5080:5080
+# Then open http://localhost:5080
+
+# Option 2: SSH tunnel from local machine
+ssh -L 5080:localhost:5080 user@server -t 'kubectl port-forward svc/openobserve 5080:5080'
+# Then open http://localhost:5080 on your local machine
+```
+
+### Update Secrets
+
+```bash
+kubectl delete secret openobserve-secrets
+kubectl create secret generic openobserve-secrets --from-env-file=.env.openobserve
+kubectl rollout restart deploy/openobserve
+```
+
+### Ship App Logs to OpenObserve
+
+Add to `app-secrets` (after OpenObserve is running):
+```
+OPENOBSERVE_URL=http://openobserve:5080
+OPENOBSERVE_USER=admin@yourdomain.com
+OPENOBSERVE_PASSWORD=YourSecurePassword
+OPENOBSERVE_ORG=default
+OPENOBSERVE_STREAM=poddyclip
+```
+
+Then restart phoenix:
+```bash
+kubectl rollout restart deploy/phoenix
+```
