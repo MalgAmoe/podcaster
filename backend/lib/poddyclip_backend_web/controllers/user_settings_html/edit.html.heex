@@ -54,6 +54,7 @@
 
       <form action={locale_path(@locale, "/users/settings")} method="post" id="update_notifications">
         <input type="hidden" name="_csrf_token" value={Phoenix.Controller.get_csrf_token()} />
+        <input type="hidden" name="_method" value="put" />
         <input type="hidden" name="action" value="update_notifications" />
 
         <div class="space-y-4">
