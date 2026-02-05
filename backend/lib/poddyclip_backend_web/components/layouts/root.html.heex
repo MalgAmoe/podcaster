@@ -67,8 +67,8 @@
           <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-2xl w-32 p-2 shadow-lg border border-base-300 z-50 mt-2">
             <li><a href={switch_locale_path(assigns, "en")} class={if @locale == "en", do: "active", else: ""}>English</a></li>
             <li><a href={switch_locale_path(assigns, "es")} class={if @locale == "es", do: "active", else: ""}>Español</a></li>
-            <li><a href={switch_locale_path(assigns, "it")} class={if @locale == "it", do: "active", else: ""}>Italiano</a></li>
             <li><a href={switch_locale_path(assigns, "fr")} class={if @locale == "fr", do: "active", else: ""}>Français</a></li>
+            <li><a href={switch_locale_path(assigns, "it")} class={if @locale == "it", do: "active", else: ""}>Italiano</a></li>
           </ul>
         </div>
 
@@ -82,7 +82,7 @@
                 <div class="flex items-center justify-between">
                   <span class="text-xs text-base-content/50 truncate">{@current_scope.user.email}</span>
                   <%= if @current_scope.user.subscription_status == "active" do %>
-                    <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-primary text-primary-content ml-2"><%= gettext("Pro") %></span>
+                    <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-primary text-primary-content ml-2"><%= gettext("Munch Plan") %></span>
                   <% else %>
                     <span class="px-2 py-0.5 text-[10px] font-medium rounded-full bg-base-300 text-base-content/70 ml-2"><%= gettext("Free") %></span>
                   <% end %>
@@ -90,13 +90,15 @@
               </li>
               <%= if @current_scope.user.subscription_status != "active" do %>
                 <li class="text-xs text-base-content/50 px-4 py-1">
-                  <% mins = div(@current_scope.user.seconds_available, 60) %>
-                  <% secs = rem(@current_scope.user.seconds_available, 60) %>
+                  <% total = PoddyclipBackendWeb.Layouts.total_seconds_available(@current_scope.user) %>
+                  <% mins = div(total, 60) %>
+                  <% secs = rem(total, 60) %>
                   <%= "#{mins}m #{secs}s" %> <%= gettext("remaining") %>
                 </li>
               <% end %>
               <li><.link href={locale_path(@locale, "/account")}><%= gettext("Account") %></.link></li>
               <li><.link href={locale_path(@locale, "/users/settings")}><%= gettext("Settings") %></.link></li>
+              <li><.link href={locale_path(@locale, "/help")}><%= gettext("Help & FAQ") %></.link></li>
               <li><.link href={locale_path(@locale, "/users/log-out")} method="delete"><%= gettext("Log out") %></.link></li>
             </ul>
           </div>

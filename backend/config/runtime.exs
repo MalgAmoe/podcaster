@@ -125,6 +125,16 @@ if polar_access_token = System.get_env("POLAR_ACCESS_TOKEN") do
   config :poddyclip_backend, :polar_access_token, polar_access_token
 end
 
+# Polar minute pack product ID (for verifying order webhooks)
+if polar_minute_pack_product_id = System.get_env("POLAR_MINUTE_PACK_PRODUCT_ID") do
+  config :poddyclip_backend, :polar_minute_pack_product_id, polar_minute_pack_product_id
+end
+
+# Polar minute pack checkout link ID (for purchase URLs)
+if polar_minute_pack_checkout_link_id = System.get_env("POLAR_MINUTE_PACK_CHECKOUT_LINK_ID") do
+  config :poddyclip_backend, :polar_minute_pack_checkout_link_id, polar_minute_pack_checkout_link_id
+end
+
 
 # OpenObserve log shipping (if configured)
 if openobserve_url = System.get_env("OPENOBSERVE_URL") do

@@ -1,9 +1,10 @@
 defmodule PoddyclipBackendWeb.PolarWebhookController do
   @moduledoc """
-  Handles webhooks from Polar.sh for subscription management.
+  Handles webhooks from Polar.sh for subscription and order management.
 
   ## Supported Events
 
+  ### Subscriptions
   - `subscription.created` - Initial subscription record created
   - `subscription.active` - Subscription is now active (payment successful)
   - `subscription.updated` - Subscription modified or renewed
@@ -11,6 +12,10 @@ defmodule PoddyclipBackendWeb.PolarWebhookController do
   - `subscription.uncanceled` - User reactivated a cancelled subscription
   - `subscription.past_due` - Payment failed, subscription in grace period
   - `subscription.revoked` - Access removed immediately (payment failed, etc.)
+
+  ### Orders
+  - `order.paid` - One-time purchase payment confirmed (e.g., minute packs)
+  - `order.refunded` - Order was refunded (remove minute pack)
 
   ## Signature Verification
 
@@ -47,7 +52,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookController do
       true ->
         case Polar.verify_signature(raw_body, headers, secret) do
           {:ok, payload} ->
-            process_webhook(conn, payload)
+            process_webhook(conn, payload, headers)
 
           {:error, :timestamp_too_old} ->
             send_error(conn, 401, "Webhook timestamp too old")
@@ -65,8 +70,9 @@ defmodule PoddyclipBackendWeb.PolarWebhookController do
     end
   end
 
-  defp process_webhook(conn, %{"type" => type, "data" => data} = payload) do
-    event_id = get_event_id(payload)
+  defp process_webhook(conn, %{"type" => type, "data" => data} = payload, headers) do
+    # Use webhook-id header (Standard Webhooks spec) or fall back to payload
+    event_id = get_event_id(payload, headers)
 
     if Billing.webhook_processed?(event_id) do
       Logger.info("Skipping duplicate webhook: #{event_id}")
@@ -79,15 +85,18 @@ defmodule PoddyclipBackendWeb.PolarWebhookController do
     end
   end
 
-  defp process_webhook(conn, payload) do
+  defp process_webhook(conn, payload, _headers) do
     Logger.warning("Invalid webhook payload: #{inspect(payload)}")
     send_error(conn, 400, "Invalid payload format")
   end
 
-  # Extract event ID from payload (Polar uses different field names)
-  defp get_event_id(%{"id" => id}), do: id
-  defp get_event_id(%{"event_id" => id}), do: id
-  defp get_event_id(_), do: "unknown_#{System.unique_integer([:positive])}"
+  # Extract event ID - prefer webhook-id header (Standard Webhooks spec)
+  defp get_event_id(payload, headers) do
+    headers["webhook-id"] ||
+      payload["id"] ||
+      payload["event_id"] ||
+      "unknown_#{System.unique_integer([:positive])}"
+  end
 
   # ----- Event Handlers -----
 
@@ -242,12 +251,127 @@ defmodule PoddyclipBackendWeb.PolarWebhookController do
     end
   end
 
+  defp handle_event("order.paid", data) do
+    # One-time purchase payment confirmed - check if it's a minute pack
+    order = data["order"] || data
+    order_id = order["id"]
+    product = get_order_product(order)
+    product_id = product["id"]
+    customer = order["customer"] || %{}
+    customer_external_id = customer["external_id"]
+
+    # Check metadata for reference_id (set during checkout link redirect)
+    # This is our primary way to identify the user for checkout links
+    metadata = order["metadata"] || %{}
+    reference_id = metadata["reference_id"]
+
+    minute_pack_product_id = Polar.minute_pack_product_id()
+
+    # Try reference_id from metadata first (set via checkout link),
+    # then fall back to customer external_id (set via Checkout API)
+    user_id_source = reference_id || customer_external_id
+
+    cond do
+      is_nil(minute_pack_product_id) ->
+        Logger.info("Minute pack product not configured, ignoring order")
+        %{status: "ok", ignored: true}
+
+      product_id != minute_pack_product_id ->
+        Logger.info("Order is not for minute pack product, ignoring",
+          order_product_id: product_id,
+          expected_product_id: minute_pack_product_id
+        )
+        %{status: "ok", ignored: true}
+
+      is_nil(user_id_source) ->
+        Logger.warning("Minute pack order has no user identifier (metadata.reference_id or customer.external_id)",
+          order_id: order_id
+        )
+        %{status: "ok", warning: "no_user_identifier"}
+
+      true ->
+        # Find user by external_id or metadata.user_id
+        # Parse string to integer since Polar returns it as a string
+        user_id = parse_user_id(user_id_source)
+
+        case user_id && PoddyclipBackend.Accounts.get_user(user_id) do
+          nil ->
+            Logger.warning("User not found for minute pack order",
+              order_id: order_id,
+              user_id_source: user_id_source
+            )
+            %{status: "ok", warning: "user_not_found"}
+
+          user ->
+            case Billing.create_minute_pack(user.id, order_id) do
+              {:ok, pack} ->
+                Logger.info("Minute pack created from order",
+                  user_id: user.id,
+                  pack_id: pack.id,
+                  order_id: order_id
+                )
+                %{status: "ok"}
+
+              {:error, reason} ->
+                Logger.error("Failed to create minute pack",
+                  user_id: user.id,
+                  order_id: order_id,
+                  error: inspect(reason)
+                )
+                %{status: "error", message: "Failed to create minute pack"}
+            end
+        end
+    end
+  end
+
+  defp handle_event("order.refunded", data) do
+    # Order was refunded - delete the minute pack if it exists
+    order = data["order"] || data
+    order_id = order["id"]
+
+    Logger.info("Order refunded webhook received", order_id: order_id)
+
+    case Billing.delete_minute_pack_by_order_id(order_id) do
+      {:ok, _pack} ->
+        Logger.info("Minute pack deleted due to refund", order_id: order_id)
+        %{status: "ok"}
+
+      {:error, :not_found} ->
+        Logger.info("No minute pack found for refunded order", order_id: order_id)
+        %{status: "ok", warning: "pack_not_found"}
+
+      {:error, reason} ->
+        Logger.error("Failed to delete minute pack on refund",
+          order_id: order_id,
+          error: inspect(reason)
+        )
+        %{status: "error", message: "Failed to delete minute pack"}
+    end
+  end
+
   defp handle_event(type, _data) do
     Logger.info("Ignoring unhandled webhook type: #{type}")
     %{status: "ok", ignored: true}
   end
 
+  defp get_order_product(order) do
+    # Order can have product directly or nested in items
+    order["product"] ||
+      get_in(order, ["items", Access.at(0), "product"]) ||
+      %{}
+  end
+
   # ----- Helpers -----
+
+  defp parse_user_id(external_id) when is_binary(external_id) do
+    case Integer.parse(external_id) do
+      {id, ""} -> id
+      _ -> nil
+    end
+  end
+
+  defp parse_user_id(external_id) when is_integer(external_id), do: external_id
+  defp parse_user_id(_), do: nil
 
   defp lowercase_headers(headers) do
     headers

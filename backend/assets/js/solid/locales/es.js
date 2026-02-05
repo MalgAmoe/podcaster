@@ -75,9 +75,9 @@ export default {
   unableToConnect: "No se puede conectar. Por favor actualiza la pagina.",
 
   // Billing
-  notEnoughTime: "No tienes suficiente tiempo. Actualiza a Pro para mas tiempo de procesamiento.",
+  notEnoughTime: "No tienes suficiente tiempo. Pasa al Munch Plan o compra un Snack para más tiempo.",
   needTime: " Necesitas {needed} pero solo tienes {available} disponibles.",
-  upgrade: "Actualizar",
+  upgrade: "Ver opciones",
 
   // Error messages
   unknownError: "Error desconocido",

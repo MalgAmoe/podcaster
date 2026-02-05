@@ -20,7 +20,7 @@
           <p class="text-5xl font-bold mb-8">$0</p>
           <ul class="space-y-3 mb-8 text-base-content/80">
             <li><%= gettext("15 minutes of processing") %></li>
-            <li><%= gettext("Same quality as Pro") %></li>
+            <li><%= gettext("Same quality as Munch Plan") %></li>
             <li><%= gettext("No credit card required") %></li>
           </ul>
           <.link href={locale_path(@locale, "/users/log-in")} class="btn btn-outline btn-block">
@@ -28,9 +28,9 @@
           </.link>
         </div>
 
-        <!-- Pro -->
+        <!-- Munch Plan -->
         <div class="p-8 rounded-3xl bg-primary text-primary-content">
-          <h2 class="text-2xl font-bold mb-1"><%= gettext("Pro") %></h2>
+          <h2 class="text-2xl font-bold mb-1"><%= gettext("Munch Plan") %></h2>
           <p class="text-primary-content/60 mb-6"><%= gettext("Feed me more") %></p>
           <p class="text-5xl font-bold mb-8">
             $15<span class="text-xl font-normal text-primary-content/60">/<%= gettext("mo") %></span>
@@ -55,11 +55,11 @@
       <div class="space-y-8">
         <div>
           <h3 class="font-semibold text-lg mb-2"><%= gettext("What formats work?") %></h3>
-          <p class="text-base-content/70"><%= gettext("WAV, MP3, FLAC, M4A, whatever. You get WAV back.") %></p>
+          <p class="text-base-content/70"><%= gettext("WAV, MP3, FLAC, M4A, whatever. You get MP3 back.") %></p>
         </div>
         <div>
           <h3 class="font-semibold text-lg mb-2"><%= gettext("How fast?") %></h3>
-          <p class="text-base-content/70"><%= gettext("Usually a couple minutes. Pro skips the line.") %></p>
+          <p class="text-base-content/70"><%= gettext("Usually a couple minutes for a 10 minute file.") %></p>
         </div>
         <div>
           <h3 class="font-semibold text-lg mb-2"><%= gettext("Can I cancel?") %></h3>
@@ -77,6 +77,7 @@
   <footer class="py-8 px-6 border-t border-base-300">
     <div class="max-w-4xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
       <span class="text-base-content/50 flex items-center gap-1"><img src="/images/munchy_cow_head.svg" alt="" class="w-5 h-5" /> Munchy Cow</span>
+      <a href="mailto:info@munchycow.com" class="text-sm text-base-content/50 hover:text-base-content transition-colors">info@munchycow.com</a>
       <nav class="flex gap-6 text-sm text-base-content/50">
         <.link href={locale_path(@locale, "/")} class="hover:text-base-content transition-colors"><%= gettext("Home") %></.link>
         <.link href={locale_path(@locale, "/terms")} class="hover:text-base-content transition-colors"><%= gettext("Terms") %></.link>

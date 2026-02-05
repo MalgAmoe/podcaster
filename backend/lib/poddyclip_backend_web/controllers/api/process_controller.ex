@@ -385,7 +385,11 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
     "email": "user@example.com",
     "plan": {"name": "free", "display_name": "Free", "seconds": 900},
     "seconds_available": 720,
-    "subscription_status": "none"
+    "subscription_status": "none",
+    "purchased_seconds": 9000,
+    "total_seconds_available": 9720,
+    "pack_count": 1,
+    "next_pack_expiry": "2027-02-05T12:00:00Z"
   }
   """
   def current_user(conn, _params) do
@@ -411,12 +415,20 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
         }
       end
 
+    # Get minute pack summary
+    pack_summary = Billing.get_pack_summary(user.id)
+    total_seconds = Billing.get_total_seconds_available(user)
+
     json(conn, %{
       id: user.id,
       email: user.email,
       plan: plan_info,
       seconds_available: user.seconds_available,
-      subscription_status: user.subscription_status
+      subscription_status: user.subscription_status,
+      purchased_seconds: pack_summary.total_seconds,
+      total_seconds_available: total_seconds,
+      pack_count: pack_summary.pack_count,
+      next_pack_expiry: pack_summary.next_expiry
     })
   end
 end

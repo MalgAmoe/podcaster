@@ -18,7 +18,7 @@ defmodule PoddyclipBackend.Billing do
   alias PoddyclipBackend.Repo
   alias PoddyclipBackend.Accounts
   alias PoddyclipBackend.Accounts.{User, UserNotifier}
-  alias PoddyclipBackend.Billing.{Plan, ProcessedWebhook}
+  alias PoddyclipBackend.Billing.{MinutePack, Plan, ProcessedWebhook}
   require Logger
 
   # ----- PubSub -----
@@ -99,10 +99,123 @@ defmodule PoddyclipBackend.Billing do
     |> Repo.all()
   end
 
+  # ----- Minute Packs -----
+
+  @doc """
+  Gets all valid (non-expired, with remaining seconds) minute packs for a user.
+  Returns packs ordered by expiry date (FIFO - earliest expiring first).
+  """
+  def get_valid_packs(user_id) do
+    now = DateTime.utc_now()
+
+    MinutePack
+    |> where([p], p.user_id == ^user_id)
+    |> where([p], p.expires_at > ^now)
+    |> where([p], p.seconds_remaining > 0)
+    |> order_by([p], asc: p.expires_at)
+    |> Repo.all()
+  end
+
+  @doc """
+  Gets a summary of the user's minute packs.
+
+  Returns `%{total_seconds: integer, pack_count: integer, next_expiry: DateTime | nil}`
+  """
+  def get_pack_summary(user_id) do
+    packs = get_valid_packs(user_id)
+
+    %{
+      total_seconds: Enum.reduce(packs, 0, &(&1.seconds_remaining + &2)),
+      pack_count: length(packs),
+      next_expiry: List.first(packs) && List.first(packs).expires_at
+    }
+  end
+
+  @doc """
+  Gets the total seconds available for a user (subscription + valid packs).
+  """
+  def get_total_seconds_available(%User{seconds_available: subscription_seconds} = user) do
+    pack_summary = get_pack_summary(user.id)
+    subscription_seconds + pack_summary.total_seconds
+  end
+
+  @doc """
+  Creates a minute pack for a user (called from Polar webhook).
+
+  Returns `{:ok, minute_pack}` or `{:error, changeset}`.
+  The polar_order_id provides idempotency for webhook retries.
+  """
+  def create_minute_pack(user_id, polar_order_id \\ nil) do
+    %MinutePack{}
+    |> MinutePack.create_changeset(%{user_id: user_id, polar_order_id: polar_order_id})
+    |> Repo.insert()
+    |> case do
+      {:ok, pack} ->
+        Logger.info("Minute pack created",
+          user_id: user_id,
+          pack_id: pack.id,
+          polar_order_id: polar_order_id,
+          seconds: pack.seconds_total,
+          expires_at: pack.expires_at
+        )
+
+        # Broadcast update to LiveView
+        case Accounts.get_user(user_id) do
+          nil -> :ok
+          user -> broadcast_user_update(Repo.preload(user, :plan))
+        end
+
+        {:ok, pack}
+
+      {:error, %Ecto.Changeset{errors: [polar_order_id: _]}} = error ->
+        # Duplicate order ID - idempotent, return success
+        Logger.info("Duplicate minute pack order, ignoring",
+          user_id: user_id,
+          polar_order_id: polar_order_id
+        )
+        # Return the existing pack
+        case Repo.get_by(MinutePack, polar_order_id: polar_order_id) do
+          nil -> error
+          pack -> {:ok, pack}
+        end
+
+      error ->
+        error
+    end
+  end
+
+  @doc """
+  Deletes a minute pack by its Polar order ID (called on refund webhook).
+
+  Returns `{:ok, minute_pack}` if found and deleted, `{:error, :not_found}` if not found.
+  """
+  def delete_minute_pack_by_order_id(polar_order_id) when is_binary(polar_order_id) do
+    case Repo.get_by(MinutePack, polar_order_id: polar_order_id) do
+      nil ->
+        {:error, :not_found}
+
+      pack ->
+        case Repo.delete(pack) do
+          {:ok, deleted_pack} ->
+            Logger.info("Minute pack deleted due to refund",
+              pack_id: deleted_pack.id,
+              user_id: deleted_pack.user_id,
+              polar_order_id: polar_order_id,
+              seconds_remaining: deleted_pack.seconds_remaining
+            )
+            {:ok, deleted_pack}
+
+          error ->
+            error
+        end
+    end
+  end
+
   # ----- Seconds -----
 
   @doc """
   Checks if a user has enough seconds for a job.
+  Includes both subscription seconds and minute pack seconds.
 
   ## Examples
 
@@ -112,15 +225,19 @@ defmodule PoddyclipBackend.Billing do
       iex> has_seconds?(user, 100000)
       false
   """
-  def has_seconds?(%User{seconds_available: available}, required) do
-    available >= required
+  def has_seconds?(%User{} = user, required) do
+    get_total_seconds_available(user) >= required
   end
 
   @doc """
   Deducts seconds from a user's balance.
 
+  Order of deduction:
+  1. Subscription seconds first
+  2. Minute packs (FIFO by expiry date)
+
   Returns `{:ok, user}` if successful, `{:error, :insufficient_seconds}` if
-  the user doesn't have enough seconds.
+  the user doesn't have enough seconds (including packs).
 
   ## Examples
 
@@ -130,35 +247,95 @@ defmodule PoddyclipBackend.Billing do
       iex> deduct_seconds(user, 100000)
       {:error, :insufficient_seconds}
   """
-  def deduct_seconds(%User{seconds_available: available} = user, amount) when amount > 0 do
-    if available >= amount do
-      case user
-           |> Ecto.Changeset.change(seconds_available: available - amount)
-           |> Repo.update() do
+  def deduct_seconds(%User{seconds_available: subscription_seconds} = user, amount) when amount > 0 do
+    total_available = get_total_seconds_available(user)
+
+    if total_available >= amount do
+      # First, deduct from subscription seconds
+      {subscription_deduct, remaining_to_deduct} =
+        if subscription_seconds >= amount do
+          {amount, 0}
+        else
+          {subscription_seconds, amount - subscription_seconds}
+        end
+
+      # Update subscription seconds
+      new_subscription_seconds = subscription_seconds - subscription_deduct
+
+      result =
+        Repo.transaction(fn ->
+          # Update user's subscription seconds
+          {:ok, updated_user} =
+            user
+            |> Ecto.Changeset.change(seconds_available: new_subscription_seconds)
+            |> Repo.update()
+
+          # Deduct remaining from packs (FIFO)
+          if remaining_to_deduct > 0 do
+            deduct_from_packs(user.id, remaining_to_deduct)
+          end
+
+          updated_user
+        end)
+
+      case result do
         {:ok, updated_user} ->
           Logger.info("Seconds deducted",
             user_id: user.id,
             amount: amount,
-            previous: available,
-            remaining: updated_user.seconds_available
+            subscription_deducted: subscription_deduct,
+            packs_deducted: remaining_to_deduct,
+            subscription_remaining: updated_user.seconds_available
           )
 
           # Check if crossing 80% threshold and send notification
-          maybe_send_low_seconds_notification(updated_user, available, amount)
+          maybe_send_low_seconds_notification(updated_user, subscription_seconds, amount)
 
           {:ok, updated_user}
 
-        error ->
-          error
+        {:error, reason} ->
+          Logger.error("Failed to deduct seconds",
+            user_id: user.id,
+            amount: amount,
+            error: inspect(reason)
+          )
+          {:error, reason}
       end
     else
       Logger.warning("Insufficient seconds for deduction",
         user_id: user.id,
         requested: amount,
-        available: available
+        subscription_available: subscription_seconds,
+        total_available: total_available
       )
       {:error, :insufficient_seconds}
     end
+  end
+
+  # Deducts seconds from packs in FIFO order (by expiry date)
+  defp deduct_from_packs(user_id, amount) do
+    packs = get_valid_packs(user_id)
+    deduct_from_packs_recursive(packs, amount)
+  end
+
+  defp deduct_from_packs_recursive([], _remaining), do: :ok
+  defp deduct_from_packs_recursive(_packs, 0), do: :ok
+
+  defp deduct_from_packs_recursive([pack | rest], remaining) do
+    deduct_from_pack = min(pack.seconds_remaining, remaining)
+    new_remaining = remaining - deduct_from_pack
+
+    pack
+    |> MinutePack.deduct_changeset(deduct_from_pack)
+    |> Repo.update!()
+
+    Logger.info("Deducted from minute pack",
+      pack_id: pack.id,
+      deducted: deduct_from_pack,
+      pack_remaining: pack.seconds_remaining - deduct_from_pack
+    )
+
+    deduct_from_packs_recursive(rest, new_remaining)
   end
 
   @doc """

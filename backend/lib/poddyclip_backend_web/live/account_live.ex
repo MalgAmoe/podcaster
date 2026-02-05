@@ -2,6 +2,8 @@ defmodule PoddyclipBackendWeb.AccountLive do
   use PoddyclipBackendWeb, :live_view
 
   alias PoddyclipBackend.{Billing, Polar, Repo}
+  alias PoddyclipBackend.Billing.MinutePack
+  alias PoddyclipBackendWeb.Endpoint
 
   @impl true
   def mount(_params, _session, socket) do
@@ -17,7 +19,17 @@ defmodule PoddyclipBackendWeb.AccountLive do
   @impl true
   def handle_params(params, _uri, socket) do
     upgraded = params["upgraded"] == "true"
-    {:noreply, assign(socket, upgraded: upgraded)}
+    snack_purchased = params["snack_purchased"] == "true"
+
+    # Track initial pack count to detect when webhook arrives
+    socket =
+      if snack_purchased and not Map.has_key?(socket.assigns, :initial_pack_count) do
+        assign(socket, initial_pack_count: socket.assigns.pack_count)
+      else
+        socket
+      end
+
+    {:noreply, assign(socket, upgraded: upgraded, snack_purchased: snack_purchased)}
   end
 
   @impl true
@@ -39,6 +51,15 @@ defmodule PoddyclipBackendWeb.AccountLive do
     remaining_min = div(user.seconds_available, 60)
     remaining_sec = rem(user.seconds_available, 60)
 
+    # Get minute pack summary
+    pack_summary = Billing.get_pack_summary(user.id)
+    pack_minutes = div(pack_summary.total_seconds, 60)
+    pack_seconds = rem(pack_summary.total_seconds, 60)
+
+    # Check if snack purchase is pending (waiting for webhook)
+    initial_pack_count = socket.assigns[:initial_pack_count]
+    snack_pending = initial_pack_count != nil and pack_summary.pack_count <= initial_pack_count
+
     assign(socket,
       user: user,
       plan: plan,
@@ -51,7 +72,16 @@ defmodule PoddyclipBackendWeb.AccountLive do
       remaining_sec: remaining_sec,
       usage_percent: usage_percent,
       checkout_url: Polar.checkout_url(user, Billing.get_plan_by_name("pro")),
-      portal_url: Polar.customer_portal_url(user)
+      portal_url: Polar.customer_portal_url(user),
+      # Minute packs
+      pack_minutes: pack_minutes,
+      pack_seconds: pack_seconds,
+      pack_count: pack_summary.pack_count,
+      next_pack_expiry: pack_summary.next_expiry,
+      snack_pending: snack_pending,
+      minute_pack_checkout_url: Polar.minute_pack_checkout_url(user, Endpoint.url() <> "/account?snack_purchased=true"),
+      minute_pack_price: "$#{MinutePack.pack_price_cents() / 100}",
+      minute_pack_minutes: div(MinutePack.pack_seconds(), 60)
     )
   end
 

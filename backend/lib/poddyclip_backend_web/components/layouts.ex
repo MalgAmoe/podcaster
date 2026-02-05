@@ -5,6 +5,15 @@ defmodule PoddyclipBackendWeb.Layouts do
   """
   use PoddyclipBackendWeb, :html
 
+  alias PoddyclipBackend.Billing
+
+  @doc """
+  Returns total seconds available for a user (subscription + packs).
+  """
+  def total_seconds_available(user) do
+    Billing.get_total_seconds_available(user)
+  end
+
   # Embed all files in layouts/* within this module.
   # The default root.html.heex file contains the HTML
   # skeleton of your application, namely HTML headers

@@ -88,7 +88,9 @@ config :poddyclip_backend, Oban,
        # Cleanup old jobs every hour
        {"0 * * * *", PoddyclipBackend.Workers.CleanupJobs},
        # Cleanup orphaned S3 files daily at 3am
-       {"0 3 * * *", PoddyclipBackend.Workers.CleanupOrphanedFiles}
+       {"0 3 * * *", PoddyclipBackend.Workers.CleanupOrphanedFiles},
+       # Cleanup expired minute packs daily at 4am
+       {"0 4 * * *", PoddyclipBackend.Workers.CleanupExpiredPacks}
      ]}
   ]
 

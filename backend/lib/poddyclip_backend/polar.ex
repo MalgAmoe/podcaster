@@ -142,6 +142,53 @@ defmodule PoddyclipBackend.Polar do
   end
 
   @doc """
+  Generates a Polar checkout URL for purchasing a minute pack.
+
+  The URL includes:
+  - Checkout link ID for minute pack product
+  - Customer email prefilled
+  - Reference ID set to user.id (flows to order metadata for webhook correlation)
+  - Success URL to redirect after purchase
+
+  ## Parameters
+
+  - `user`: The user purchasing the pack
+  - `success_url`: URL to redirect to after successful purchase (optional)
+
+  ## Returns
+
+  The checkout URL as a string, or nil if minute pack checkout is not configured.
+  """
+  def minute_pack_checkout_url(user, success_url \\ nil) do
+    checkout_link_id = Application.get_env(:poddyclip_backend, :polar_minute_pack_checkout_link_id)
+
+    if checkout_link_id do
+      api_host = polar_api_host()
+
+      # Use reference_id to pass user_id - this gets copied to checkout metadata,
+      # then to order metadata. customer_external_id doesn't work with checkout links.
+      params = %{
+        "customer_email" => user.email,
+        "reference_id" => to_string(user.id)
+      }
+
+      params = if success_url, do: Map.put(params, "success_url", success_url), else: params
+      query = URI.encode_query(params)
+
+      "https://#{api_host}/v1/checkout-links/#{checkout_link_id}/redirect?#{query}"
+    else
+      nil
+    end
+  end
+
+  @doc """
+  Returns the product ID for minute packs.
+  """
+  def minute_pack_product_id do
+    Application.get_env(:poddyclip_backend, :polar_minute_pack_product_id)
+  end
+
+  @doc """
   Generates a Polar customer portal URL for subscription management.
 
   Users can use this to:

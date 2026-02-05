@@ -77,6 +77,7 @@ defmodule PoddyclipBackendWeb.Router do
     get "/pricing", PageController, :pricing
     get "/terms", PageController, :terms
     get "/privacy", PageController, :privacy
+    get "/help", PageController, :help
   end
 
   # Authenticated app - Spanish
@@ -99,6 +100,7 @@ defmodule PoddyclipBackendWeb.Router do
     get "/pricing", PageController, :pricing
     get "/terms", PageController, :terms
     get "/privacy", PageController, :privacy
+    get "/help", PageController, :help
   end
 
   # Authenticated app - Italian
@@ -121,6 +123,7 @@ defmodule PoddyclipBackendWeb.Router do
     get "/pricing", PageController, :pricing
     get "/terms", PageController, :terms
     get "/privacy", PageController, :privacy
+    get "/help", PageController, :help
   end
 
   # Authenticated app - French
@@ -143,6 +146,7 @@ defmodule PoddyclipBackendWeb.Router do
     get "/pricing", PageController, :pricing
     get "/terms", PageController, :terms
     get "/privacy", PageController, :privacy
+    get "/help", PageController, :help
   end
 
   # Authenticated app (SolidJS handles client-side routing for /app/*)
