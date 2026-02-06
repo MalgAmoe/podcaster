@@ -388,8 +388,7 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
     "subscription_status": "none",
     "purchased_seconds": 9000,
     "total_seconds_available": 9720,
-    "pack_count": 1,
-    "next_pack_expiry": "2027-02-05T12:00:00Z"
+    "pack_count": 1
   }
   """
   def current_user(conn, _params) do
@@ -427,8 +426,7 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
       subscription_status: user.subscription_status,
       purchased_seconds: pack_summary.total_seconds,
       total_seconds_available: total_seconds,
-      pack_count: pack_summary.pack_count,
-      next_pack_expiry: pack_summary.next_expiry
+      pack_count: pack_summary.pack_count
     })
   end
 end

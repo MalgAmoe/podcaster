@@ -2,6 +2,8 @@
 
 Professional podcast audio enhancement with spectral denoising, dynamics processing, and analog-style saturation.
 
+Only pay for what you eat.
+
 ## Overview
 
 Poddyclip is a Rust workspace with three components:

@@ -179,14 +179,6 @@
             <span class="text-sm text-base-content/70"><%= gettext("Purchased Minutes") %></span>
             <span class="text-lg font-semibold"><%= @pack_minutes %>m <%= @pack_seconds %>s</span>
           </div>
-          <%= if @next_pack_expiry do %>
-            <div class="flex justify-between items-center mt-2">
-              <span class="text-sm text-base-content/70"><%= gettext("Next Expiry") %></span>
-              <span class="text-sm font-medium">
-                <%= Calendar.strftime(@next_pack_expiry, "%B %d, %Y") %>
-              </span>
-            </div>
-          <% end %>
         </div>
       <% else %>
         <p class="text-sm text-base-content/70 mb-4">

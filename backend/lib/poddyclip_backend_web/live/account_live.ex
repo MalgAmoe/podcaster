@@ -77,7 +77,6 @@ defmodule PoddyclipBackendWeb.AccountLive do
       pack_minutes: pack_minutes,
       pack_seconds: pack_seconds,
       pack_count: pack_summary.pack_count,
-      next_pack_expiry: pack_summary.next_expiry,
       snack_pending: snack_pending,
       minute_pack_checkout_url: Polar.minute_pack_checkout_url(user, Endpoint.url() <> "/account?snack_purchased=true"),
       minute_pack_price: "$#{MinutePack.pack_price_cents() / 100}",
