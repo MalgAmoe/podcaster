@@ -117,6 +117,23 @@
       </form>
     </div>
 
+    <!-- Your Data -->
+    <div class="mt-8 p-6 rounded-2xl bg-base-200 border border-base-300">
+      <h2 class="text-lg font-semibold mb-4">Your Data</h2>
+      <p class="text-sm text-base-content/60 mb-4">
+        Download a copy of all your data including account info, processing history, and purchases.
+      </p>
+      <.link
+        href={locale_path(@locale || "en", "/users/settings/export-data")}
+        class="btn btn-outline"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+        Download my data
+      </.link>
+    </div>
+
     <!-- Danger Zone -->
     <div class="mt-8 p-6 rounded-2xl bg-error/5 border border-error/20">
       <h2 class="text-lg font-semibold text-error mb-2">Danger Zone</h2>

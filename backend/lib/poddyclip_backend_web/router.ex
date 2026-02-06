@@ -234,6 +234,7 @@ defmodule PoddyclipBackendWeb.Router do
     end
 
     get "/users/settings/confirm-email/:token", UserSettingsController, :confirm_email
+    get "/users/settings/export-data", UserSettingsController, :export_data
   end
 
   scope "/es", PoddyclipBackendWeb do
@@ -268,6 +269,7 @@ defmodule PoddyclipBackendWeb.Router do
     end
 
     get "/users/settings/confirm-email/:token", UserSettingsController, :confirm_email
+    get "/users/settings/export-data", UserSettingsController, :export_data
   end
 
   scope "/it", PoddyclipBackendWeb do
@@ -302,6 +304,7 @@ defmodule PoddyclipBackendWeb.Router do
     end
 
     get "/users/settings/confirm-email/:token", UserSettingsController, :confirm_email
+    get "/users/settings/export-data", UserSettingsController, :export_data
   end
 
   scope "/fr", PoddyclipBackendWeb do
@@ -337,6 +340,7 @@ defmodule PoddyclipBackendWeb.Router do
     end
 
     get "/users/settings/confirm-email/:token", UserSettingsController, :confirm_email
+    get "/users/settings/export-data", UserSettingsController, :export_data
   end
 
   scope "/", PoddyclipBackendWeb do

@@ -17,6 +17,8 @@ defmodule PoddyclipBackend.Application do
         {Phoenix.PubSub, name: PoddyclipBackend.PubSub},
         # Log shipper for OpenObserve (must start before logger backend uses it)
         PoddyclipBackend.LogShipper,
+        # Rate limiter for data exports
+        PoddyclipBackend.RateLimiter,
         # Oban job queue
         {Oban, Application.fetch_env!(:poddyclip_backend, Oban)},
         # Subscription expiry checker
