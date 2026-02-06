@@ -52,6 +52,13 @@ defmodule PoddyclipBackendWeb.PageController do
     |> render(:help)
   end
 
+  def legal(conn, _params) do
+    conn
+    |> put_layout(false)
+    |> assign(:conn, conn)
+    |> render(:legal)
+  end
+
   # Authenticated app
   def process(conn, _params) do
     # Use only root layout (no app layout) - root already has the navbar

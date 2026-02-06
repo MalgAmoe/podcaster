@@ -77,6 +77,7 @@ defmodule PoddyclipBackendWeb.Router do
     get "/pricing", PageController, :pricing
     get "/terms", PageController, :terms
     get "/privacy", PageController, :privacy
+    get "/legal", PageController, :legal
     get "/help", PageController, :help
   end
 
@@ -100,6 +101,7 @@ defmodule PoddyclipBackendWeb.Router do
     get "/pricing", PageController, :pricing
     get "/terms", PageController, :terms
     get "/privacy", PageController, :privacy
+    get "/legal", PageController, :legal
     get "/help", PageController, :help
   end
 
@@ -123,6 +125,7 @@ defmodule PoddyclipBackendWeb.Router do
     get "/pricing", PageController, :pricing
     get "/terms", PageController, :terms
     get "/privacy", PageController, :privacy
+    get "/legal", PageController, :legal
     get "/help", PageController, :help
   end
 
@@ -146,6 +149,7 @@ defmodule PoddyclipBackendWeb.Router do
     get "/pricing", PageController, :pricing
     get "/terms", PageController, :terms
     get "/privacy", PageController, :privacy
+    get "/legal", PageController, :legal
     get "/help", PageController, :help
   end
 
