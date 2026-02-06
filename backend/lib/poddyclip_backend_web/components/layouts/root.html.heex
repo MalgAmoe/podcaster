@@ -82,7 +82,7 @@
                 <div class="flex items-center justify-between">
                   <span class="text-xs text-base-content/50 truncate">{@current_scope.user.email}</span>
                   <%= if @current_scope.user.subscription_status == "active" do %>
-                    <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-primary text-primary-content ml-2"><%= gettext("Munch Plan") %></span>
+                    <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-primary text-primary-content ml-2"><%= gettext("Munch") %></span>
                   <% else %>
                     <span class="px-2 py-0.5 text-[10px] font-medium rounded-full bg-base-300 text-base-content/70 ml-2"><%= gettext("Free") %></span>
                   <% end %>

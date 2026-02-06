@@ -1,0 +1,225 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <div class="max-w-md mx-auto py-8">
+    <.header>
+      Account Settings
+      <:subtitle>Manage your account</:subtitle>
+    </.header>
+
+    <!-- Email Section -->
+    <div class="mt-8 p-6 rounded-2xl bg-base-200 border border-base-300">
+      <h2 class="text-lg font-semibold mb-4">Email Address</h2>
+      <p class="text-sm text-base-content/60 mb-4">
+        We'll send a confirmation link to your new email address.
+      </p>
+
+      <.form :let={f} for={@email_changeset} phx-submit="update_email" id="update_email">
+        <div class="form-control w-full">
+          <label class="label">
+            <span class="label-text text-base-content/70">Email</span>
+          </label>
+          <input
+            type="email"
+            name={f[:email].name}
+            id={f[:email].id}
+            value={Phoenix.HTML.Form.normalize_value("email", f[:email].value)}
+            class="input input-bordered w-full bg-base-100 rounded-lg"
+            autocomplete="email"
+            required
+          />
+          <%= if f[:email].errors != [] do %>
+            <label class="label">
+              <span class="label-text-alt text-error">
+                <%= for {msg, _} <- f[:email].errors do %><%= msg %><% end %>
+              </span>
+            </label>
+          <% end %>
+        </div>
+
+        <div class="mt-4 flex justify-end">
+          <button type="submit" class="btn btn-primary" phx-disable-with="Sending...">
+            Update email
+          </button>
+        </div>
+      </.form>
+    </div>
+
+    <!-- Notification Preferences Section -->
+    <div class="mt-8 p-6 rounded-2xl bg-base-200 border border-base-300">
+      <h2 class="text-lg font-semibold mb-4">Email Notifications</h2>
+      <p class="text-sm text-base-content/60 mb-4">
+        Choose which emails you'd like to receive.
+      </p>
+
+      <form phx-submit="update_notifications" id="update_notifications">
+        <div class="space-y-4">
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              name="notifications[job_complete]"
+              value="true"
+              checked={@notification_preferences["job_complete"]}
+              class="checkbox checkbox-primary"
+            />
+            <div>
+              <span class="text-base-content">Email me when my audio is ready</span>
+              <p class="text-xs text-base-content/60">Get notified when processing completes</p>
+            </div>
+          </label>
+
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              name="notifications[job_failed]"
+              value="true"
+              checked={@notification_preferences["job_failed"]}
+              class="checkbox checkbox-primary"
+            />
+            <div>
+              <span class="text-base-content">Email me if processing fails</span>
+              <p class="text-xs text-base-content/60">Get notified if something goes wrong</p>
+            </div>
+          </label>
+
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              name="notifications[low_time]"
+              value="true"
+              checked={@notification_preferences["low_time"]}
+              class="checkbox checkbox-primary"
+            />
+            <div>
+              <span class="text-base-content">Warn me when I'm running low on time</span>
+              <p class="text-xs text-base-content/60">Get notified at 80% usage</p>
+            </div>
+          </label>
+
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              name="notifications[subscription_expiry]"
+              value="true"
+              checked={@notification_preferences["subscription_expiry"]}
+              class="checkbox checkbox-primary"
+            />
+            <div>
+              <span class="text-base-content">Remind me before my subscription ends</span>
+              <p class="text-xs text-base-content/60">Get a reminder 7 days before expiry</p>
+            </div>
+          </label>
+        </div>
+
+        <div class="mt-6 flex justify-end">
+          <button type="submit" class="btn btn-primary">
+            Save preferences
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Danger Zone -->
+    <div class="mt-8 p-6 rounded-2xl bg-error/5 border border-error/20">
+      <h2 class="text-lg font-semibold text-error mb-2">Danger Zone</h2>
+      <p class="text-sm text-base-content/70 mb-4">
+        Once you delete your account, there is no going back. All your data, including
+        processed files and purchase history, will be permanently deleted.
+      </p>
+      <button
+        type="button"
+        phx-click="show_delete_modal"
+        class="btn btn-error btn-outline"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg>
+        Delete Account
+      </button>
+    </div>
+
+    <!-- Delete Account Modal -->
+    <%= if @show_delete_modal do %>
+      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" phx-click="hide_delete_modal">
+        <div class="bg-base-100 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl" phx-click="noop">
+          <h3 class="text-xl font-bold text-error mb-4">Delete Your Account?</h3>
+
+          <div class="space-y-4 text-sm text-base-content/80">
+            <p>This action is permanent and cannot be undone.</p>
+
+            <!-- What they'll lose -->
+            <div class="space-y-3">
+              <%= if @deletion_info.subscription.active do %>
+                <div class="p-3 rounded-lg bg-warning/10 border border-warning/20">
+                  <div class="flex items-center gap-2 text-warning font-medium">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    Active Subscription
+                  </div>
+                  <p class="text-warning/80 mt-1">
+                    Munch Plan — <%= @deletion_info.subscription.days_remaining %> days remaining
+                    <span class="text-xs block">(until <%= Calendar.strftime(@deletion_info.subscription.ends_at, "%B %d, %Y") %>)</span>
+                  </p>
+                </div>
+              <% end %>
+
+              <%= if @deletion_info.snacks.count > 0 do %>
+                <div class="p-3 rounded-lg bg-warning/10 border border-warning/20">
+                  <div class="flex items-center gap-2 text-warning font-medium">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <%= @deletion_info.snacks.count %> Snack Pack<%= if @deletion_info.snacks.count > 1, do: "s" %>
+                  </div>
+                  <p class="text-warning/80 mt-1">
+                    <%= @deletion_info.snacks.minutes %> minutes remaining
+                  </p>
+                </div>
+              <% end %>
+            </div>
+
+            <ul class="list-disc list-inside space-y-1 ml-2 text-base-content/70">
+              <li>Your account and profile</li>
+              <li>All uploaded and processed files</li>
+              <li>Your processing history</li>
+            </ul>
+
+            <%= if @deletion_info.has_anything_to_lose do %>
+              <p class="text-sm font-medium text-error">
+                By typing DELETE below, you confirm you accept losing the above with no refund.
+              </p>
+            <% end %>
+
+            <div class="form-control w-full">
+              <label class="label pb-2">
+                <span class="label-text text-base-content/70">Type <strong>DELETE</strong> to confirm</span>
+              </label>
+              <input
+                type="text"
+                phx-keyup="update_delete_confirmation"
+                value={@delete_confirmation}
+                placeholder="DELETE"
+                class="input input-bordered w-full bg-base-100 rounded-lg"
+                autocomplete="off"
+              />
+            </div>
+          </div>
+
+          <div class="flex gap-3 mt-6">
+            <button type="button" phx-click="hide_delete_modal" class="btn btn-ghost flex-1">
+              Cancel
+            </button>
+            <button
+              type="button"
+              phx-click="confirm_delete_account"
+              disabled={@delete_confirmation != "DELETE"}
+              class={"btn btn-error flex-1 " <> if(@delete_confirmation != "DELETE", do: "btn-disabled", else: "")}
+            >
+              Delete Forever
+            </button>
+          </div>
+        </div>
+      </div>
+    <% end %>
+
+  </div>
+</Layouts.app>

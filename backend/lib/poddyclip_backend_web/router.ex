@@ -230,10 +230,9 @@ defmodule PoddyclipBackendWeb.Router do
         {PoddyclipBackendWeb.LocaleHook, :set_locale}
       ] do
       live "/account", AccountLive
+      live "/users/settings", SettingsLive
     end
 
-    get "/users/settings", UserSettingsController, :edit
-    put "/users/settings", UserSettingsController, :update
     get "/users/settings/confirm-email/:token", UserSettingsController, :confirm_email
   end
 
@@ -265,10 +264,9 @@ defmodule PoddyclipBackendWeb.Router do
         {PoddyclipBackendWeb.LocaleHook, :set_locale}
       ] do
       live "/account", AccountLive
+      live "/users/settings", SettingsLive
     end
 
-    get "/users/settings", UserSettingsController, :edit
-    put "/users/settings", UserSettingsController, :update
     get "/users/settings/confirm-email/:token", UserSettingsController, :confirm_email
   end
 
@@ -300,10 +298,9 @@ defmodule PoddyclipBackendWeb.Router do
         {PoddyclipBackendWeb.LocaleHook, :set_locale}
       ] do
       live "/account", AccountLive
+      live "/users/settings", SettingsLive
     end
 
-    get "/users/settings", UserSettingsController, :edit
-    put "/users/settings", UserSettingsController, :update
     get "/users/settings/confirm-email/:token", UserSettingsController, :confirm_email
   end
 
@@ -336,10 +333,9 @@ defmodule PoddyclipBackendWeb.Router do
         {PoddyclipBackendWeb.LocaleHook, :set_locale}
       ] do
       live "/account", AccountLive
+      live "/users/settings", SettingsLive
     end
 
-    get "/users/settings", UserSettingsController, :edit
-    put "/users/settings", UserSettingsController, :update
     get "/users/settings/confirm-email/:token", UserSettingsController, :confirm_email
   end
 

@@ -179,3 +179,9 @@
 .animate-slide-in {
   animation: slide-in 0.3s ease-out forwards;
 }
+
+/* Dialog modal backdrop */
+dialog::backdrop {
+  background-color: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+}

@@ -176,7 +176,7 @@ msgstr ""
 msgid "Harsh sibilants making you sound like a snake?"
 msgstr ""
 
-#: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:89
+#: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:93
 #, elixir-autogen, elixir-format
 msgid "Home"
 msgstr ""
@@ -316,7 +316,7 @@ msgid "Priority queue"
 msgstr ""
 
 #: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:78
-#: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:91
+#: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:95
 #, elixir-autogen, elixir-format
 msgid "Privacy"
 msgstr ""
@@ -378,7 +378,7 @@ msgid "Status"
 msgstr ""
 
 #: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:77
-#: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:90
+#: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:94
 #, elixir-autogen, elixir-format
 msgid "Terms"
 msgstr ""
@@ -396,11 +396,6 @@ msgstr ""
 #: lib/poddyclip_backend_web/controllers/user_session_controller.ex:39
 #, elixir-autogen, elixir-format
 msgid "The link is invalid or it has expired."
-msgstr ""
-
-#: lib/poddyclip_backend_web/controllers/user_session_html/confirm.html.heex:56
-#, elixir-autogen, elixir-format
-msgid "Tip: If you prefer passwords, you can enable them in the user settings."
 msgstr ""
 
 #: lib/poddyclip_backend_web/live/account_live.html.heex:84
@@ -622,7 +617,6 @@ msgstr ""
 msgid "Free accounts get 15 minutes of audio processing to try out the service. Once you've used your free minutes, you can upgrade to Munch Plan for more processing time."
 msgstr ""
 
-#: lib/poddyclip_backend_web/components/layouts/root.html.heex:85
 #: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:33
 #: lib/poddyclip_backend_web/live/account_live.html.heex:48
 #, elixir-autogen, elixir-format
@@ -709,4 +703,9 @@ msgstr ""
 #: lib/poddyclip_backend_web/components/layouts/root.html.heex:18
 #, elixir-autogen, elixir-format
 msgid "Natural-sounding audio repair with honest per-second billing. Only pay for what you use."
+msgstr ""
+
+#: lib/poddyclip_backend_web/components/layouts/root.html.heex:85
+#, elixir-autogen, elixir-format
+msgid "Munch"
 msgstr ""

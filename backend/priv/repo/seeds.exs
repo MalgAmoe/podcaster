@@ -24,12 +24,11 @@ plans = [
     active: true
   },
   %{
-    name: "pro",
-    display_name: "Pro",
+    name: "munch",
+    display_name: "Munch Plan",
     minutes: 900,
     price_cents: 1500,
-    # TODO: Replace with actual Polar product ID after creating product
-    polar_product_id: System.get_env("POLAR_PRO_PRODUCT_ID"),
+    polar_product_id: System.get_env("POLAR_MUNCH_PRODUCT_ID"),
     active: true
   }
 ]

@@ -384,4 +384,91 @@ defmodule PoddyclipBackend.Accounts do
     |> Ecto.Changeset.change(%{expiry_notification_sent_at: nil})
     |> Repo.update()
   end
+
+  ## Account Deletion
+
+  @doc """
+  Permanently deletes a user account and all associated data.
+
+  This function:
+  1. Revokes any active Polar subscription (immediate termination)
+  2. Deletes all S3 files (inputs and results) for the user
+  3. Deletes all user tokens
+  4. Deletes the user record (cascades to jobs and minute_packs)
+
+  Returns `{:ok, user}` on success, `{:error, reason}` on failure.
+  """
+  def delete_user_account(%User{} = user) do
+    alias PoddyclipBackend.{Storage, Polar}
+    require Logger
+
+    Logger.info("Deleting user account", user_id: user.id, email: user.email)
+
+    # 1. Revoke Polar subscription if active (immediate termination)
+    if user.polar_subscription_id && user.subscription_status == "active" do
+      case Polar.revoke_subscription(user.polar_subscription_id) do
+        {:ok, _} ->
+          Logger.info("Revoked Polar subscription for deleted user",
+            user_id: user.id,
+            subscription_id: user.polar_subscription_id
+          )
+
+        {:error, reason} ->
+          # Log but don't block deletion
+          Logger.warning("Failed to revoke Polar subscription during account deletion",
+            user_id: user.id,
+            subscription_id: user.polar_subscription_id,
+            reason: inspect(reason)
+          )
+      end
+    end
+
+    # 2. Delete all S3 files for this user
+    delete_user_s3_files(user.id)
+
+    # 3. Delete all tokens first (not strictly necessary due to cascade, but explicit)
+    Repo.delete_all(from(t in UserToken, where: t.user_id == ^user.id))
+
+    # 4. Delete the user (cascades to jobs, minute_packs via DB constraints)
+    case Repo.delete(user) do
+      {:ok, deleted_user} ->
+        Logger.info("User account deleted successfully", user_id: user.id)
+        {:ok, deleted_user}
+
+      {:error, changeset} ->
+        Logger.error("Failed to delete user account",
+          user_id: user.id,
+          error: inspect(changeset.errors)
+        )
+        {:error, changeset}
+    end
+  end
+
+  defp delete_user_s3_files(user_id) do
+    alias PoddyclipBackend.Storage
+    require Logger
+
+    # Delete input files
+    case Storage.delete_user_inputs(user_id) do
+      :ok -> Logger.debug("Deleted input files for user", user_id: user_id)
+      {:error, reason} -> Logger.warning("Failed to delete input files", user_id: user_id, error: inspect(reason))
+    end
+
+    # Delete result files - list all keys under results/{user_id}/
+    if Storage.enabled?() do
+      prefix = "results/#{user_id}/"
+      keys = Storage.list_keys(prefix)
+
+      Enum.each(keys, fn key ->
+        case Storage.delete(key) do
+          {:ok, _} -> :ok
+          {:error, reason} -> Logger.warning("Failed to delete S3 file", key: key, error: inspect(reason))
+        end
+      end)
+
+      Logger.debug("Deleted #{length(keys)} result files for user", user_id: user_id)
+    end
+
+    :ok
+  end
 end

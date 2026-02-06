@@ -32,13 +32,13 @@ defmodule Mix.Tasks.Polar.ImportSubscribers do
       {:ok, subscriptions} ->
         Mix.shell().info("Found #{length(subscriptions)} active subscriptions\n")
 
-        pro_plan = Billing.get_plan_by_name("pro")
+        munch_plan = Billing.get_plan_by_name("munch")
 
-        if is_nil(pro_plan) do
-          Mix.shell().error("Pro plan not found in database. Run seeds first.")
+        if is_nil(munch_plan) do
+          Mix.shell().error("Munch plan not found in database. Run seeds first.")
         else
           Enum.each(subscriptions, fn sub ->
-            import_subscription(sub, pro_plan)
+            import_subscription(sub, munch_plan)
           end)
 
           Mix.shell().info("\nDone!")
@@ -52,7 +52,7 @@ defmodule Mix.Tasks.Polar.ImportSubscribers do
     end
   end
 
-  defp import_subscription(sub, pro_plan) do
+  defp import_subscription(sub, munch_plan) do
     alias PoddyclipBackend.{Repo, Billing, Polar}
     alias PoddyclipBackend.Accounts.User
 
@@ -68,7 +68,7 @@ defmodule Mix.Tasks.Polar.ImportSubscribers do
         case Repo.get_by(User, email: email) do
           nil ->
             # Create user
-            create_user_from_polar(email, customer_id, sub, pro_plan)
+            create_user_from_polar(email, customer_id, sub, munch_plan)
 
           user ->
             # User exists, just sync
@@ -80,21 +80,24 @@ defmodule Mix.Tasks.Polar.ImportSubscribers do
     end
   end
 
-  defp create_user_from_polar(email, customer_id, sub, pro_plan) do
+  defp create_user_from_polar(email, customer_id, sub, munch_plan) do
     alias PoddyclipBackend.Repo
     alias PoddyclipBackend.Accounts.User
 
     period_end = parse_datetime(sub["current_period_end"])
 
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
     changeset =
       %User{}
       |> User.email_changeset(%{email: email})
+      |> Ecto.Changeset.put_change(:confirmed_at, now)
       |> Ecto.Changeset.put_change(:polar_customer_id, customer_id)
       |> Ecto.Changeset.put_change(:polar_subscription_id, sub["id"])
       |> Ecto.Changeset.put_change(:subscription_status, "active")
       |> Ecto.Changeset.put_change(:current_period_ends_at, period_end)
-      |> Ecto.Changeset.put_change(:plan_id, pro_plan.id)
-      |> Ecto.Changeset.put_change(:seconds_available, pro_plan.seconds)
+      |> Ecto.Changeset.put_change(:plan_id, munch_plan.id)
+      |> Ecto.Changeset.put_change(:seconds_available, munch_plan.seconds)
 
     case Repo.insert(changeset) do
       {:ok, user} ->

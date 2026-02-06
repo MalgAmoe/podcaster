@@ -302,9 +302,33 @@ defmodule PoddyclipBackend.Polar do
     end
   end
 
+  @doc """
+  Revokes a subscription immediately.
+
+  Uses DELETE to immediately terminate the subscription:
+  - User loses access immediately
+  - No future charges will occur
+  - Polar will send `subscription.revoked` webhook
+
+  Used when a user deletes their account.
+
+  Returns `{:ok, subscription}` or `{:error, reason}`.
+  """
+  def revoke_subscription(subscription_id) when is_binary(subscription_id) do
+    case polar_access_token() do
+      nil ->
+        {:error, :no_access_token}
+
+      token ->
+        url = "https://#{polar_api_host()}/v1/subscriptions/#{subscription_id}"
+        api_delete(url, token)
+    end
+  end
+
+  def revoke_subscription(nil), do: {:ok, :no_subscription}
+
   # Internal HTTP GET helper
   defp api_get(url, token) do
-    # Ensure inets is started
     :inets.start()
     :ssl.start()
 
@@ -323,6 +347,31 @@ defmodule PoddyclipBackend.Polar do
 
       {:ok, {{_, status, _}, _, body}} ->
         {:error, {:http_error, status, to_string(body)}}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  # Internal HTTP DELETE helper
+  defp api_delete(url, token) do
+    :inets.start()
+    :ssl.start()
+
+    headers = [
+      {~c"Authorization", String.to_charlist("Bearer #{token}")},
+      {~c"Accept", ~c"application/json"}
+    ]
+
+    case :httpc.request(:delete, {String.to_charlist(url), headers}, [], []) do
+      {:ok, {{_, status, _}, _, response_body}} when status in [200, 204] ->
+        case Jason.decode(to_string(response_body)) do
+          {:ok, data} -> {:ok, data}
+          {:error, _} -> {:ok, :revoked}  # 204 No Content
+        end
+
+      {:ok, {{_, status, _}, _, response_body}} ->
+        {:error, {:http_error, status, to_string(response_body)}}
 
       {:error, reason} ->
         {:error, reason}
