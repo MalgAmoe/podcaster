@@ -32,9 +32,10 @@
         <div class="p-8 rounded-3xl bg-primary text-primary-content">
           <h2 class="text-2xl font-bold mb-1"><%= gettext("Munch Plan") %></h2>
           <p class="text-primary-content/60 mb-6"><%= gettext("Feed me more") %></p>
-          <p class="text-5xl font-bold mb-8">
+          <p class="text-5xl font-bold mb-1">
             $15<span class="text-xl font-normal text-primary-content/60">/<%= gettext("mo") %></span>
           </p>
+          <p class="text-sm text-primary-content/50 mb-6"><%= gettext("+ applicable tax") %></p>
           <ul class="space-y-3 mb-8 text-primary-content/80">
             <li><%= gettext("15 hours per month") %></li>
             <li><%= gettext("2 hours per file") %></li>
@@ -47,11 +48,17 @@
       </div>
 
       <!-- Snacks -->
-      <div class="mt-8 p-6 rounded-2xl bg-base-200/50 border border-base-300 text-center">
-        <h3 class="text-xl font-bold mb-2"><%= gettext("Still hungry?") %></h3>
-        <p class="text-base-content/70 mb-4">
-          <%= gettext("Grab a Snack: $5 for 150 minutes. Works with any plan. Stack unlimited packs. Valid 1 year each.") %>
+      <div class="mt-8 p-8 rounded-2xl bg-base-200 border border-base-300 text-center">
+        <h3 class="text-2xl font-bold mb-2"><%= gettext("Still hungry?") %></h3>
+        <p class="text-3xl font-bold mb-1">
+          $5<span class="text-base font-normal text-base-content/60"> / <%= gettext("150 minutes") %></span>
         </p>
+        <p class="text-sm text-base-content/50 mb-4"><%= gettext("+ applicable tax") %></p>
+        <ul class="space-y-2 mb-6 text-base-content/70">
+          <li><%= gettext("Works with any plan") %></li>
+          <li><%= gettext("Stack unlimited packs") %></li>
+          <li><%= gettext("Valid 1 year each") %></li>
+        </ul>
         <p class="text-sm text-base-content/50">
           <%= gettext("Buy snacks anytime from your account.") %>
         </p>

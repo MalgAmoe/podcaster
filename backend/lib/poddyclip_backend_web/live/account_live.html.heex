@@ -117,12 +117,15 @@
           <% end %>
         <% else %>
           <%= if @checkout_url do %>
-            <a href={@checkout_url} class="btn btn-primary flex-1">
-              <%= gettext("Upgrade to Munch Plan - $15/mo") %>
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-              </svg>
-            </a>
+            <div class="flex-1">
+              <a href={@checkout_url} class="btn btn-primary w-full">
+                <%= gettext("Upgrade to Munch Plan - $15/mo") %>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </a>
+              <p class="text-xs text-base-content/50 mt-1 text-center"><%= gettext("+ applicable tax") %></p>
+            </div>
           <% else %>
             <div class="flex-1 text-center p-4 rounded-lg bg-base-100 border border-base-300">
               <p class="text-sm text-base-content/70">
@@ -204,7 +207,7 @@
 
       <!-- Info note -->
       <p class="text-xs text-base-content/50 mt-4">
-        <%= gettext("Snacks expire 1 year after purchase. Subscription time is used first.") %>
+        <%= gettext("Snacks expire 1 year after purchase. Subscription time is used first. Prices exclude applicable tax.") %>
       </p>
     </div>
 
