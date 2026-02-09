@@ -9,15 +9,6 @@ pub enum OutputFormat {
     Mp3,
 }
 
-/// Compressor type selection
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum CompressorType {
-    #[default]
-    Peak,
-    Fet,
-}
-
 /// Audio category - determines filter settings
 #[derive(Debug, Clone, Copy, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -67,9 +58,10 @@ pub struct ProcessConfig {
     pub expander_enabled: bool,
     pub expander_preset: u8,
 
-    pub compressor_enabled: bool,
-    pub compressor_type: CompressorType,
-    pub compressor_preset: u8,
+    pub peakcomp_enabled: bool,
+    pub peakcomp_preset: u8,
+    pub fetcomp_enabled: bool,
+    pub fetcomp_preset: u8,
 
     // EQ
     pub fixeq_enabled: bool,
@@ -117,9 +109,10 @@ impl Default for ProcessConfig {
             declick: false,
             expander_enabled: false,
             expander_preset: 2,
-            compressor_enabled: true,
-            compressor_type: CompressorType::Peak,
-            compressor_preset: 2,
+            peakcomp_enabled: true,
+            peakcomp_preset: 2,
+            fetcomp_enabled: false,
+            fetcomp_preset: 2,
             fixeq_enabled: true,
             fixeq_preset: 1,
             deesser_enabled: true,
@@ -181,9 +174,10 @@ impl ProcessConfig {
                 // Dynamics
                 expander_enabled: false,
                 expander_preset: strength,
-                compressor_enabled: true,
-                compressor_type: CompressorType::Peak,
-                compressor_preset: strength,
+                peakcomp_enabled: true,
+                peakcomp_preset: strength,
+                fetcomp_enabled: strength == 3,
+                fetcomp_preset: strength - 2,
 
                 // EQ
                 fixeq_enabled: strength >= 2,
@@ -232,9 +226,10 @@ impl ProcessConfig {
                 // Dynamics
                 expander_enabled: false,
                 expander_preset: strength,
-                compressor_enabled: strength >= 2,
-                compressor_type: CompressorType::Peak,
-                compressor_preset: strength - 1,
+                peakcomp_enabled: strength >= 2,
+                peakcomp_preset: strength - 1,
+                fetcomp_enabled: strength >= 2,
+                fetcomp_preset: strength - 1,
 
                 // EQ
                 fixeq_enabled: strength >= 2,
@@ -244,10 +239,10 @@ impl ProcessConfig {
                 enhanceeq_preset: 1,
 
                 // Saturation
-                saturation_enabled: strength >= 2,
+                saturation_enabled: strength == 1,
                 saturation_preset: 1,
-                tape_enabled: false,
-                tape_preset: strength,
+                tape_enabled: strength >= 2,
+                tape_preset: strength - 1,
                 buttercomp_enabled: strength == 3,
                 buttercomp_preset: 1,
 

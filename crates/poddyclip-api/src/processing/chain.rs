@@ -20,7 +20,9 @@ pub struct ChainPreset {
     #[serde(default)]
     pub expander: ProcessorSetting,
     #[serde(default)]
-    pub compressor: CompressorSetting,
+    pub peakcomp: ProcessorSetting,
+    #[serde(default)]
+    pub fetcomp: ProcessorSetting,
     #[serde(default)]
     pub fixeq: ProcessorSetting,
     #[serde(default)]
@@ -196,111 +198,6 @@ impl OutputSetting {
     }
 }
 
-/// Compressor setting: type and preset
-#[derive(Debug, Clone)]
-pub struct CompressorSetting {
-    pub comp_type: CompressorType,
-    pub preset: u8,
-    pub enabled: bool,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum CompressorType {
-    Peak,
-    Fet,
-}
-
-impl Default for CompressorSetting {
-    fn default() -> Self {
-        CompressorSetting {
-            comp_type: CompressorType::Peak,
-            preset: 3,
-            enabled: false,
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for CompressorSetting {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        use serde::de::{self, MapAccess, Visitor};
-
-        struct CompressorSettingVisitor;
-
-        impl<'de> Visitor<'de> for CompressorSettingVisitor {
-            type Value = CompressorSetting;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str(
-                    "a compressor setting table { type = \"peak\"/\"fet\", preset = 1-5 } or false",
-                )
-            }
-
-            fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                if v {
-                    Ok(CompressorSetting::default())
-                } else {
-                    Ok(CompressorSetting {
-                        comp_type: CompressorType::Peak,
-                        preset: 3,
-                        enabled: false,
-                    })
-                }
-            }
-
-            fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
-            where
-                M: MapAccess<'de>,
-            {
-                let mut comp_type = CompressorType::Peak;
-                let mut preset = 3u8;
-
-                while let Some(key) = map.next_key::<String>()? {
-                    match key.as_str() {
-                        "type" => {
-                            let type_str: String = map.next_value()?;
-                            comp_type = match type_str.as_str() {
-                                "peak" => CompressorType::Peak,
-                                "fet" => CompressorType::Fet,
-                                _ => {
-                                    return Err(de::Error::custom(format!(
-                                        "compressor type must be 'peak' or 'fet', got '{}'",
-                                        type_str
-                                    )))
-                                }
-                            };
-                        }
-                        "preset" => {
-                            preset = map.next_value()?;
-                            if preset < 1 || preset > 5 {
-                                return Err(de::Error::custom(format!(
-                                    "preset must be 1-5, got {}",
-                                    preset
-                                )));
-                            }
-                        }
-                        _ => {
-                            let _: toml::Value = map.next_value()?;
-                        }
-                    }
-                }
-
-                Ok(CompressorSetting {
-                    comp_type,
-                    preset,
-                    enabled: true,
-                })
-            }
-        }
-
-        deserializer.deserialize_any(CompressorSettingVisitor)
-    }
-}
 
 fn default_preset() -> u8 {
     3

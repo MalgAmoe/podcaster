@@ -29,7 +29,7 @@ use poddyclip::saturation::tape::TapeGlue;
 use poddyclip::saturation::get_saturation_preset;
 use poddyclip::traits::{Stereo, StereoProcessor};
 
-use crate::models::{CompressorType, ProcessConfig};
+use crate::models::ProcessConfig;
 use crate::processing::chain::{load_chain, ChainPreset};
 
 /// Error returned when a job is cancelled
@@ -54,7 +54,7 @@ const STAGES: &[&str] = &[
     "analyzing_peaks",    // 9
     "peak_attenuation",   // 10
     "expander",           // 11
-    "compressor",         // 12
+    "peakcomp",           // 12
     "analyzing_eq",       // 13
     "fixeq",              // 14
     "deesser",            // 15
@@ -62,11 +62,12 @@ const STAGES: &[&str] = &[
     "buttercomp",         // 17
     "analyzing_enhance",  // 18
     "enhanceeq",          // 19
-    "tape",               // 20
-    "radio",              // 21
-    "analyzing_levels",   // 22
-    "output",             // 23
-    "encoding",           // 24
+    "radio",              // 20
+    "fetcomp",            // 21
+    "tape",               // 22
+    "analyzing_levels",   // 23
+    "output",             // 24
+    "encoding",           // 25
 ];
 
 /// Run the full processing chain on audio samples
@@ -296,33 +297,19 @@ pub fn process_audio(
     }
 
     // =========================================================================
-    // COMPRESSOR
+    // PEAK COMPRESSOR
     // =========================================================================
-    report("compressor", 12)?;
+    report("peakcomp", 12)?;
 
-    if effective_config.compressor_enabled {
-        let use_fet = effective_config.compressor_type == CompressorType::Fet;
-        let comp_preset = effective_config.compressor_preset;
-
-        if use_fet {
-            let mut fetcomp = StereoFetCompressor::new_with_preset(sample_rate as f32, comp_preset)
-                .ok_or_else(|| anyhow::anyhow!("Invalid fetcomp preset"))?;
-            if is_stereo {
-                let (left, right) = samples.split_at_mut(1);
-                fetcomp.process_stereo(&mut left[0], &mut right[0]);
-            } else {
-                fetcomp.process_mono(&mut samples[0]);
-            }
+    if effective_config.peakcomp_enabled {
+        let mut peakcomp = StereoVcaPeakComp::new_with_preset(sample_rate as f32, effective_config.peakcomp_preset)
+            .ok_or_else(|| anyhow::anyhow!("Invalid peakcomp preset"))?;
+        peakcomp.configure(samples);
+        if is_stereo {
+            let (left, right) = samples.split_at_mut(1);
+            peakcomp.process_stereo(&mut left[0], &mut right[0]);
         } else {
-            let mut peakcomp = StereoVcaPeakComp::new_with_preset(sample_rate as f32, comp_preset)
-                .ok_or_else(|| anyhow::anyhow!("Invalid peakcomp preset"))?;
-            peakcomp.configure(samples);
-            if is_stereo {
-                let (left, right) = samples.split_at_mut(1);
-                peakcomp.process_stereo(&mut left[0], &mut right[0]);
-            } else {
-                peakcomp.process_mono(&mut samples[0]);
-            }
+            peakcomp.process_mono(&mut samples[0]);
         }
     }
 
@@ -402,7 +389,7 @@ pub fn process_audio(
     }
 
     // =========================================================================
-    // ENHANCEEQ (or RadioVoice)
+    // ENHANCE EQ (or RadioVoice)
     // =========================================================================
     if !effective_config.radio && effective_config.enhanceeq_enabled {
         report("analyzing_enhance", 18)?;
@@ -436,9 +423,50 @@ pub fn process_audio(
     }
 
     // =========================================================================
+    // RADIO VOICE EQ (optional)
+    // =========================================================================
+    if effective_config.radio {
+        report("radio", 20)?;
+        let mut radio = RadioVoiceProcessor::new(sample_rate);
+        radio.set_amount(effective_config.radio_amount);
+
+        let mono = if is_stereo {
+            analysis::utils::mix_to_mono(&samples[0], &samples[1])
+        } else {
+            samples[0].clone()
+        };
+        radio.analyze(&mono);
+
+        if is_stereo {
+            let (left, right) = samples.split_at_mut(1);
+            radio.process(&mut left[0]);
+            radio.reset();
+            radio.process(&mut right[0]);
+        } else {
+            radio.process(&mut samples[0]);
+        }
+    }
+
+    // =========================================================================
+    // FET COMPRESSOR (final glue after EQ)
+    // =========================================================================
+    report("fetcomp", 21)?;
+
+    if effective_config.fetcomp_enabled {
+        let mut fetcomp = StereoFetCompressor::new_with_preset(sample_rate as f32, effective_config.fetcomp_preset)
+            .ok_or_else(|| anyhow::anyhow!("Invalid fetcomp preset"))?;
+        if is_stereo {
+            let (left, right) = samples.split_at_mut(1);
+            fetcomp.process_stereo(&mut left[0], &mut right[0]);
+        } else {
+            fetcomp.process_mono(&mut samples[0]);
+        }
+    }
+
+    // =========================================================================
     // TAPE
     // =========================================================================
-    report("tape", 20)?;
+    report("tape", 22)?;
 
     if effective_config.tape_enabled {
         let sat_preset = get_saturation_preset(effective_config.tape_preset)
@@ -462,40 +490,15 @@ pub fn process_audio(
     }
 
     // =========================================================================
-    // RADIO VOICE EQ (optional)
-    // =========================================================================
-    if effective_config.radio {
-        report("radio", 21)?;
-        let mut radio = RadioVoiceProcessor::new(sample_rate);
-        radio.set_amount(effective_config.radio_amount);
-
-        let mono = if is_stereo {
-            analysis::utils::mix_to_mono(&samples[0], &samples[1])
-        } else {
-            samples[0].clone()
-        };
-        radio.analyze(&mono);
-
-        if is_stereo {
-            let (left, right) = samples.split_at_mut(1);
-            radio.process(&mut left[0]);
-            radio.reset();
-            radio.process(&mut right[0]);
-        } else {
-            radio.process(&mut samples[0]);
-        }
-    }
-
-    // =========================================================================
     // OUTPUT STAGE
     // =========================================================================
     if effective_config.output_enabled {
-        report("analyzing_levels", 22)?;
+        report("analyzing_levels", 23)?;
         let lufs = measure_integrated_lufs(samples, sample_rate);
         let lufs_gain_db = effective_config.lufs_target - lufs;
         apply_gain(samples, lufs_gain_db);
 
-        report("output", 23)?;
+        report("output", 24)?;
         let mut limiter = Limiter::new(-1.0, 5.0, 100.0, sample_rate as f32);
         if is_stereo {
             let (left, right) = samples.split_at_mut(1);
@@ -528,12 +531,10 @@ fn config_from_chain(chain: &ChainPreset, request: &ProcessConfig) -> ProcessCon
         declick: false, // Always off for API (offline only)
         expander_enabled: chain.expander.is_enabled(),
         expander_preset: chain.expander.preset().unwrap_or(3),
-        compressor_enabled: chain.compressor.enabled,
-        compressor_type: match chain.compressor.comp_type {
-            crate::processing::chain::CompressorType::Peak => CompressorType::Peak,
-            crate::processing::chain::CompressorType::Fet => CompressorType::Fet,
-        },
-        compressor_preset: chain.compressor.preset,
+        peakcomp_enabled: chain.peakcomp.is_enabled(),
+        peakcomp_preset: chain.peakcomp.preset().unwrap_or(3),
+        fetcomp_enabled: chain.fetcomp.is_enabled(),
+        fetcomp_preset: chain.fetcomp.preset().unwrap_or(3),
         fixeq_enabled: chain.fixeq.is_enabled(),
         fixeq_preset: chain.fixeq.preset().unwrap_or(3),
         deesser_enabled: chain.deesser,
