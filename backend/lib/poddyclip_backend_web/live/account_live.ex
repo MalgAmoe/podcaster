@@ -40,7 +40,7 @@ defmodule PoddyclipBackendWeb.AccountLive do
 
   defp assign_user_data(socket, user) do
     plan = user.plan || Billing.get_or_create_free_plan()
-    is_pro = plan.name == "pro"
+    is_pro = plan.name == "munch"
     max_seconds = plan.seconds
     used_seconds = max(0, max_seconds - user.seconds_available)
     usage_percent = if max_seconds > 0, do: round(used_seconds / max_seconds * 100), else: 0
@@ -71,7 +71,7 @@ defmodule PoddyclipBackendWeb.AccountLive do
       remaining_min: remaining_min,
       remaining_sec: remaining_sec,
       usage_percent: usage_percent,
-      checkout_url: Polar.checkout_url(user, Billing.get_plan_by_name("pro")),
+      checkout_url: Polar.checkout_url(user, Billing.get_plan_by_name("munch")),
       portal_url: Polar.customer_portal_url(user),
       # Minute packs
       pack_minutes: pack_minutes,

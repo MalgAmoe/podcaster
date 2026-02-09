@@ -118,6 +118,12 @@
         <% else %>
           <%= if @checkout_url do %>
             <div class="flex-1">
+              <p class="text-xs text-base-content/50 mb-2 text-center">
+                <%= gettext("By proceeding, you agree to our %{link_start}Terms%{link_end} and waive your 14-day right of withdrawal once the service begins.",
+                  link_start: "<a href=\"#{locale_path(@locale, "/terms")}\" class=\"underline hover:text-base-content\" target=\"_blank\">",
+                  link_end: "</a>"
+                ) |> raw() %>
+              </p>
               <a href={@checkout_url} class="btn btn-primary w-full">
                 <%= gettext("Upgrade to Munch Plan - $15/mo") %>
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -191,6 +197,12 @@
 
       <!-- Buy Snack Button -->
       <%= if @minute_pack_checkout_url do %>
+        <p class="text-xs text-base-content/50 mb-2 text-center">
+          <%= gettext("By proceeding, you agree to our %{link_start}Terms%{link_end} and waive your 14-day right of withdrawal once the service begins.",
+            link_start: "<a href=\"#{locale_path(@locale, "/terms")}\" class=\"underline hover:text-base-content\" target=\"_blank\">",
+            link_end: "</a>"
+          ) |> raw() %>
+        </p>
         <a href={@minute_pack_checkout_url} class="btn btn-primary w-full">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -206,9 +218,31 @@
       <% end %>
 
       <!-- Info note -->
-      <p class="text-xs text-base-content/50 mt-4">
-        <%= gettext("Snacks expire 1 year after purchase. Subscription time is used first. Prices exclude applicable tax.") %>
-      </p>
+      <p class="text-xs text-base-content/50 mt-1 text-center"><%= gettext("+ applicable tax") %></p>
+
+      <div class="mt-4 pt-4 border-t border-base-300">
+        <p class="text-sm font-medium mb-3"><%= gettext("Good to know:") %></p>
+        <ul class="space-y-2 text-sm text-base-content/70">
+          <li class="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            <%= gettext("Subscription time is used first") %>
+          </li>
+          <li class="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            <%= gettext("Snacks expire 1 year after purchase") %>
+          </li>
+          <li class="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            <%= gettext("Stack as many as you need") %>
+          </li>
+        </ul>
+      </div>
     </div>
 
   </div>

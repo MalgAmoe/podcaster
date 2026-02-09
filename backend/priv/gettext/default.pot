@@ -32,12 +32,12 @@ msgid "15 minutes of processing"
 msgstr ""
 
 #: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:41
-#: lib/poddyclip_backend_web/live/account_live.html.heex:154
+#: lib/poddyclip_backend_web/live/account_live.html.heex:160
 #, elixir-autogen, elixir-format
 msgid "2 hours per file"
 msgstr ""
 
-#: lib/poddyclip_backend_web/live/account_live.html.heex:148
+#: lib/poddyclip_backend_web/live/account_live.html.heex:154
 #, elixir-autogen, elixir-format
 msgid "900 minutes per month (15 hours)"
 msgstr ""
@@ -73,7 +73,7 @@ msgstr ""
 msgid "Attempting to reconnect"
 msgstr ""
 
-#: lib/poddyclip_backend_web/live/account_live.html.heex:132
+#: lib/poddyclip_backend_web/live/account_live.html.heex:138
 #, elixir-autogen, elixir-format
 msgid "Billing is not yet configured. Contact support to upgrade."
 msgstr ""
@@ -305,7 +305,7 @@ msgstr ""
 msgid "Pricing"
 msgstr ""
 
-#: lib/poddyclip_backend_web/live/account_live.html.heex:160
+#: lib/poddyclip_backend_web/live/account_live.html.heex:166
 #, elixir-autogen, elixir-format
 msgid "Priority processing queue"
 msgstr ""
@@ -590,19 +590,19 @@ msgstr ""
 msgid "remaining"
 msgstr ""
 
-#: lib/poddyclip_backend_web/live/account_live.html.heex:182
+#: lib/poddyclip_backend_web/live/account_live.html.heex:188
 #, elixir-autogen, elixir-format
 msgid "Purchased Minutes"
 msgstr ""
 
-#: lib/poddyclip_backend_web/live/account_live.html.heex:173
+#: lib/poddyclip_backend_web/live/account_live.html.heex:179
 #, elixir-autogen, elixir-format
 msgid "%{count} snack"
 msgid_plural "%{count} snacks"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/poddyclip_backend_web/live/account_live.html.heex:198
+#: lib/poddyclip_backend_web/live/account_live.html.heex:210
 #, elixir-autogen, elixir-format
 msgid "Buy Snack (%{minutes} min) - %{price}"
 msgstr ""
@@ -618,12 +618,12 @@ msgstr ""
 msgid "Munch Plan"
 msgstr ""
 
-#: lib/poddyclip_backend_web/live/account_live.html.heex:142
+#: lib/poddyclip_backend_web/live/account_live.html.heex:148
 #, elixir-autogen, elixir-format
 msgid "Munch Plan includes:"
 msgstr ""
 
-#: lib/poddyclip_backend_web/live/account_live.html.heex:188
+#: lib/poddyclip_backend_web/live/account_live.html.heex:194
 #, elixir-autogen, elixir-format
 msgid "No snacks yet. Buy a snack to add more processing time."
 msgstr ""
@@ -633,17 +633,17 @@ msgstr ""
 msgid "Same quality as Munch Plan"
 msgstr ""
 
-#: lib/poddyclip_backend_web/live/account_live.html.heex:170
+#: lib/poddyclip_backend_web/live/account_live.html.heex:176
 #, elixir-autogen, elixir-format
 msgid "Snacks"
 msgstr ""
 
-#: lib/poddyclip_backend_web/live/account_live.html.heex:203
+#: lib/poddyclip_backend_web/live/account_live.html.heex:215
 #, elixir-autogen, elixir-format
 msgid "Snacks are not yet available for purchase."
 msgstr ""
 
-#: lib/poddyclip_backend_web/live/account_live.html.heex:122
+#: lib/poddyclip_backend_web/live/account_live.html.heex:128
 #, elixir-autogen, elixir-format
 msgid "Upgrade to Munch Plan - $15/mo"
 msgstr ""
@@ -702,14 +702,10 @@ msgstr ""
 
 #: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:38
 #: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:56
-#: lib/poddyclip_backend_web/live/account_live.html.heex:127
+#: lib/poddyclip_backend_web/live/account_live.html.heex:133
+#: lib/poddyclip_backend_web/live/account_live.html.heex:221
 #, elixir-autogen, elixir-format
 msgid "+ applicable tax"
-msgstr ""
-
-#: lib/poddyclip_backend_web/live/account_live.html.heex:210
-#, elixir-autogen, elixir-format
-msgid "Snacks expire 1 year after purchase. Subscription time is used first. Prices exclude applicable tax."
 msgstr ""
 
 #: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:54
@@ -730,4 +726,30 @@ msgstr ""
 #: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:58
 #, elixir-autogen, elixir-format
 msgid "Works with any plan"
+msgstr ""
+
+#: lib/poddyclip_backend_web/live/account_live.html.heex:122
+#: lib/poddyclip_backend_web/live/account_live.html.heex:201
+#, elixir-autogen, elixir-format
+msgid "By proceeding, you agree to our %{link_start}Terms%{link_end} and waive your 14-day right of withdrawal once the service begins."
+msgstr ""
+
+#: lib/poddyclip_backend_web/live/account_live.html.heex:224
+#, elixir-autogen, elixir-format
+msgid "Good to know:"
+msgstr ""
+
+#: lib/poddyclip_backend_web/live/account_live.html.heex:236
+#, elixir-autogen, elixir-format
+msgid "Snacks expire 1 year after purchase"
+msgstr ""
+
+#: lib/poddyclip_backend_web/live/account_live.html.heex:242
+#, elixir-autogen, elixir-format
+msgid "Stack as many as you need"
+msgstr ""
+
+#: lib/poddyclip_backend_web/live/account_live.html.heex:230
+#, elixir-autogen, elixir-format
+msgid "Subscription time is used first"
 msgstr ""
