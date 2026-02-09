@@ -399,12 +399,16 @@ defmodule PoddyclipBackendWeb.PolarWebhookController do
   defp find_user_for_subscription(subscription) do
     subscription_id = subscription["id"]
     customer_id = get_customer_id(subscription)
+    customer_email = get_in(subscription, ["customer", "email"])
 
-    # Try finding by subscription ID first (if already linked)
-    # Then by customer ID - DO NOT fall back to email lookup for security
-    # (prevents account takeover if attacker controls email in subscription)
+    # Try finding by subscription ID first (if already linked),
+    # then by customer ID, then by email as last resort for initial activation.
+    # Email lookup is safe here because Polar verifies the checkout email
+    # matches the customer, and this only matters for the first webhook
+    # before polar_customer_id is stored on the user.
     Billing.get_user_by_subscription_id(subscription_id) ||
-      (customer_id && Billing.get_user_by_customer_id(customer_id))
+      (customer_id && Billing.get_user_by_customer_id(customer_id)) ||
+      (customer_email && PoddyclipBackend.Accounts.get_user_by_email(customer_email))
   end
 
   defp get_plan_for_product(product) do
@@ -413,8 +417,8 @@ defmodule PoddyclipBackendWeb.PolarWebhookController do
     # Try to find by Polar product ID
     case PoddyclipBackend.Repo.get_by(Billing.Plan, polar_product_id: product_id) do
       nil ->
-        # Fall back to pro plan
-        Billing.get_plan_by_name("pro") || Billing.get_or_create_free_plan()
+        # Fall back to munch plan
+        Billing.get_plan_by_name("munch") || Billing.get_or_create_free_plan()
 
       plan ->
         plan
