@@ -194,7 +194,6 @@ pub async fn create_s3_job(
     let mut config = if req.category.is_some() || req.mode.is_some() || req.strength.is_some() {
         ProcessConfig::from_dynamic(
             req.category.as_deref(),
-            req.mode.as_deref(),
             req.strength,
         )
     } else if let Some(ref chain_name) = req.chain {
@@ -208,7 +207,7 @@ pub async fn create_s3_job(
         }
     } else {
         // Default to voice/natural/3
-        ProcessConfig::from_dynamic(None, None, None)
+        ProcessConfig::from_dynamic(None, None)
     };
 
     // Apply output format settings

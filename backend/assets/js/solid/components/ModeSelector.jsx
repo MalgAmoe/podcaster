@@ -1,40 +1,15 @@
-import { For, Show } from "solid-js";
+import { Show } from "solid-js";
 import { useProcess } from "../context/ProcessContext";
 import { useI18n } from "../context/I18nContext";
 
 export function ModeSelector() {
-  const { store, currentMode, setMode, currentAiClean, setAiClean } = useProcess();
+  const { store, currentAiClean, setAiClean } = useProcess();
   const { t } = useI18n();
 
-  const MODES = [
-    { id: "natural", labelKey: "natural" },
-    { id: "studio", labelKey: "studio" }
-  ];
-
   return (
-    <div class="form-control text-center">
-      <p class="font-medium mb-3">{t("processingMode")}</p>
-      <div class="flex justify-center gap-2">
-        <For each={MODES}>
-          {(mode) => (
-            <button
-              type="button"
-              onClick={() => setMode(mode.id)}
-              class={`px-3 py-1.5 rounded-full transition-all text-sm ${
-                mode.id === currentMode()
-                  ? "bg-primary text-primary-content font-semibold"
-                  : "bg-base-300 text-base-content/50"
-              }`}
-            >
-              {t(mode.labelKey)}
-            </button>
-          )}
-        </For>
-      </div>
-
-      {/* AI Clean toggle - only shown for voice category */}
-      <Show when={store.processingConfig.category === "voice"}>
-        <div class="mt-4 flex items-center justify-center gap-2">
+    <Show when={store.processingConfig.category === "voice"}>
+      <div class="form-control text-center">
+        <div class="flex items-center justify-center gap-2">
           <label class="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -50,7 +25,7 @@ export function ModeSelector() {
             </svg>
           </div>
         </div>
-      </Show>
-    </div>
+      </div>
+    </Show>
   );
 }

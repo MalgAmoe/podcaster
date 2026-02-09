@@ -21,11 +21,11 @@ export function ProcessProvider(props) {
     uploadState: "idle", // idle, uploading, ready, error
     estimatedSeconds: null, // Detected audio duration in seconds
     submitting: false, // Prevents double-submit
-    // Processing configuration - each category stores its own mode + strength
+    // Processing configuration - each category stores its own strength
     processingConfig: {
       category: "voice", // "voice" | "mixed"
-      voice: { mode: "natural", strength: 2, aiClean: false },
-      mixed: { mode: "natural", strength: 2, aiClean: false }
+      voice: { strength: 2, aiClean: false },
+      mixed: { strength: 2, aiClean: false }
     },
     job: null,
   });
@@ -251,11 +251,6 @@ export function ProcessProvider(props) {
     setStore("processingConfig", "category", category);
   }
 
-  function setMode(mode) {
-    const cat = store.processingConfig.category;
-    setStore("processingConfig", cat, "mode", mode);
-  }
-
   function setStrength(strength) {
     const cat = store.processingConfig.category;
     setStore("processingConfig", cat, "strength", Math.max(1, Math.min(3, strength)));
@@ -267,7 +262,6 @@ export function ProcessProvider(props) {
   }
 
   // Computed helpers for current config
-  const currentMode = () => store.processingConfig[store.processingConfig.category].mode;
   const currentStrength = () => store.processingConfig[store.processingConfig.category].strength;
   const currentAiClean = () => store.processingConfig[store.processingConfig.category].aiClean;
 
@@ -286,7 +280,6 @@ export function ProcessProvider(props) {
       const catConfig = store.processingConfig[cat];
       const config = {
         category: cat,
-        mode: catConfig.mode,
         strength: catConfig.strength,
         // Only send ai_clean for voice category where it can be toggled
         ai_clean: cat === "voice" ? catConfig.aiClean : undefined,
@@ -375,10 +368,8 @@ export function ProcessProvider(props) {
     store,
     uploadFile,
     setCategory,
-    setMode,
     setStrength,
     setAiClean,
-    currentMode,
     currentStrength,
     currentAiClean,
     submitJob,

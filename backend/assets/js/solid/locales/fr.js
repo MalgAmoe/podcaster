@@ -20,10 +20,7 @@ export default {
   voice: "Voix",
   mixedAudio: "Audio Mixte",
 
-  // Mode selector
-  processingMode: "Mode de traitement",
-  natural: "Naturel",
-  studio: "Studio",
+  // AI Clean
   aiClean: "Nettoyage IA",
   takesLonger: "Prend plus de temps",
 

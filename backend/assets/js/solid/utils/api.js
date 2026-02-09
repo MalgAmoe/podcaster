@@ -130,7 +130,6 @@ export const api = {
       s3_key: s3Key,
       filename,
       category: config.category,
-      mode: config.mode,
       strength: config.strength,
       ai_clean: config.ai_clean,
       duration_seconds: config.duration_seconds

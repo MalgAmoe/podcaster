@@ -12,7 +12,6 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
 
   # Valid parameter values for security validation
   @valid_categories ~w(voice mixed)
-  @valid_modes ~w(natural studio repair)
   @valid_strengths 1..5
 
   @doc """
@@ -88,13 +87,11 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
 
     # Validate processing parameters against whitelist
     category = params["category"] || "voice"
-    mode = params["mode"] || "natural"
     strength = params["strength"] || 3
 
     with :ok <- validate_category(category),
-         :ok <- validate_mode(mode),
          :ok <- validate_strength(strength) do
-      create_job_validated(conn, user, s3_key, filename, params, category, mode, strength)
+      create_job_validated(conn, user, s3_key, filename, params, category, strength)
     else
       {:error, msg} ->
         conn
@@ -106,13 +103,10 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   defp validate_category(cat) when cat in @valid_categories, do: :ok
   defp validate_category(cat), do: {:error, "Invalid category: #{inspect(cat)}"}
 
-  defp validate_mode(mode) when mode in @valid_modes, do: :ok
-  defp validate_mode(mode), do: {:error, "Invalid mode: #{inspect(mode)}"}
-
   defp validate_strength(strength) when strength in @valid_strengths, do: :ok
   defp validate_strength(strength), do: {:error, "Invalid strength: #{inspect(strength)}"}
 
-  defp create_job_validated(conn, user, s3_key, filename, params, category, mode, strength) do
+  defp create_job_validated(conn, user, s3_key, filename, params, category, strength) do
     # Check if cancelled subscription has expired
     {:ok, user} = Billing.check_subscription_expiry(user)
 
@@ -132,7 +126,6 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
       # Build job options with validated parameters
       opts = [
         category: category,
-        mode: mode,
         strength: strength,
         ai_clean: params["ai_clean"],
         estimated_seconds: estimated_seconds

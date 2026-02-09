@@ -83,7 +83,6 @@ defmodule PoddyclipBackend.Processing.Client do
       user_id: Keyword.get(opts, :user_id),
       filename: Keyword.get(opts, :filename),
       category: Keyword.get(opts, :category, "voice"),
-      mode: Keyword.get(opts, :mode, "natural"),
       strength: Keyword.get(opts, :strength, 3),
       ai_clean: Keyword.get(opts, :ai_clean),
       output_format: Keyword.get(opts, :output_format, "mp3"),

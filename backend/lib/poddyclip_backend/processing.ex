@@ -56,7 +56,6 @@ defmodule PoddyclipBackend.Processing do
       user_id: user_id,
       filename: filename,
       category: opts[:category],
-      mode: opts[:mode],
       strength: opts[:strength],
       ai_clean: opts[:ai_clean],
       output_format: opts[:output_format],
