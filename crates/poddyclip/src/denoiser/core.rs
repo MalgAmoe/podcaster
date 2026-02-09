@@ -145,6 +145,7 @@ impl RealtimeDenoiser {
 
         // Process frame by frame
         let mut i = 0;
+        let mut frame_idx = 0usize;
         while i + window_size <= input.len() {
             let frame = &input[i..i + window_size];
 
@@ -215,8 +216,17 @@ impl RealtimeDenoiser {
 
             // Overlap-add
             let out_frame = self.stft.overlap_add(&synthesized);
-            output.extend(out_frame);
 
+            // Short cubic fade-in to avoid artifacts from unstable noise estimate
+            if frame_idx < 4 {
+                let t = (frame_idx + 1) as f32 / 4.0;
+                let fade = t * t * t * t * t;
+                output.extend(out_frame.iter().map(|&s| s * fade));
+            } else {
+                output.extend(out_frame);
+            }
+
+            frame_idx += 1;
             i += hop_size;
         }
 

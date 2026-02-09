@@ -136,10 +136,10 @@ pub const PRESETS: [Preset; 3] = [
     // 3: Intense - moderate noise reduction
     Preset {
         name: "Intense",
-        alpha_base: 11.4,
-        alpha_min: 6.4,
-        alpha_max: 17.8,
-        beta: 0.01,
+        alpha_base: 12.0,
+        alpha_min: 8.0,
+        alpha_max: 20.0,
+        beta: 0.03,
         delta: [
             0.6, 0.8, 1.0, 1.2, 1.3, 1.5, 1.6, // Low (7)
             1.8, 2.0, 2.2, 2.2, 2.2, 2.2, 2.0, // Mid (7)

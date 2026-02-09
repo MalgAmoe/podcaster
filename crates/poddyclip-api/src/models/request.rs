@@ -107,7 +107,7 @@ impl Default for ProcessConfig {
             output_format: OutputFormat::Mp3,
             mp3_bitrate: 192,
             chain: None,
-            denoiser_preset: 2,
+            denoiser_preset: 1,
             dereverb: 0,
             spectral_gate: 0,
             depeak: false,
@@ -116,7 +116,7 @@ impl Default for ProcessConfig {
             hp_slope: 24,
             hp_cutoff: 90.0, // Voice default
             declick: false,
-            expander_enabled: true,
+            expander_enabled: false,
             expander_preset: 2,
             compressor_enabled: true,
             compressor_type: CompressorType::Peak,
@@ -124,11 +124,11 @@ impl Default for ProcessConfig {
             fixeq_enabled: true,
             fixeq_preset: 1,
             deesser_enabled: true,
-            enhanceeq_enabled: true,
+            enhanceeq_enabled: false,
             enhanceeq_preset: 2,
             saturation_enabled: true,
             saturation_preset: 2,
-            tape_enabled: true,
+            tape_enabled: false,
             tape_preset: 2,
             buttercomp_enabled: true,
             buttercomp_preset: 2,
@@ -144,11 +144,7 @@ impl Default for ProcessConfig {
 impl ProcessConfig {
     /// Build a ProcessConfig from dynamic category/mode/strength parameters.
     /// This replaces the chain preset system with a more intuitive UI.
-    pub fn from_dynamic(
-        category: Option<&str>,
-        mode: Option<&str>,
-        strength: Option<u8>,
-    ) -> Self {
+    pub fn from_dynamic(category: Option<&str>, mode: Option<&str>, strength: Option<u8>) -> Self {
         let category = match category {
             Some("mixed") => Category::Mixed,
             _ => Category::Voice,
@@ -179,40 +175,40 @@ impl ProcessConfig {
 
                 // Noise reduction
                 denoiser_preset: strength,
-                dereverb: 0,
+                dereverb: strength - 1,
                 spectral_gate: 0,
-                declick: true,
+                declick: strength > 1,
                 depeak: false,
                 depeak_max_db: 18.0,
                 ai_denoise: false,
 
                 // Dynamics
-                expander_enabled: true,
+                expander_enabled: false,
                 expander_preset: strength,
                 compressor_enabled: true,
                 compressor_type: CompressorType::Peak,
                 compressor_preset: strength,
 
                 // EQ
-                fixeq_enabled: true,
-                fixeq_preset: strength,
+                fixeq_enabled: strength >= 2,
+                fixeq_preset: 1,
                 deesser_enabled: true,
                 enhanceeq_enabled: true,
                 enhanceeq_preset: strength,
 
                 // Saturation
                 saturation_enabled: strength >= 2,
-                saturation_preset: strength,
+                saturation_preset: strength - 1,
                 tape_enabled: false,
                 tape_preset: strength,
-                buttercomp_enabled: strength >= 2,
-                buttercomp_preset: strength,
+                buttercomp_enabled: strength > 1,
+                buttercomp_preset: strength - 1,
 
                 // Output
                 output_enabled: true,
                 lufs_target: -16.0,
-                radio: false,
-                radio_amount: 1.0,
+                radio: strength == 3,
+                radio_amount: 0.2,
             },
 
             (Category::Voice, ProcessingMode::Studio) => Self {
@@ -227,7 +223,7 @@ impl ProcessConfig {
 
                 // Noise reduction
                 denoiser_preset: strength,
-                dereverb: 0,
+                dereverb: strength,
                 spectral_gate: 0,
                 declick: true,
                 depeak: false,
@@ -250,9 +246,9 @@ impl ProcessConfig {
 
                 // Saturation
                 saturation_enabled: true,
-                saturation_preset: strength,
-                tape_enabled: false,
-                tape_preset: strength,
+                saturation_preset: 1,
+                tape_enabled: strength >= 2,
+                tape_preset: strength - 1,
                 buttercomp_enabled: true,
                 buttercomp_preset: strength,
 
@@ -260,7 +256,7 @@ impl ProcessConfig {
                 output_enabled: true,
                 lufs_target: -14.0,
                 radio: true,
-                radio_amount: 1.0,
+                radio_amount: f32::from(strength) / f32::from(3.0),
             },
 
             // =================================================================
@@ -280,31 +276,31 @@ impl ProcessConfig {
                 denoiser_preset: strength,
                 dereverb: 0,
                 spectral_gate: 0,
-                declick: true,
+                declick: strength > 1,
                 depeak: false,
                 depeak_max_db: 18.0,
                 ai_denoise: false,
 
                 // Dynamics
-                expander_enabled: true,
+                expander_enabled: false,
                 expander_preset: strength,
                 compressor_enabled: true,
                 compressor_type: CompressorType::Peak,
-                compressor_preset: strength,
+                compressor_preset: 1,
 
                 // EQ
                 fixeq_enabled: true,
-                fixeq_preset: strength,
+                fixeq_preset: if strength > 2 { 1 } else { 0 },
                 deesser_enabled: true,
                 enhanceeq_enabled: true,
-                enhanceeq_preset: strength,
+                enhanceeq_preset: strength - 1,
 
                 // Saturation
-                saturation_enabled: strength >= 2,
+                saturation_enabled: false,
                 saturation_preset: strength,
                 tape_enabled: false,
                 tape_preset: strength,
-                buttercomp_enabled: strength >= 2,
+                buttercomp_enabled: false,
                 buttercomp_preset: strength,
 
                 // Output
@@ -326,7 +322,7 @@ impl ProcessConfig {
 
                 // Noise reduction
                 denoiser_preset: strength,
-                dereverb: 0,
+                dereverb: 1,
                 spectral_gate: 0,
                 declick: true,
                 depeak: false,
@@ -335,31 +331,31 @@ impl ProcessConfig {
 
                 // Dynamics
                 expander_enabled: true,
-                expander_preset: strength,
+                expander_preset: 1,
                 compressor_enabled: true,
-                compressor_type: CompressorType::Fet,
-                compressor_preset: strength,
+                compressor_type: CompressorType::Peak,
+                compressor_preset: 2,
 
                 // EQ
                 fixeq_enabled: true,
-                fixeq_preset: strength,
+                fixeq_preset: 2,
                 deesser_enabled: true,
                 enhanceeq_enabled: false,
-                enhanceeq_preset: strength,
+                enhanceeq_preset: 1,
 
                 // Saturation
                 saturation_enabled: true,
-                saturation_preset: strength,
+                saturation_preset: 1,
                 tape_enabled: false,
                 tape_preset: strength,
                 buttercomp_enabled: true,
-                buttercomp_preset: strength,
+                buttercomp_preset: 1,
 
                 // Output
                 output_enabled: true,
                 lufs_target: -14.0,
-                radio: false,
-                radio_amount: 1.0,
+                radio: true,
+                radio_amount: 0.2,
             },
         }
     }
