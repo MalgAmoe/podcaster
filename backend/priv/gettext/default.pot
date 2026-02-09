@@ -473,11 +473,6 @@ msgstr ""
 msgid "tasty audio"
 msgstr ""
 
-#: lib/poddyclip_backend_web/controllers/page_html/help.html.heex:44
-#, elixir-autogen, elixir-format
-msgid "AI Clean uses deep learning to isolate voice from everything else. It's great for removing complex background noise like traffic, fans, or multiple speakers. It takes longer to process but produces cleaner results for noisy recordings."
-msgstr ""
-
 #: lib/poddyclip_backend_web/controllers/page_html/help.html.heex:4
 #, elixir-autogen, elixir-format
 msgid "Answers to common questions about Munchy Cow"
@@ -752,4 +747,9 @@ msgstr ""
 #: lib/poddyclip_backend_web/live/account_live.html.heex:230
 #, elixir-autogen, elixir-format
 msgid "Subscription time is used first"
+msgstr ""
+
+#: lib/poddyclip_backend_web/controllers/page_html/help.html.heex:44
+#, elixir-autogen, elixir-format
+msgid "AI Clean uses deep learning to isolate voice from everything else. It's great for removing complex background noise like traffic, music, or fans. It takes longer to process but produces cleaner results for noisy recordings."
 msgstr ""

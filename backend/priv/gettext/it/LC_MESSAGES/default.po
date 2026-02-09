@@ -473,11 +473,6 @@ msgstr "mese"
 msgid "tasty audio"
 msgstr "audio saporito"
 
-#: lib/poddyclip_backend_web/controllers/page_html/help.html.heex:44
-#, elixir-autogen, elixir-format
-msgid "AI Clean uses deep learning to isolate voice from everything else. It's great for removing complex background noise like traffic, fans, or multiple speakers. It takes longer to process but produces cleaner results for noisy recordings."
-msgstr "Pulizia IA usa il deep learning per isolare la voce da tutto il resto. È ottimo per rimuovere rumori di fondo complessi come traffico, ventilatori o più parlanti. Richiede più tempo per elaborare ma produce risultati più puliti per registrazioni rumorose."
-
 #: lib/poddyclip_backend_web/controllers/page_html/help.html.heex:4
 #, elixir-autogen, elixir-format
 msgid "Answers to common questions about Munchy Cow"
@@ -753,3 +748,8 @@ msgstr "Accumulane quanti ne vuoi"
 #, elixir-autogen, elixir-format
 msgid "Subscription time is used first"
 msgstr "Il tempo dell'abbonamento viene usato per primo"
+
+#: lib/poddyclip_backend_web/controllers/page_html/help.html.heex:44
+#, elixir-autogen, elixir-format
+msgid "AI Clean uses deep learning to isolate voice from everything else. It's great for removing complex background noise like traffic, music, or fans. It takes longer to process but produces cleaner results for noisy recordings."
+msgstr "Pulizia IA usa il deep learning per isolare la voce da tutto il resto. È ottimo per rimuovere rumori di fondo complessi come traffico, musica o ventilatori. Richiede più tempo per elaborare ma produce risultati più puliti per registrazioni rumorose."
