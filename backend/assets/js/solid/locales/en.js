@@ -15,11 +15,6 @@ export default {
   fileTooLarge: "File too large. Maximum size is 500MB.",
   uploadFirst: "Please upload a file first",
 
-  // Category toggle
-  whatProcessing: "What are you processing?",
-  voice: "Voice",
-  mixedAudio: "Mixed Audio",
-
   // AI Clean
   aiClean: "AI Clean",
   takesLonger: "Takes longer to process",

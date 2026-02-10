@@ -75,13 +75,7 @@ pub struct CreateS3JobRequest {
     pub user_id: Option<i64>,
     /// Original filename (for output naming)
     pub filename: Option<String>,
-    /// Legacy chain preset (deprecated, use category/mode/strength)
-    pub chain: Option<String>,
-    /// Audio category: "voice" or "mixed"
-    pub category: Option<String>,
-    /// Processing mode: "repair", "natural", or "studio"
-    pub mode: Option<String>,
-    /// Processing strength: 1-5
+    /// Processing strength: 1-3
     pub strength: Option<u8>,
     #[serde(default)]
     pub output_format: Option<String>,
@@ -188,27 +182,8 @@ pub async fn create_s3_job(
             .to_string()
     });
 
-    // Build ProcessConfig from request
-    // If category/mode/strength are provided, use dynamic builder
-    // Otherwise fall back to chain preset (legacy) or defaults
-    let mut config = if req.category.is_some() || req.mode.is_some() || req.strength.is_some() {
-        ProcessConfig::from_dynamic(
-            req.category.as_deref(),
-            req.strength,
-        )
-    } else if let Some(ref chain_name) = req.chain {
-        // Legacy chain preset support
-        if !state.config.chains_dir.join(format!("{}.toml", chain_name)).exists() {
-            return Err(ApiError::ChainNotFound(chain_name.clone()));
-        }
-        ProcessConfig {
-            chain: req.chain,
-            ..ProcessConfig::default()
-        }
-    } else {
-        // Default to voice/natural/3
-        ProcessConfig::from_dynamic(None, None)
-    };
+    // Build ProcessConfig from strength
+    let mut config = ProcessConfig::from_strength(req.strength);
 
     // Apply output format settings
     config.output_format = match req.output_format.as_deref() {
@@ -254,7 +229,6 @@ pub async fn create_s3_job(
 
     // Spawn processing task
     let state_clone = state.clone();
-    let chains_dir = state.config.chains_dir.clone();
     let job_timeout = state.config.job_timeout_seconds;
     let filename_for_upload = filename.clone();
     let webhook_client = state.webhook.clone();
@@ -363,7 +337,6 @@ pub async fn create_s3_job(
                     &mut samples,
                     metadata.sample_rate,
                     &config,
-                    &chains_dir,
                     Some(progress_callback),
                 )?;
 

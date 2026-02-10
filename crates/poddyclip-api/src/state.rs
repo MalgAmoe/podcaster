@@ -1,5 +1,4 @@
 use dashmap::DashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use uuid::Uuid;
@@ -27,7 +26,6 @@ pub struct AppConfig {
     pub max_file_size_mb: usize,
     pub job_timeout_seconds: u64,
     pub result_retention_seconds: u64,
-    pub chains_dir: PathBuf,
     pub port: u16,
     pub api_key: Option<String>,
     /// Comma-separated list of allowed CORS origins. Empty = allow any (dev mode).
@@ -40,7 +38,6 @@ impl Default for AppConfig {
             max_file_size_mb: DEFAULT_MAX_FILE_SIZE_MB,
             job_timeout_seconds: 600,
             result_retention_seconds: 3600,
-            chains_dir: PathBuf::from("chains"),
             port: 3000,
             api_key: None,
             cors_origins: None, // None = allow any (dev mode)
@@ -63,9 +60,6 @@ impl AppConfig {
                 .ok()
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(3600),
-            chains_dir: std::env::var("CHAINS_DIR")
-                .map(PathBuf::from)
-                .unwrap_or_else(|_| PathBuf::from("chains")),
             port: std::env::var("PORT")
                 .ok()
                 .and_then(|s| s.parse().ok())

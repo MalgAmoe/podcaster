@@ -29,9 +29,6 @@ pub enum ApiError {
     #[error("Processing error: {0}")]
     ProcessingError(String),
 
-    #[error("Chain preset not found: {0}")]
-    ChainNotFound(String),
-
     #[error("Internal error: {0}")]
     Internal(String),
 }
@@ -56,11 +53,6 @@ impl IntoResponse for ApiError {
             ApiError::ProcessingError(m) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "processing_error", m.clone())
             }
-            ApiError::ChainNotFound(n) => (
-                StatusCode::NOT_FOUND,
-                "chain_not_found",
-                format!("Chain '{}' not found", n),
-            ),
             ApiError::Internal(m) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal_error", m.clone())
             }

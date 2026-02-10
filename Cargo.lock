@@ -2902,7 +2902,6 @@ dependencies = [
  "symphonia",
  "thiserror 2.0.17",
  "tokio",
- "toml 0.8.23",
  "tower",
  "tower-http",
  "tracing",

@@ -15,11 +15,6 @@ export default {
   fileTooLarge: "Fichier trop volumineux. Taille maximale : 500 Mo.",
   uploadFirst: "Veuillez d'abord télécharger un fichier",
 
-  // Category toggle
-  whatProcessing: "Que traitez-vous ?",
-  voice: "Voix",
-  mixedAudio: "Audio Mixte",
-
   // AI Clean
   aiClean: "Nettoyage IA",
   takesLonger: "Prend plus de temps",

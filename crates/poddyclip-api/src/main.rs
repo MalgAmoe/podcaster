@@ -17,7 +17,7 @@ use tower_http::{
 use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use poddyclip_api::handlers::{create_s3_job, delete_job, health, list_presets};
+use poddyclip_api::handlers::{create_s3_job, delete_job, health};
 use poddyclip_api::openobserve::{OpenObserveConfig, OpenObserveLayer};
 use poddyclip_api::require_api_key;
 use poddyclip_api::state::{AppConfig, AppState};
@@ -59,7 +59,6 @@ async fn main() {
     info!("  Max file size: {} MB", config.max_file_size_mb);
     info!("  Job timeout: {}s", config.job_timeout_seconds);
     info!("  Result retention: {}s", config.result_retention_seconds);
-    info!("  Chains directory: {}", config.chains_dir.display());
 
     // Initialize S3 storage if configured
     let storage = match StorageConfig::from_env() {
@@ -107,8 +106,7 @@ async fn main() {
 
     // Public routes
     let public_routes = Router::new()
-        .route("/health", get(health))
-        .route("/presets", get(list_presets));
+        .route("/health", get(health));
 
     // Configure CORS based on CORS_ORIGINS env var
     // - Not set or empty: allow any origin (dev mode)

@@ -1,7 +1,5 @@
 //! Audio processing engine - adapts CLI processing chain for API use
 
-use std::path::Path;
-
 use anyhow::Result;
 use thiserror::Error;
 use tracing::{debug, info, warn};
@@ -30,7 +28,6 @@ use poddyclip::saturation::get_saturation_preset;
 use poddyclip::traits::{Stereo, StereoProcessor};
 
 use crate::models::ProcessConfig;
-use crate::processing::chain::{load_chain, ChainPreset};
 
 /// Error returned when a job is cancelled
 #[derive(Debug, Error)]
@@ -71,7 +68,6 @@ pub fn process_audio(
     samples: &mut Vec<Vec<f32>>,
     sample_rate: u32,
     config: &ProcessConfig,
-    chains_dir: &Path,
     on_progress: Option<ProgressCallback>,
 ) -> Result<()> {
     let is_stereo = samples.len() >= 2;
@@ -84,15 +80,7 @@ pub fn process_audio(
         Ok(())
     };
 
-    // Load chain preset if specified (overrides individual settings)
-    let effective_config = if let Some(chain_name) = &config.chain {
-        let chain = load_chain(chain_name, chains_dir)
-            .map_err(|e| anyhow::anyhow!("Failed to load chain: {}", e))?;
-        info!("Using chain preset: {}", chain_name);
-        config_from_chain(&chain, config)
-    } else {
-        config.clone()
-    };
+    let effective_config = config.clone();
 
     let duration_secs = samples[0].len() as f32 / sample_rate as f32;
     info!(
@@ -541,45 +529,6 @@ pub fn process_audio(
     }
 
     Ok(())
-}
-
-/// Create effective ProcessConfig from chain preset, keeping some overrides from request
-fn config_from_chain(chain: &ChainPreset, request: &ProcessConfig) -> ProcessConfig {
-    ProcessConfig {
-        // Keep output format and bitrate from request
-        output_format: request.output_format,
-        mp3_bitrate: request.mp3_bitrate,
-        // Chain name (already resolved)
-        chain: None,
-        // Values from chain preset
-        denoiser_preset: chain.denoiser,
-        dereverb: chain.dereverb,
-        spectral_gate: chain.spectral_gate,
-        filters_enabled: true,
-        hp_slope: 24,
-        hp_cutoff: 90.0, // Voice default
-        declick: false, // Always off for API (offline only)
-        peakcomp_enabled: chain.peakcomp.is_enabled(),
-        peakcomp_preset: chain.peakcomp.preset().unwrap_or(3),
-        fetcomp_enabled: chain.fetcomp.is_enabled(),
-        fetcomp_preset: chain.fetcomp.preset().unwrap_or(3),
-        fixeq_enabled: chain.fixeq.is_enabled(),
-        fixeq_preset: chain.fixeq.preset().unwrap_or(3),
-        deesser_enabled: chain.deesser,
-        saturation_enabled: chain.saturation.is_enabled(),
-        saturation_preset: chain.saturation.preset().unwrap_or(3),
-        buttercomp_enabled: chain.buttercomp.is_enabled(),
-        buttercomp_preset: chain.buttercomp.preset().unwrap_or(3),
-        enhanceeq_enabled: chain.enhanceeq.is_enabled(),
-        enhanceeq_preset: chain.enhanceeq.preset().unwrap_or(3),
-        tape_enabled: chain.tape.is_enabled(),
-        tape_preset: chain.tape.preset().unwrap_or(3),
-        output_enabled: chain.output.is_enabled(),
-        lufs_target: chain.output.lufs_target().unwrap_or(-16.0),
-        radio: chain.radio,
-        radio_amount: chain.radio_amount,
-        ai_denoise: false, // Chain presets don't include AI denoise by default
-    }
 }
 
 /// Get total number of processing stages

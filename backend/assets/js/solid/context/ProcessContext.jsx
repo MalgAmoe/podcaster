@@ -21,11 +21,10 @@ export function ProcessProvider(props) {
     uploadState: "idle", // idle, uploading, ready, error
     estimatedSeconds: null, // Detected audio duration in seconds
     submitting: false, // Prevents double-submit
-    // Processing configuration - each category stores its own strength
+    // Processing configuration
     processingConfig: {
-      category: "voice", // "voice" | "mixed"
-      voice: { strength: 2, aiClean: false },
-      mixed: { strength: 2, aiClean: false }
+      strength: 2,
+      aiClean: false,
     },
     job: null,
   });
@@ -247,23 +246,17 @@ export function ProcessProvider(props) {
   }
 
   // Processing config actions
-  function setCategory(category) {
-    setStore("processingConfig", "category", category);
-  }
-
   function setStrength(strength) {
-    const cat = store.processingConfig.category;
-    setStore("processingConfig", cat, "strength", Math.max(1, Math.min(3, strength)));
+    setStore("processingConfig", "strength", Math.max(1, Math.min(3, strength)));
   }
 
   function setAiClean(enabled) {
-    const cat = store.processingConfig.category;
-    setStore("processingConfig", cat, "aiClean", enabled);
+    setStore("processingConfig", "aiClean", enabled);
   }
 
   // Computed helpers for current config
-  const currentStrength = () => store.processingConfig[store.processingConfig.category].strength;
-  const currentAiClean = () => store.processingConfig[store.processingConfig.category].aiClean;
+  const currentStrength = () => store.processingConfig.strength;
+  const currentAiClean = () => store.processingConfig.aiClean;
 
   async function submitJob() {
     if (!store.s3Key || !store.filename) {
@@ -276,15 +269,11 @@ export function ProcessProvider(props) {
     setStore("submitting", true);
 
     try {
-      const cat = store.processingConfig.category;
-      const catConfig = store.processingConfig[cat];
       const config = {
-        category: cat,
-        strength: catConfig.strength,
-        // Only send ai_clean for voice category where it can be toggled
-        ai_clean: cat === "voice" ? catConfig.aiClean : undefined,
+        strength: store.processingConfig.strength,
+        ai_clean: store.processingConfig.aiClean,
         // Send duration for billing (default to 60s if not detected)
-        duration_seconds: store.estimatedSeconds || 60
+        duration_seconds: store.estimatedSeconds || 60,
       };
       const job = await api.createJob(store.s3Key, store.filename, config);
       setStore({ job });
@@ -367,7 +356,6 @@ export function ProcessProvider(props) {
   const value = {
     store,
     uploadFile,
-    setCategory,
     setStrength,
     setAiClean,
     currentStrength,

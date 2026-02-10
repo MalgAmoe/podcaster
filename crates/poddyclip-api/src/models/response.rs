@@ -9,17 +9,6 @@ pub struct ProcessResponse {
 }
 
 #[derive(Debug, Serialize)]
-pub struct PresetInfo {
-    pub name: String,
-    pub description: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct PresetsResponse {
-    pub chain_presets: Vec<PresetInfo>,
-}
-
-#[derive(Debug, Serialize)]
 pub struct HealthResponse {
     pub status: String,
     pub version: String,

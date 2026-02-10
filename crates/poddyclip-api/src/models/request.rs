@@ -9,23 +9,6 @@ pub enum OutputFormat {
     Mp3,
 }
 
-/// Audio category - determines filter settings
-#[derive(Debug, Clone, Copy, Deserialize, Default, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum Category {
-    #[default]
-    Voice,
-    Mixed,
-}
-
-/// Processing mode - determines the overall processing approach
-#[derive(Debug, Clone, Copy, Deserialize, Default, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum ProcessingMode {
-    #[default]
-    Natural,
-}
-
 /// Configuration for audio processing - mirrors CLI arguments
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -33,9 +16,6 @@ pub struct ProcessConfig {
     // Output format
     pub output_format: OutputFormat,
     pub mp3_bitrate: u32,
-
-    // Chain preset (overrides individual settings)
-    pub chain: Option<String>,
 
     // Denoiser (always enabled)
     pub denoiser_preset: u8,
@@ -92,13 +72,12 @@ impl Default for ProcessConfig {
         Self {
             output_format: OutputFormat::Mp3,
             mp3_bitrate: 192,
-            chain: None,
             denoiser_preset: 1,
             dereverb: 0,
             spectral_gate: 0,
             filters_enabled: true,
             hp_slope: 24,
-            hp_cutoff: 90.0, // Voice default
+            hp_cutoff: 90.0,
             declick: false,
             peakcomp_enabled: true,
             peakcomp_preset: 2,
@@ -119,122 +98,59 @@ impl Default for ProcessConfig {
             lufs_target: -16.0,
             radio: false,
             radio_amount: 1.0,
-            ai_denoise: false, // Off by default, enabled in Repair mode
+            ai_denoise: false,
         }
     }
 }
 
 impl ProcessConfig {
-    /// Build a ProcessConfig from dynamic category/mode/strength parameters.
-    /// This replaces the chain preset system with a more intuitive UI.
-    pub fn from_dynamic(category: Option<&str>, strength: Option<u8>) -> Self {
-        let category = match category {
-            Some("mixed") => Category::Mixed,
-            _ => Category::Voice,
-        };
-        let _mode = ProcessingMode::Natural; // Only natural mode supported
+    /// Build a ProcessConfig from a strength parameter (1-3).
+    /// Voice-only processing pipeline.
+    pub fn from_strength(strength: Option<u8>) -> Self {
         let strength = strength.unwrap_or(2).clamp(1, 3);
 
-        Self::build_config(category, strength)
-    }
+        Self {
+            output_format: OutputFormat::Mp3,
+            mp3_bitrate: 192,
 
-    fn build_config(category: Category, strength: u8) -> Self {
-        match category {
-            // =================================================================
-            // VOICE CONFIG
-            // =================================================================
-            Category::Voice => Self {
-                output_format: OutputFormat::Mp3,
-                mp3_bitrate: 192,
-                chain: None,
+            // Filters
+            filters_enabled: true,
+            hp_slope: 24,
+            hp_cutoff: 90.0,
 
-                // Filters
-                filters_enabled: true,
-                hp_slope: 24,
-                hp_cutoff: 90.0,
+            // Noise reduction
+            denoiser_preset: strength,
+            dereverb: if strength == 3 { 3 } else { strength - 1 },
+            spectral_gate: 0,
+            declick: strength > 1,
+            ai_denoise: false,
 
-                // Noise reduction
-                denoiser_preset: strength,
-                dereverb: if strength == 3 { 3 } else { strength - 1},
-                spectral_gate: 0,
-                declick: strength > 1,
-                ai_denoise: false,
+            // Dynamics
+            peakcomp_enabled: true,
+            peakcomp_preset: strength,
+            fetcomp_enabled: true,
+            fetcomp_preset: strength,
 
-                // Dynamics
-                peakcomp_enabled: true,
-                peakcomp_preset: strength,
-                fetcomp_enabled: true,
-                fetcomp_preset: strength,
+            // EQ
+            fixeq_enabled: strength >= 2,
+            fixeq_preset: 1,
+            deesser_enabled: true,
+            enhanceeq_enabled: true,
+            enhanceeq_preset: strength,
 
-                // EQ
-                fixeq_enabled: strength >= 2,
-                fixeq_preset: 1,
-                deesser_enabled: true,
-                enhanceeq_enabled: true,
-                enhanceeq_preset: strength,
+            // Saturation
+            saturation_enabled: strength == 2,
+            saturation_preset: 1,
+            tape_enabled: strength == 3,
+            tape_preset: 2,
+            buttercomp_enabled: strength > 1,
+            buttercomp_preset: strength - 1,
 
-                // Saturation
-                saturation_enabled: strength == 2,
-                saturation_preset: 1,
-                tape_enabled: strength == 3,
-                tape_preset: 2,
-                buttercomp_enabled: strength > 1,
-                buttercomp_preset: strength - 1,
-
-                // Output
-                output_enabled: true,
-                lufs_target: -16.0,
-                radio: strength == 3,
-                radio_amount: 1.0,
-            },
-
-            // =================================================================
-            // MIXED AUDIO CONFIG (gentler, different HP)
-            // =================================================================
-            Category::Mixed => Self {
-                output_format: OutputFormat::Mp3,
-                mp3_bitrate: 192,
-                chain: None,
-
-                // Filters - gentler for mixed content
-                filters_enabled: true,
-                hp_slope: 24,
-                hp_cutoff: 65.0,
-
-                // Noise reduction
-                denoiser_preset: strength,
-                dereverb: if strength >= 2 { strength - 1 } else { 0 },
-                spectral_gate: strength - 1,
-                declick: strength > 1,
-                ai_denoise: false,
-
-                // Dynamics
-                peakcomp_enabled: strength >= 2,
-                peakcomp_preset: strength - 1,
-                fetcomp_enabled: strength >= 2,
-                fetcomp_preset: strength - 1,
-
-                // EQ
-                fixeq_enabled: strength >= 2,
-                fixeq_preset: 1,
-                deesser_enabled: true,
-                enhanceeq_enabled: true,
-                enhanceeq_preset: 1,
-
-                // Saturation
-                saturation_enabled: strength == 1,
-                saturation_preset: 1,
-                tape_enabled: strength >= 2,
-                tape_preset: strength - 1,
-                buttercomp_enabled: strength == 3,
-                buttercomp_preset: 1,
-
-                // Output
-                output_enabled: true,
-                lufs_target: -16.0,
-                radio: strength == 3,
-                radio_amount: 0.3,
-            },
+            // Output
+            output_enabled: true,
+            lufs_target: -16.0,
+            radio: strength == 3,
+            radio_amount: 1.0,
         }
     }
 }
