@@ -22,10 +22,10 @@ export default {
 
   // AI Clean
   aiClean: "Pulizia IA",
-  takesLonger: "Richiede piu tempo",
+  takesLonger: "Richiede più tempo",
 
   // Strength knob
-  strength: "Intensita",
+  strength: "Intensità",
   subtle: "Leggera",
   balanced: "Bilanciata",
   intense: "Intensa",
@@ -45,17 +45,17 @@ export default {
 
   // Job complete
   mooo: "MUUU!",
-  audioReady: "Il tuo audio e pronto!",
+  audioReady: "Il tuo audio è pronto!",
   original: "Originale",
   processed: "Elaborato",
   download: "Scarica",
   downloadProcessedAudio: "Scarica audio elaborato",
-  feedMeMore: "Dammi di piu!",
+  feedMeMore: "Dammi di più!",
   uploadAnotherFile: "Carica un altro file",
   audioComparison: "Confronto audio",
 
   // Job failed
-  cowChoked: "La mucca si e strozzata!",
+  cowChoked: "La mucca si è strozzata!",
   feedHerAgain: "Dalla di nuovo",
 
   // Past munchings
@@ -81,7 +81,7 @@ export default {
   formatNotSupported: "Formato audio non supportato. Prova a convertire in WAV o MP3.",
   noAudioFound: "Nessun audio trovato nel file.",
   couldNotReadFile: "Impossibile leggere il file audio. Potrebbe essere corrotto.",
-  processingTooLong: "L'elaborazione ha impiegato troppo tempo. Prova con un file piu corto.",
+  processingTooLong: "L'elaborazione ha impiegato troppo tempo. Prova con un file più corto.",
   couldNotAccessFile: "Impossibile accedere al file. Ricaricalo.",
   failedToCreateOutput: "Impossibile creare il file di output.",
 
@@ -98,9 +98,6 @@ export default {
     denoise: "Pulizia rumore...",
     ai_denoise: "Pulizia IA della voce...",
     spectral_gate: "Silenziamento parti quiete...",
-    analyzing_peaks: "Ricerca toni aspri...",
-    peak_attenuation: "Ammorbidimento toni aspri...",
-    expander: "Apertura dinamiche...",
     peakcomp: "Livellamento...",
     analyzing_eq: "Controllo del tono...",
     fixeq: "Correzione zone fangose...",
@@ -114,7 +111,6 @@ export default {
     tape: "Aggiunta sensazione analogica...",
     analyzing_levels: "Misurazione volume...",
     output: "Limitazione finale...",
-    encoding: "Salvataggio file...",
     completed: "Fatto!"
   }
 };

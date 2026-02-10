@@ -15,7 +15,7 @@ use uuid::Uuid;
 use crate::audio::{decode_audio, encode_mp3, encode_wav};
 use crate::error::ApiError;
 use crate::models::{Job, JobStatus, OutputFormat, ProcessConfig, ProcessResponse};
-use crate::processing::{process_audio, CancelledError};
+use crate::processing::{get_total_stages, process_audio, CancelledError};
 use crate::state::AppState;
 use crate::storage::Storage;
 
@@ -341,7 +341,7 @@ pub async fn create_s3_job(
                     }
 
                     let adjusted_index = index + 1; // +1 for "waiting" stage
-                    debug!("Job {} progress: {} ({}/25)", job_id, stage, adjusted_index);
+                    debug!("Job {} progress: {} ({}/{})", job_id, stage, adjusted_index, get_total_stages());
                     progress_state.update_job(&job_id, |j| {
                         j.progress.update(stage, adjusted_index);
                         j.updated_at = now();
@@ -420,7 +420,7 @@ pub async fn create_s3_job(
                     }
                     j.result_content_type = Some(content_type);
                     j.result_s3_key = s3_key;
-                    j.progress.update("completed", 25);
+                    j.progress.update("completed", get_total_stages() + 1);
                     j.updated_at = now();
                 });
 

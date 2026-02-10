@@ -55,23 +55,23 @@ impl RadioTarget {
         const BASS_LOW: f32 = 60.0;
         const BASS_HIGH: f32 = 200.0;
         const BASS_CENTER: f32 = 120.0;
-        const BASS_BOOST: f32 = 3.0;      // +3 dB shelf boost
+        const BASS_BOOST: f32 = 0.0;
 
         const MUD_LOW: f32 = 300.0;
         const MUD_HIGH: f32 = 600.0;
         const MUD_CENTER: f32 = 400.0;
-        const MUD_DIP: f32 = -3.0;        // -3 dB scoop
+        const MUD_DIP: f32 = 0.0;
 
         const MID_LOW: f32 = 600.0;
-        const MID_HIGH: f32 = 3000.0;
+        const MID_HIGH: f32 = 2000.0;
 
-        const PRESENCE_LOW: f32 = 3000.0;
+        const PRESENCE_LOW: f32 = 2000.0;
         const PRESENCE_HIGH: f32 = 5000.0;
-        const PRESENCE_CENTER: f32 = 4000.0;
-        const PRESENCE_BUMP: f32 = 3.0;   // +3 dB boost
+        const PRESENCE_CENTER: f32 = 3500.0;
+        const PRESENCE_BUMP: f32 = 0.0;
 
         const AIR_LOW: f32 = 8000.0;
-        const AIR_SHELF: f32 = 2.0;       // +2 dB shelf (gentle, voice has little HF)
+        const AIR_SHELF: f32 = 0.0;
 
         for bin in 0..num_bins {
             let freq = bin as f32 * bin_freq;
@@ -199,25 +199,25 @@ mod tests {
         let hz120_bin = (120.0 / bin_freq).round() as usize;
 
         assert!(
-            target.curve_db[hz30_bin] < target.curve_db[hz120_bin] - 10.0,
-            "30Hz should be >10dB below 120Hz (bass zone)"
+            target.curve_db[hz30_bin] < target.curve_db[hz120_bin] - 6.0,
+            "30Hz ({:.1} dB) should be >6dB below 120Hz ({:.1} dB) due to rumble rolloff",
+            target.curve_db[hz30_bin], target.curve_db[hz120_bin]
         );
     }
 
     #[test]
-    fn test_hyped_bass_boost() {
+    fn test_bass_follows_voice_slope() {
         let target = RadioTarget::generate(120.0, 2049, 48000, 48000.0 / 4096.0);
         let bin_freq: f32 = 48000.0 / 4096.0;
 
-        // 120 Hz (bass boost center) should have a boost
+        // 120 Hz is in bass zone — with BASS_BOOST=0, should follow voice slope
         let hz120_bin = (120.0 / bin_freq).round() as usize;
+        let actual_freq = hz120_bin as f32 * bin_freq;
+        let voice_slope = -6.0 * (actual_freq / 1000.0_f32).log2();
 
-        // 120 Hz in bass boost zone should be boosted relative to voice slope alone
-        // (voice slope at 1kHz = 0 dB reference)
-        let bass_val = target.curve_db[hz120_bin];
-        let voice_at_120 = -6.0 * (120.0 / 1000.0_f32).log2();
-
-        // Bass should be boosted above just voice slope
-        assert!(bass_val > voice_at_120, "120Hz should be boosted: {} > {}", bass_val, voice_at_120);
+        // Should be within 0.1 dB of pure voice slope (no boost applied)
+        let diff = (target.curve_db[hz120_bin] - voice_slope).abs();
+        assert!(diff < 0.1, "120Hz ({:.2} dB) should match voice slope ({:.2} dB), diff={:.3}",
+            target.curve_db[hz120_bin], voice_slope, diff);
     }
 }

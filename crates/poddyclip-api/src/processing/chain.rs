@@ -16,10 +16,6 @@ pub struct ChainPreset {
     #[serde(default)]
     pub spectral_gate: u8,
     #[serde(default)]
-    pub depeak: bool,
-    #[serde(default)]
-    pub expander: ProcessorSetting,
-    #[serde(default)]
     pub peakcomp: ProcessorSetting,
     #[serde(default)]
     pub fetcomp: ProcessorSetting,

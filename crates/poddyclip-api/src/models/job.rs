@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::processing::get_total_stages;
 use super::ProcessConfig;
 
 #[derive(Debug, Clone, Serialize)]
@@ -63,7 +64,7 @@ impl JobProgress {
         Self {
             stage: "queued".to_string(),
             stage_index: 0,
-            total_stages: 25, // +1 for "waiting" stage
+            total_stages: get_total_stages() + 1, // +1 for "waiting" stage
             percent_complete: 0,
         }
     }

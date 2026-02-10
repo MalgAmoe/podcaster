@@ -43,8 +43,6 @@ pub struct ProcessConfig {
     // Optional spectral processors
     pub dereverb: u8,
     pub spectral_gate: u8,
-    pub depeak: bool,
-    pub depeak_max_db: f32,
 
     // Filters
     pub filters_enabled: bool,
@@ -55,9 +53,6 @@ pub struct ProcessConfig {
     pub declick: bool,
 
     // Dynamics
-    pub expander_enabled: bool,
-    pub expander_preset: u8,
-
     pub peakcomp_enabled: bool,
     pub peakcomp_preset: u8,
     pub fetcomp_enabled: bool,
@@ -101,14 +96,10 @@ impl Default for ProcessConfig {
             denoiser_preset: 1,
             dereverb: 0,
             spectral_gate: 0,
-            depeak: false,
-            depeak_max_db: 18.0,
             filters_enabled: true,
             hp_slope: 24,
             hp_cutoff: 90.0, // Voice default
             declick: false,
-            expander_enabled: false,
-            expander_preset: 2,
             peakcomp_enabled: true,
             peakcomp_preset: 2,
             fetcomp_enabled: false,
@@ -164,20 +155,16 @@ impl ProcessConfig {
 
                 // Noise reduction
                 denoiser_preset: strength,
-                dereverb: strength - 1,
+                dereverb: if strength == 3 { 3 } else { strength - 1},
                 spectral_gate: 0,
                 declick: strength > 1,
-                depeak: false,
-                depeak_max_db: 18.0,
                 ai_denoise: false,
 
                 // Dynamics
-                expander_enabled: false,
-                expander_preset: strength,
                 peakcomp_enabled: true,
                 peakcomp_preset: strength,
-                fetcomp_enabled: strength == 3,
-                fetcomp_preset: strength - 2,
+                fetcomp_enabled: true,
+                fetcomp_preset: strength,
 
                 // EQ
                 fixeq_enabled: strength >= 2,
@@ -187,10 +174,10 @@ impl ProcessConfig {
                 enhanceeq_preset: strength,
 
                 // Saturation
-                saturation_enabled: strength >= 2,
-                saturation_preset: strength - 1,
-                tape_enabled: false,
-                tape_preset: strength,
+                saturation_enabled: strength == 2,
+                saturation_preset: 1,
+                tape_enabled: strength == 3,
+                tape_preset: 2,
                 buttercomp_enabled: strength > 1,
                 buttercomp_preset: strength - 1,
 
@@ -198,7 +185,7 @@ impl ProcessConfig {
                 output_enabled: true,
                 lufs_target: -16.0,
                 radio: strength == 3,
-                radio_amount: 0.2,
+                radio_amount: 1.0,
             },
 
             // =================================================================
@@ -219,13 +206,9 @@ impl ProcessConfig {
                 dereverb: if strength >= 2 { strength - 1 } else { 0 },
                 spectral_gate: strength - 1,
                 declick: strength > 1,
-                depeak: false,
-                depeak_max_db: 18.0,
                 ai_denoise: false,
 
                 // Dynamics
-                expander_enabled: false,
-                expander_preset: strength,
                 peakcomp_enabled: strength >= 2,
                 peakcomp_preset: strength - 1,
                 fetcomp_enabled: strength >= 2,

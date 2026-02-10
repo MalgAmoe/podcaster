@@ -98,9 +98,6 @@ export default {
     denoise: "Cleaning up noise...",
     ai_denoise: "AI cleaning voice...",
     spectral_gate: "Gating quiet parts...",
-    analyzing_peaks: "Finding harsh tones...",
-    peak_attenuation: "Smoothing harsh tones...",
-    expander: "Opening up dynamics...",
     peakcomp: "Leveling out...",
     analyzing_eq: "Checking the tone...",
     fixeq: "Fixing muddy spots...",
@@ -114,7 +111,6 @@ export default {
     tape: "Adding analog feel...",
     analyzing_levels: "Measuring loudness...",
     output: "Final limiting...",
-    encoding: "Saving your file...",
     completed: "Done!"
   }
 };

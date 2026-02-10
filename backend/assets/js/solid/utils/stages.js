@@ -14,9 +14,6 @@ const STAGE_KEYS = {
   "denoise": "stages.denoise",
   "ai_denoise": "stages.ai_denoise",
   "spectral_gate": "stages.spectral_gate",
-  "analyzing_peaks": "stages.analyzing_peaks",
-  "peak_attenuation": "stages.peak_attenuation",
-  "expander": "stages.expander",
   "peakcomp": "stages.peakcomp",
   "analyzing_eq": "stages.analyzing_eq",
   "fixeq": "stages.fixeq",
@@ -30,7 +27,6 @@ const STAGE_KEYS = {
   "tape": "stages.tape",
   "analyzing_levels": "stages.analyzing_levels",
   "output": "stages.output",
-  "encoding": "stages.encoding",
   "completed": "stages.completed"
 };
 

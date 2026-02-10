@@ -26,7 +26,7 @@ case "${1:-}" in
         ;;
     api)
         echo -e "${GREEN}Starting Rust API (release build)...${NC}"
-        cargo run --release -p poddyclip-api
+        RUST_LOG=info,poddyclip_api::processing=debug cargo run --release -p poddyclip-api
         ;;
     web)
         echo -e "${GREEN}Starting Phoenix (with admin dashboard)...${NC}"

@@ -116,7 +116,7 @@ impl RadioFilterParams {
             let bass_count = (bass_high_bin - bass_low_bin + 1) as f32;
             let avg_bass_error = bass_sum / bass_count;
 
-            params.low_shelf_gain = avg_bass_error.clamp(-4.0, 6.0); // No bias, reasonable clamp
+            params.low_shelf_gain = avg_bass_error.clamp(-4.0, 0.0); // No bias, reasonable clamp
             params.low_shelf_freq = low_shelf_cutoff;
         }
 
