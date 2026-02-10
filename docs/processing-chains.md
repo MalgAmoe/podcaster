@@ -1,22 +1,13 @@
-# Audio Processing Chains
+# Audio Processing Pipeline
 
 ## Overview
 
-Chains are TOML configuration files that define which processors to apply and at what intensity. They live in the `chains/` directory.
+The processing pipeline is configured via **strength** (1-3) and an optional **AI Clean** toggle. The strength maps to processor settings in `ProcessConfig::from_strength()`.
 
 ## Web UI Configuration
 
-The web interface uses a simplified configuration:
-
-- **Category**: `voice` or `mixed`
-- **Mode**: `natural` or `studio`
 - **Strength**: 1-3 (Subtle, Balanced, Intense)
-- **AI Clean**: Optional toggle (voice category only) - isolates voice using deep learning
-
-This generates a `ProcessConfig` that feeds into the same processing pipeline as TOML chains.
-
-The logic that maps category/mode/strength to processor settings is in:
-`crates/poddyclip-api/src/models/request.rs` → `ProcessConfig::build_config()`
+- **AI Clean**: Optional toggle - isolates voice using deep learning
 
 ### API
 
@@ -25,53 +16,46 @@ POST /api/jobs
 {
   "s3_key": "inputs/123/audio.mp3",
   "filename": "episode.mp3",
-  "category": "voice",
-  "mode": "natural",
-  "strength": 3
+  "strength": 2,
+  "ai_clean": false
 }
 ```
 
 ---
 
-## Quick Answer: Can I Add Processors in Any Order?
+## Processing Order
 
-**No.** The processing order is **fixed and immutable**. Chains only control which processors are enabled and their intensity (preset 1-5). The engine always applies processors in the same sequence regardless of the order in your TOML file.
-
-This is intentional - audio processing order matters significantly for quality.
-
-## Fixed Processing Order
+The processing order is **fixed and immutable**. Strength controls which processors are enabled and their intensity.
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  1. INPUT STAGE                                             │
-│     └─ Filters (HP 80Hz + LP 15.5kHz)                       │
-│     └─ Input gain normalization (-18 LUFS target)           │
-│     └─ Declick (offline only)                               │
-├─────────────────────────────────────────────────────────────┤
-│  2. SPECTRAL (STFT-based, mono processing)                  │
-│     └─ DeReverb (optional)                                  │
-│     └─ Denoiser (always on)                                 │
-│     └─ Spectral Gate (optional)                             │
-│     └─ Peak Attenuator (optional)                           │
-├─────────────────────────────────────────────────────────────┤
-│  3. DYNAMICS                                                │
-│     └─ Expander / noise gate (optional)                     │
-│     └─ Compressor - Peak OR FET (optional)                  │
-├─────────────────────────────────────────────────────────────┤
-│  4. EQ & TONE                                               │
-│     └─ FixEQ - mud removal + correction (optional)          │
-│     └─ De-Esser (optional)                                  │
-│     └─ Saturation / Channel9 (optional)                     │
-│     └─ ButterComp (optional)                                │
-├─────────────────────────────────────────────────────────────┤
-│  5. ENHANCEMENT                                             │
-│     └─ EnhanceEQ OR RadioVoice (mutually exclusive)         │
-│     └─ TapeGlue (optional)                                  │
-├─────────────────────────────────────────────────────────────┤
-│  6. OUTPUT STAGE                                            │
-│     └─ LUFS normalization (optional)                        │
-│     └─ Limiter - true peak -1dB (paired with LUFS)          │
-└─────────────────────────────────────────────────────────────┘
+1. INPUT STAGE
+   - Filters (HP 80Hz + LP 15.5kHz)
+   - Input gain normalization (-18 LUFS target)
+   - Declick (offline only)
+
+2. SPECTRAL (STFT-based, mono processing)
+   - DeReverb (optional)
+   - Denoiser (always on)
+   - AI Denoise (optional, DeepFilterNet)
+   - Spectral Gate (optional)
+
+3. DYNAMICS
+   - Peak Compressor (look-ahead VCA)
+   - FET Compressor (feedback 1176-style)
+
+4. EQ & TONE
+   - FixEQ - mud removal + correction (optional)
+   - De-Esser (sibilance reduction)
+   - Saturation / Channel9 (optional)
+   - ButterComp (optional)
+
+5. ENHANCEMENT
+   - EnhanceEQ OR RadioVoice (mutually exclusive)
+   - TapeGlue (optional)
+
+6. OUTPUT STAGE
+   - LUFS normalization (-16 LUFS target)
+   - Limiter - true peak -1dB
 ```
 
 ## Why This Order?
@@ -80,182 +64,33 @@ This is intentional - audio processing order matters significantly for quality.
 |-------|--------|
 | Filters first | Remove rumble/hiss before analysis |
 | Denoiser before gate | Gate needs clean signal to detect speech vs noise |
-| Expander before compressor | Gate reduces noise, then compressor works on clean signal |
+| Compressor after gate | Compressor works on clean signal |
 | FixEQ before de-esser | Remove mud first, then target remaining sibilance |
 | Enhancement last | Boost presence after all corrective processing |
 | Limiter always last | Catch any peaks from cumulative gain |
 
-## Chain File Format
+## Strength Levels
 
-```toml
-name = "My Chain"
-description = "Optional description"
-
-# Spectral processors (1-5 intensity, false to disable)
-denoiser = 3        # Always enabled, controls intensity
-dereverb = 2        # Optional reverb removal
-spectral_gate = 0   # 0 or false = disabled
-depeak = false      # Tonal noise removal
-
-# Dynamics
-expander = 2                              # Noise gate
-compressor = { type = "peak", preset = 3 } # or type = "fet"
-
-# EQ & Tone
-fixeq = 3           # 1-5 preset level (or false to disable)
-deesser = true
-saturation = 2      # Channel9 warmth
-buttercomp = 3      # Airwindows compression
-
-# Enhancement
-enhanceeq = 3       # Presence/air boost
-tape = 2            # TapeGlue saturation
-radio = false       # true = use RadioVoice instead of EnhanceEQ
-
-# Output
-output = -16        # LUFS target (-14, -16, -18, -24)
-                    # false = disable normalization + limiter
-```
-
-## Preset Levels
-
-All preset-based processors use 1-5 scale:
-
-| Level | Name | Use Case |
-|-------|------|----------|
-| 1 | Gentle | Clean recordings, minimal intervention |
-| 2 | Light | Good recordings with minor issues |
-| 3 | Moderate | Average recordings (default) |
-| 4 | Strong | Problematic recordings |
-| 5 | Aggressive | Very noisy/problematic recordings |
-
-## Built-in Chains
-
-### gentle.toml
-```toml
-name = "Gentle"
-description = "Minimal processing, preserve dynamics"
-
-denoiser = 1
-expander = 1
-compressor = { type = "peak", preset = 1 }
-fixeq = 1
-deesser = true
-output = -18
-```
-
-### podcast.toml
-```toml
-name = "Podcast"
-description = "Balanced processing for conversational podcasts"
-
-denoiser = 3
-expander = 2
-compressor = { type = "peak", preset = 3 }
-fixeq = 3
-deesser = true
-saturation = 2
-buttercomp = 3
-enhanceeq = 3
-tape = 2
-output = -16
-```
-
-### broadcast.toml
-```toml
-name = "Broadcast"
-description = "Radio-ready, polished sound"
-
-denoiser = 4
-expander = 4
-compressor = { type = "fet", preset = 4 }
-fixeq = 4
-deesser = true
-saturation = 3
-buttercomp = 4
-enhanceeq = 5
-tape = 3
-output = -14
-```
-
-## Creating Custom Chains
-
-1. Create a new `.toml` file in `chains/`
-2. Set `name` (required) and `description` (optional)
-3. Configure processors - **omitted processors are disabled by default**
-4. Set output LUFS target (omit for no normalization)
-
-**Minimal chain (just denoising):**
-```toml
-name = "Denoise Only"
-denoiser = 3
-output = false  # No normalization
-```
-
-**Full custom chain:**
-```toml
-name = "Interview Cleanup"
-description = "For noisy interview recordings"
-
-# Heavy noise reduction
-denoiser = 4
-dereverb = 2
-spectral_gate = 3
-
-# Gentle dynamics
-expander = 2
-compressor = { type = "peak", preset = 2 }
-
-# Standard EQ
-fixeq = 2
-deesser = true
-
-# Light enhancement
-enhanceeq = 2
-
-# Podcast-standard output
-output = -16
-```
-
-## CLI Usage
-
-```bash
-# Use a chain
-poddyclip input.wav --chain podcast
-
-# Override chain settings
-poddyclip input.wav --chain podcast --preset 5  # Override denoiser to level 5
-
-# List available chains
-poddyclip --list-chains
-
-# Process without chain (uses defaults)
-poddyclip input.wav --preset 3
-```
-
-## Mutually Exclusive Options
-
-| Option A | Option B | Notes |
-|----------|----------|-------|
-| EnhanceEQ | RadioVoice | Set `radio = true` for RadioVoice |
-| Peak compressor | FET compressor | Set via `compressor.type` |
+| Level | Name | Description |
+|-------|------|-------------|
+| 1 | Subtle | Light touch, preserves dynamics |
+| 2 | Balanced | Good for most recordings (default) |
+| 3 | Intense | Heavy processing, broadcast-ready |
 
 ## Processor Categories
 
 ### STFT-Based (Spectral)
 - Denoiser, DeReverb, Spectral Gate, Peak Attenuator
 - Process L/R channels independently (no stereo linking)
-- May cause minor stereo artifacts on very different channels
 
 ### Sample-Based (Time Domain)
-- Expander, Compressors, EQ, Saturation, Limiter
+- Compressors, EQ, Saturation, Limiter
 - Can have stereo linking (shared detection)
 - Preserves stereo image better
 
 ## Best Practices
 
-1. **Start with a built-in chain** and adjust
-2. **Don't over-process** - if source is clean, use gentle/light settings
-3. **Match output LUFS to platform** (-14 YouTube, -16 podcasts, -24 film)
-4. **Test with headphones** - artifacts more audible
-5. **A/B compare** - toggle original vs processed frequently
+1. **Start with Balanced** (strength 2) and adjust
+2. **Don't over-process** - if source is clean, use Subtle
+3. **Enable AI Clean** for noisy recordings with non-voice sounds
+4. **A/B compare** - toggle original vs processed frequently

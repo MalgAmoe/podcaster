@@ -46,22 +46,6 @@ defmodule PoddyclipBackend.Processing.Client do
   end
 
   @doc """
-  List available processing presets.
-  """
-  def list_presets do
-    case Req.get("#{base_url()}/presets", receive_timeout: 10_000) do
-      {:ok, %{status: 200, body: body}} ->
-        {:ok, body}
-
-      {:ok, %{status: status, body: body}} ->
-        {:error, {:http_error, status, body}}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  @doc """
   Start processing a job using an S3 input key.
 
   This is the preferred method - the audio file is already in S3,
@@ -69,10 +53,8 @@ defmodule PoddyclipBackend.Processing.Client do
 
   ## Options
     * `:filename` - Original filename (for output naming)
-    * `:category` - Audio category: "voice" or "mixed" (default: "voice")
-    * `:mode` - Processing mode: "repair", "natural", or "studio" (default: "natural")
-    * `:strength` - Processing strength: 1-5 (default: 3)
-    * `:ai_clean` - Enable AI (DeepFilterNet) denoiser (nil = use default for mode)
+    * `:strength` - Processing strength: 1-3 (default: 2)
+    * `:ai_clean` - Enable AI (DeepFilterNet) denoiser (nil = use default)
     * `:output_format` - "wav" or "mp3" (default: "mp3")
     * `:mp3_bitrate` - Bitrate for MP3 output (default: 192)
   """
@@ -82,8 +64,7 @@ defmodule PoddyclipBackend.Processing.Client do
       input_s3_key: input_s3_key,
       user_id: Keyword.get(opts, :user_id),
       filename: Keyword.get(opts, :filename),
-      category: Keyword.get(opts, :category, "voice"),
-      strength: Keyword.get(opts, :strength, 3),
+      strength: Keyword.get(opts, :strength, 2),
       ai_clean: Keyword.get(opts, :ai_clean),
       output_format: Keyword.get(opts, :output_format, "mp3"),
       mp3_bitrate: Keyword.get(opts, :mp3_bitrate, 192),

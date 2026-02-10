@@ -11,28 +11,7 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   alias PoddyclipBackend.Storage
 
   # Valid parameter values for security validation
-  @valid_categories ~w(voice mixed)
-  @valid_strengths 1..5
-
-  @doc """
-  GET /api/presets - List available processing presets.
-  """
-  def presets(conn, _params) do
-    case Client.list_presets() do
-      {:ok, %{"chain_presets" => presets}} ->
-        json(conn, %{presets: Enum.map(presets, & &1["name"])})
-
-      {:ok, body} when is_map(body) ->
-        # Handle different response formats
-        presets = body["chain_presets"] || body["presets"] || []
-        names = Enum.map(presets, fn p -> p["name"] || p end)
-        json(conn, %{presets: names})
-
-      {:error, _reason} ->
-        # Fallback to default presets
-        json(conn, %{presets: ["podcast", "broadcast", "gentle"]})
-    end
-  end
+  @valid_strengths 1..3
 
   @doc """
   POST /api/presign-upload - Generate S3 presigned PUT URL.
@@ -76,7 +55,7 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   @doc """
   POST /api/jobs - Create a processing job.
 
-  Request: {"s3_key": "...", "filename": "...", "category": "voice", "mode": "natural", "strength": 3, "duration_seconds": 300}
+  Request: {"s3_key": "...", "filename": "...", "strength": 2, "ai_clean": false, "duration_seconds": 300}
   Response: {"id": 123, "status": "queued", "filename": "..."}
 
   The duration_seconds parameter is used to estimate seconds needed. If not provided,
@@ -86,12 +65,10 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
     user = conn.assigns.current_user
 
     # Validate processing parameters against whitelist
-    category = params["category"] || "voice"
-    strength = params["strength"] || 3
+    strength = params["strength"] || 2
 
-    with :ok <- validate_category(category),
-         :ok <- validate_strength(strength) do
-      create_job_validated(conn, user, s3_key, filename, params, category, strength)
+    with :ok <- validate_strength(strength) do
+      create_job_validated(conn, user, s3_key, filename, params, strength)
     else
       {:error, msg} ->
         conn
@@ -100,13 +77,10 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
     end
   end
 
-  defp validate_category(cat) when cat in @valid_categories, do: :ok
-  defp validate_category(cat), do: {:error, "Invalid category: #{inspect(cat)}"}
-
   defp validate_strength(strength) when strength in @valid_strengths, do: :ok
   defp validate_strength(strength), do: {:error, "Invalid strength: #{inspect(strength)}"}
 
-  defp create_job_validated(conn, user, s3_key, filename, params, category, strength) do
+  defp create_job_validated(conn, user, s3_key, filename, params, strength) do
     # Check if cancelled subscription has expired
     {:ok, user} = Billing.check_subscription_expiry(user)
 
@@ -125,7 +99,6 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
     else
       # Build job options with validated parameters
       opts = [
-        category: category,
         strength: strength,
         ai_clean: params["ai_clean"],
         estimated_seconds: estimated_seconds

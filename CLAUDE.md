@@ -585,16 +585,13 @@ The `poddyclip-api` crate provides HTTP endpoints for audio processing.
 - `deepfilter` (default) - Enables AI denoiser
 
 **ProcessConfig fields (key ones):**
-- `ai_denoise: bool` - Enable DeepFilterNet (default: false, optional for voice category)
+- `ai_denoise: bool` - Enable DeepFilterNet (default: false)
 - `denoiser_preset: u8` - Spectral subtraction level 1-3
 - `dereverb: u8` - DeReverb level 0-3 (0 = off)
 - `spectral_gate: u8` - Gate level 0-3 (0 = off)
 
-**Processing modes (via category/mode/strength):**
-| Mode | AI Clean | Saturation |
-|------|----------|------------|
-| Natural | Optional (voice) | Light |
-| Studio | Optional (voice) | Full |
+**Configuration:** Voice-only pipeline, configured via `strength` (1-3) and `ai_clean` (bool).
+`ProcessConfig::from_strength(strength)` maps strength to all processor settings.
 
 **API stages (25 total):**
 ```

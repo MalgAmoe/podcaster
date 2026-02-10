@@ -180,7 +180,6 @@ defmodule PoddyclipBackendWeb.Router do
   scope "/api", PoddyclipBackendWeb.Api do
     pipe_through :api_auth
 
-    get "/presets", ProcessController, :presets
     post "/presign-upload", ProcessController, :presign_upload
     get "/jobs/current", ProcessController, :current_job
     get "/jobs/history", ProcessController, :job_history

@@ -24,7 +24,8 @@ defmodule PoddyclipBackend.Processing do
   concurrency limit (4 jobs), so excess jobs wait in line instead of failing.
 
   ## Options
-    * `:chain` - Name of the processing chain preset to use
+    * `:strength` - Processing strength: 1-3 (default: 2)
+    * `:ai_clean` - Enable AI denoiser
     * `:output_format` - "wav" or "mp3" (default: "mp3")
     * `:mp3_bitrate` - Bitrate for MP3 output (default: 192)
   """
@@ -36,7 +37,6 @@ defmodule PoddyclipBackend.Processing do
         filename: filename,
         status: :queued,
         input_s3_key: input_s3_key,
-        chain: opts[:chain],
         user_id: user_id,
         estimated_seconds: opts[:estimated_seconds]
       })
@@ -45,8 +45,7 @@ defmodule PoddyclipBackend.Processing do
     Logger.info("Job submitted",
       job_id: job.id,
       user_id: user_id,
-      filename: filename,
-      chain: opts[:chain]
+      filename: filename
     )
 
     # Enqueue Oban job to start processing
@@ -55,7 +54,6 @@ defmodule PoddyclipBackend.Processing do
       job_id: job.id,
       user_id: user_id,
       filename: filename,
-      category: opts[:category],
       strength: opts[:strength],
       ai_clean: opts[:ai_clean],
       output_format: opts[:output_format],
