@@ -116,7 +116,7 @@ impl ProcessConfig {
             // Filters
             filters_enabled: true,
             hp_slope: 24,
-            hp_cutoff: 90.0,
+            hp_cutoff: 75.0,
 
             // Noise reduction
             denoiser_preset: strength,

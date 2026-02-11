@@ -33,17 +33,21 @@ defmodule PoddyclipBackendWeb.PageController do
   end
 
   def terms(conn, _params) do
+    locale = conn.assigns[:locale] || "en"
+
     conn
     |> put_layout(false)
     |> assign(:conn, conn)
-    |> render(:terms)
+    |> render(locale_template(:terms, locale))
   end
 
   def privacy(conn, _params) do
+    locale = conn.assigns[:locale] || "en"
+
     conn
     |> put_layout(false)
     |> assign(:conn, conn)
-    |> render(:privacy)
+    |> render(locale_template(:privacy, locale))
   end
 
   def help(conn, _params) do
@@ -76,6 +80,11 @@ defmodule PoddyclipBackendWeb.PageController do
     |> put_layout(false)
     |> render(:past_munchings, jobs: jobs)
   end
+
+  defp locale_template(page, "es"), do: :"#{page}_es"
+  defp locale_template(page, "fr"), do: :"#{page}_fr"
+  defp locale_template(page, "it"), do: :"#{page}_it"
+  defp locale_template(page, _), do: page
 
   defp load_job_history(user_id) do
     jobs = Processing.list_completed_jobs_for_user(user_id)
