@@ -181,6 +181,11 @@ if Application.compile_env(:poddyclip_backend, :admin_enabled) do
 end
 
 if config_env() == :prod do
+  # Sentry error tracking
+  if sentry_dsn = System.get_env("SENTRY_DSN") do
+    config :sentry, dsn: sentry_dsn
+  end
+
   # Email via Resend
   resend_api_key = System.get_env("RESEND_API_KEY")
 

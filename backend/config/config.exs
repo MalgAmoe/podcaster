@@ -49,7 +49,22 @@ config :tailwind,
     cd: Path.expand("..", __DIR__)
   ]
 
+# Sentry error tracking (DSN loaded from env in runtime.exs)
+config :sentry,
+  enable_source_code_context: true,
+  root_source_code_paths: [File.cwd!()],
+  environment_name: config_env(),
+  integrations: [
+    oban: [
+      capture_errors: true,
+      cron: [enabled: true]
+    ]
+  ]
+
 # Configure Elixir's Logger
+config :logger,
+  handlers: [{Sentry.LoggerHandler, []}]
+
 config :logger, :default_formatter,
   format: "$time $metadata[$level] $message\n",
   metadata: [:request_id, :job_id, :user_id]

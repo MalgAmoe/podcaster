@@ -1,4 +1,5 @@
 defmodule PoddyclipBackendWeb.Endpoint do
+  use Sentry.PlugCapture
   use Phoenix.Endpoint, otp_app: :poddyclip_backend
 
   require Logger
@@ -67,6 +68,8 @@ defmodule PoddyclipBackendWeb.Endpoint do
     pass: ["*/*"],
     json_decoder: Phoenix.json_library(),
     body_reader: {PoddyclipBackendWeb.CacheBodyReader, :read_body, []}
+
+  plug Sentry.PlugContext
 
   plug Plug.MethodOverride
   plug Plug.Head
