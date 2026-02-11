@@ -4,9 +4,10 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   """
   use PoddyclipBackendWeb, :controller
 
+  require Logger
+
   alias PoddyclipBackend.Billing
   alias PoddyclipBackend.Processing
-  alias PoddyclipBackend.Processing.Client
   alias PoddyclipBackend.Processing.Job
   alias PoddyclipBackend.Storage
 
@@ -77,6 +78,12 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
     end
   end
 
+  def create_job(conn, _params) do
+    conn
+    |> put_status(400)
+    |> json(%{error: "Missing required parameters: s3_key, filename"})
+  end
+
   defp validate_strength(strength) when strength in @valid_strengths, do: :ok
   defp validate_strength(strength), do: {:error, "Invalid strength: #{inspect(strength)}"}
 
@@ -104,41 +111,24 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
         estimated_seconds: estimated_seconds
       ]
 
-      case Processing.submit_job_from_s3(s3_key, filename, user.id, opts) do
-        {:ok, job} ->
-          json(conn, %{
-            id: job.id,
-            status: Atom.to_string(job.status),
-            filename: job.filename
-          })
+      try do
+        case Processing.submit_job_from_s3(s3_key, filename, user.id, opts) do
+          {:ok, job} ->
+            json(conn, %{
+              id: job.id,
+              status: Atom.to_string(job.status),
+              filename: job.filename
+            })
+        end
+      rescue
+        e ->
+          Logger.error("Failed to create job: #{Exception.message(e)}")
 
-        {:error, {:http_error, status, %{"error" => %{"message" => msg}}}} ->
-          conn
-          |> put_status(status)
-          |> json(%{error: msg})
-
-        {:error, {:http_error, status, body}} when is_binary(body) ->
-          conn
-          |> put_status(status)
-          |> json(%{error: body})
-
-        {:error, reason} when is_binary(reason) ->
-          conn
-          |> put_status(422)
-          |> json(%{error: reason})
-
-        {:error, reason} ->
           conn
           |> put_status(500)
-          |> json(%{error: "Failed to start processing: #{inspect(reason)}"})
+          |> json(%{error: "Failed to start processing"})
       end
     end
-  end
-
-  def create_job(conn, _params) do
-    conn
-    |> put_status(400)
-    |> json(%{error: "Missing required parameters: s3_key, filename"})
   end
 
   @doc """

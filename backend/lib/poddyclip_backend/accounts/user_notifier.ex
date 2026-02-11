@@ -18,7 +18,7 @@ defmodule PoddyclipBackend.Accounts.UserNotifier do
   end
 
   # Wraps content in a simple branded HTML template
-  defp html_template(content, opts \\ []) do
+  defp html_template(content, opts) do
     button_text = opts[:button_text]
     button_url = opts[:button_url]
     new_tab = opts[:new_tab] || false
@@ -63,7 +63,7 @@ defmodule PoddyclipBackend.Accounts.UserNotifier do
   end
 
   # Delivers the email using the application mailer.
-  defp deliver(recipient, subject, text_body, html_body \\ nil) do
+  defp deliver(recipient, subject, text_body, html_body) do
     email =
       new()
       |> to(recipient)

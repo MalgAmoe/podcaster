@@ -50,7 +50,7 @@ defmodule PoddyclipBackendWeb.UserSettingsController do
   end
 
   defp build_export_data(user) do
-    alias PoddyclipBackend.{Repo, Billing}
+    alias PoddyclipBackend.Repo
     alias PoddyclipBackend.Processing.Job
     alias PoddyclipBackend.Billing.MinutePack
 

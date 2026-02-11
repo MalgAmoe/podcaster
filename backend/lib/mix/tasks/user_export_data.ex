@@ -18,7 +18,6 @@ defmodule Mix.Tasks.User.ExportData do
   import Ecto.Query
   alias PoddyclipBackend.Repo
   alias PoddyclipBackend.Accounts
-  alias PoddyclipBackend.Accounts.User
   alias PoddyclipBackend.Processing.Job
   alias PoddyclipBackend.Billing.MinutePack
 

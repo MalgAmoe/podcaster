@@ -9,8 +9,6 @@ defmodule PoddyclipBackendWeb.Plugs.BasicAuth do
   The /health endpoint is always allowed through for k8s probes.
   """
 
-  import Plug.Conn
-
   def init(opts), do: opts
 
   # Allow health checks and internal API (webhooks from Rust API)
