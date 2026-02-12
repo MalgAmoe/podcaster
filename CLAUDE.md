@@ -586,19 +586,19 @@ The `poddyclip-api` crate provides HTTP endpoints for audio processing.
 
 **ProcessConfig fields (key ones):**
 - `ai_denoise: bool` - Enable DeepFilterNet (default: false)
+- `mono: bool` - Enable mono summing / center audio (default: false)
 - `denoiser_preset: u8` - Spectral subtraction level 1-3
 - `dereverb: u8` - DeReverb level 0-3 (0 = off)
 - `spectral_gate: u8` - Gate level 0-3 (0 = off)
 
-**Configuration:** Voice-only pipeline, configured via `strength` (1-3) and `ai_clean` (bool).
-`ProcessConfig::from_strength(strength)` maps strength to all processor settings.
+**Configuration:** Voice-only pipeline, configured via `strength` (1-3), `ai_clean` (bool), and `mono` (bool).
+`ProcessConfig::from_strength(strength)` maps strength to all processor settings. `mono` is never auto-enabled by strength.
 
-**API stages (25 total):**
+**API stages (23 total):**
 ```
 0-decoding, 1-filters, 2-input_gain, 3-analyzing_reverb, 4-dereverb,
 5-analyzing_noise, 6-denoise, 7-ai_denoise, 8-spectral_gate,
-9-analyzing_peaks, 10-peak_attenuation, 11-expander, 12-compressor,
-13-analyzing_eq, 14-fixeq, 15-deesser, 16-saturation, 17-buttercomp,
-18-analyzing_enhance, 19-enhanceeq, 20-tape, 21-radio,
-22-analyzing_levels, 23-output, 24-encoding
+9-center_audio, 10-peakcomp, 11-analyzing_eq, 12-fixeq, 13-deesser,
+14-saturation, 15-buttercomp, 16-analyzing_enhance, 17-enhanceeq,
+18-radio, 19-fetcomp, 20-tape, 21-analyzing_levels, 22-output
 ```

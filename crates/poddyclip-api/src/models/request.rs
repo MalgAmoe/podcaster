@@ -65,6 +65,9 @@ pub struct ProcessConfig {
 
     // AI Denoise (DeepFilterNet) - voice-focused
     pub ai_denoise: bool,
+
+    // Mono summing (center audio) - sum L+R to dual-mono
+    pub mono: bool,
 }
 
 impl Default for ProcessConfig {
@@ -99,6 +102,7 @@ impl Default for ProcessConfig {
             radio: false,
             radio_amount: 1.0,
             ai_denoise: false,
+            mono: false,
         }
     }
 }
@@ -151,6 +155,7 @@ impl ProcessConfig {
             lufs_target: -16.0,
             radio: strength == 3,
             radio_amount: 1.0,
+            mono: false,
         }
     }
 }

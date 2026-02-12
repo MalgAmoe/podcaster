@@ -66,6 +66,7 @@ defmodule PoddyclipBackend.Processing.Client do
       filename: Keyword.get(opts, :filename),
       strength: Keyword.get(opts, :strength, 2),
       ai_clean: Keyword.get(opts, :ai_clean),
+      mono: Keyword.get(opts, :mono),
       output_format: Keyword.get(opts, :output_format, "mp3"),
       mp3_bitrate: Keyword.get(opts, :mp3_bitrate, 192),
       webhook_url: webhook_url(),

@@ -17,7 +17,9 @@ export default {
 
   // AI Clean
   aiClean: "Pulizia IA",
-  takesLonger: "Richiede più tempo",
+  takesLonger: "Pulisce il rumore con IA. Richiede più tempo",
+  centerAudio: "Centra Audio",
+  centerAudioTooltip: "Mixa l'audio in mono",
 
   // Strength knob
   strength: "Intensità",

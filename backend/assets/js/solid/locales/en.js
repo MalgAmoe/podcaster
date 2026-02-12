@@ -17,7 +17,9 @@ export default {
 
   // AI Clean
   aiClean: "AI Clean",
-  takesLonger: "Takes longer to process",
+  takesLonger: "Cleans noise with AI. Takes longer to process",
+  centerAudio: "Center Audio",
+  centerAudioTooltip: "Mixing the audio to mono",
 
   // Strength knob
   strength: "Strength",

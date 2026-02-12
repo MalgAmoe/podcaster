@@ -108,6 +108,7 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
       opts = [
         strength: strength,
         ai_clean: params["ai_clean"],
+        mono: params["mono"],
         estimated_seconds: estimated_seconds
       ]
 

@@ -70,6 +70,7 @@ defmodule PoddyclipBackend.Workers.ProcessingWorker do
       filename: args["filename"],
       strength: args["strength"],
       ai_clean: args["ai_clean"],
+      mono: args["mono"],
       output_format: args["output_format"] || "mp3",
       mp3_bitrate: args["mp3_bitrate"] || 192
     ]

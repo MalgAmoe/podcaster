@@ -131,6 +131,7 @@ export const api = {
       filename,
       strength: config.strength,
       ai_clean: config.ai_clean,
+      mono: config.mono,
       duration_seconds: config.duration_seconds,
     });
   },

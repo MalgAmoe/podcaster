@@ -25,6 +25,7 @@ export function ProcessProvider(props) {
     processingConfig: {
       strength: 2,
       aiClean: false,
+      mono: false,
     },
     job: null,
   });
@@ -254,9 +255,14 @@ export function ProcessProvider(props) {
     setStore("processingConfig", "aiClean", enabled);
   }
 
+  function setMono(enabled) {
+    setStore("processingConfig", "mono", enabled);
+  }
+
   // Computed helpers for current config
   const currentStrength = () => store.processingConfig.strength;
   const currentAiClean = () => store.processingConfig.aiClean;
+  const currentMono = () => store.processingConfig.mono;
 
   async function submitJob() {
     if (!store.s3Key || !store.filename) {
@@ -272,6 +278,7 @@ export function ProcessProvider(props) {
       const config = {
         strength: store.processingConfig.strength,
         ai_clean: store.processingConfig.aiClean,
+        mono: store.processingConfig.mono,
         // Send duration for billing (default to 60s if not detected)
         duration_seconds: store.estimatedSeconds || 60,
       };
@@ -358,8 +365,10 @@ export function ProcessProvider(props) {
     uploadFile,
     setStrength,
     setAiClean,
+    setMono,
     currentStrength,
     currentAiClean,
+    currentMono,
     submitJob,
     cancelJob,
     reset,

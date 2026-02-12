@@ -56,6 +56,7 @@ defmodule PoddyclipBackend.Processing do
       filename: filename,
       strength: opts[:strength],
       ai_clean: opts[:ai_clean],
+      mono: opts[:mono],
       output_format: opts[:output_format],
       mp3_bitrate: opts[:mp3_bitrate]
     }

@@ -88,6 +88,9 @@ pub struct CreateS3JobRequest {
     /// Enable AI (DeepFilterNet) denoiser for voice cleaning
     #[serde(default)]
     pub ai_clean: Option<bool>,
+    /// Enable mono summing (center audio)
+    #[serde(default)]
+    pub mono: Option<bool>,
 }
 
 fn default_mp3_bitrate() -> u32 {
@@ -196,6 +199,11 @@ pub async fn create_s3_job(
     // Allow explicit override of ai_denoise
     if let Some(ai_clean) = req.ai_clean {
         config.ai_denoise = ai_clean;
+    }
+
+    // Allow explicit override of mono summing
+    if let Some(mono) = req.mono {
+        config.mono = mono;
     }
 
     // Validate webhook URL if provided (SSRF prevention)
