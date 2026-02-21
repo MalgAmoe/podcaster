@@ -114,7 +114,7 @@ defmodule PoddyclipBackend.Workers.FreePlanResetWorkerTest do
 
   describe "subscription downgrade sets free period" do
     test "expiry worker sets current_period_ends_at on downgrade" do
-      pro_plan = pro_plan_fixture()
+      munch_plan = munch_plan_fixture()
       user = user_fixture()
 
       past = DateTime.utc_now() |> DateTime.add(-1, :hour) |> DateTime.truncate(:second)
@@ -122,7 +122,7 @@ defmodule PoddyclipBackend.Workers.FreePlanResetWorkerTest do
       {:ok, user} =
         user
         |> Ecto.Changeset.change(
-          plan_id: pro_plan.id,
+          plan_id: munch_plan.id,
           subscription_status: "cancelled",
           polar_subscription_id: "sub_test",
           current_period_ends_at: past,

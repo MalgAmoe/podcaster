@@ -19,9 +19,9 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
     end)
 
     free_plan = free_plan_fixture()
-    pro_plan = pro_plan_fixture()
+    munch_plan = munch_plan_fixture()
 
-    %{free_plan: free_plan, pro_plan: pro_plan}
+    %{free_plan: free_plan, munch_plan: munch_plan}
   end
 
   defp sign_webhook(body, webhook_id \\ "wh_test_#{System.unique_integer([:positive])}") do
@@ -90,7 +90,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
   end
 
   describe "subscription.active" do
-    test "activates pro subscription for existing user", %{conn: conn, pro_plan: pro_plan} do
+    test "activates pro subscription for existing user", %{conn: conn, munch_plan: munch_plan} do
       # Create user and link to Polar customer_id (simulates checkout flow)
       customer_id = "cus_test_#{System.unique_integer([:positive])}"
       user = user_fixture()
@@ -110,7 +110,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
               id: "sub_test_123",
               customer_id: customer_id,
               customer: %{email: user.email},
-              product: %{id: pro_plan.polar_product_id},
+              product: %{id: munch_plan.polar_product_id},
               current_period_end: System.system_time(:second) + 86400 * 30
             }
           }
@@ -121,14 +121,14 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
 
       # Verify user was updated
       updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
-      assert updated_user.plan_id == pro_plan.id
+      assert updated_user.plan_id == munch_plan.id
       assert updated_user.seconds_available == 54000
       assert updated_user.subscription_status == "active"
       assert updated_user.polar_subscription_id == "sub_test_123"
       assert updated_user.polar_customer_id == customer_id
     end
 
-    test "handles user not found", %{conn: conn, pro_plan: pro_plan} do
+    test "handles user not found", %{conn: conn, munch_plan: munch_plan} do
       body =
         Jason.encode!(%{
           id: "evt_nouser_#{System.unique_integer()}",
@@ -137,7 +137,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
             subscription: %{
               id: "sub_nouser",
               customer: %{email: "nonexistent@example.com"},
-              product: %{id: pro_plan.polar_product_id}
+              product: %{id: munch_plan.polar_product_id}
             }
           }
         })
@@ -150,7 +150,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
   end
 
   describe "subscription.updated" do
-    test "resets minutes on renewal", %{conn: conn, pro_plan: pro_plan} do
+    test "resets minutes on renewal", %{conn: conn, munch_plan: munch_plan} do
       user = user_fixture()
 
       # Set up user as pro subscriber with used minutes
@@ -158,7 +158,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
 
       {:ok, user} =
         Billing.update_subscription(user, %{
-          plan_id: pro_plan.id,
+          plan_id: munch_plan.id,
           seconds_available: 6000,
           subscription_status: "active",
           polar_subscription_id: "sub_renew_123",
@@ -190,7 +190,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
       assert updated_user.seconds_available == 54000
     end
 
-    test "doesn't reset minutes for non-renewal update", %{conn: conn, pro_plan: pro_plan} do
+    test "doesn't reset minutes for non-renewal update", %{conn: conn, munch_plan: munch_plan} do
       user = user_fixture()
 
       # Set up user as pro subscriber
@@ -198,7 +198,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
 
       {:ok, user} =
         Billing.update_subscription(user, %{
-          plan_id: pro_plan.id,
+          plan_id: munch_plan.id,
           seconds_available: 30000,
           subscription_status: "active",
           polar_subscription_id: "sub_update_456",
@@ -229,12 +229,12 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
   end
 
   describe "subscription.canceled" do
-    test "marks subscription as cancelled", %{conn: conn, pro_plan: pro_plan} do
+    test "marks subscription as cancelled", %{conn: conn, munch_plan: munch_plan} do
       user = user_fixture()
 
       {:ok, user} =
         Billing.update_subscription(user, %{
-          plan_id: pro_plan.id,
+          plan_id: munch_plan.id,
           seconds_available: 30000,
           subscription_status: "active",
           polar_subscription_id: "sub_cancel_123"
@@ -255,18 +255,18 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
       updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
       assert updated_user.subscription_status == "cancelled"
       # Should keep access until period ends
-      assert updated_user.plan_id == pro_plan.id
+      assert updated_user.plan_id == munch_plan.id
       assert updated_user.seconds_available == 30000
     end
   end
 
   describe "subscription.uncanceled" do
-    test "reactivates cancelled subscription", %{conn: conn, pro_plan: pro_plan} do
+    test "reactivates cancelled subscription", %{conn: conn, munch_plan: munch_plan} do
       user = user_fixture()
 
       {:ok, user} =
         Billing.update_subscription(user, %{
-          plan_id: pro_plan.id,
+          plan_id: munch_plan.id,
           seconds_available: 30000,
           subscription_status: "cancelled",
           polar_subscription_id: "sub_uncancel_123",
@@ -289,18 +289,18 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
       # Should be reactivated
       assert updated_user.subscription_status == "active"
       # Should keep pro plan and remaining minutes
-      assert updated_user.plan_id == pro_plan.id
+      assert updated_user.plan_id == munch_plan.id
       assert updated_user.seconds_available == 30000
     end
   end
 
   describe "subscription.past_due" do
-    test "marks subscription as past_due", %{conn: conn, pro_plan: pro_plan} do
+    test "marks subscription as past_due", %{conn: conn, munch_plan: munch_plan} do
       user = user_fixture()
 
       {:ok, user} =
         Billing.update_subscription(user, %{
-          plan_id: pro_plan.id,
+          plan_id: munch_plan.id,
           seconds_available: 30000,
           subscription_status: "active",
           polar_subscription_id: "sub_pastdue_123"
@@ -322,18 +322,18 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
       # Should be marked as past_due
       assert updated_user.subscription_status == "past_due"
       # Should keep access while in grace period
-      assert updated_user.plan_id == pro_plan.id
+      assert updated_user.plan_id == munch_plan.id
       assert updated_user.seconds_available == 30000
     end
   end
 
   describe "subscription.revoked" do
-    test "removes access immediately", %{conn: conn, free_plan: free_plan, pro_plan: pro_plan} do
+    test "removes access immediately", %{conn: conn, free_plan: free_plan, munch_plan: munch_plan} do
       user = user_fixture()
 
       {:ok, user} =
         Billing.update_subscription(user, %{
-          plan_id: pro_plan.id,
+          plan_id: munch_plan.id,
           seconds_available: 30000,
           subscription_status: "active",
           polar_subscription_id: "sub_revoke_123",

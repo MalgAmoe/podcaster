@@ -31,7 +31,7 @@ defmodule PoddyclipBackend.BillingTest do
 
     test "list_active_plans/0 returns active plans ordered by price" do
       _free = free_plan_fixture()
-      _pro = pro_plan_fixture()
+      _pro = munch_plan_fixture()
       plans = Billing.list_active_plans()
       assert length(plans) >= 2
       # First should be free (price 0)
@@ -95,7 +95,7 @@ defmodule PoddyclipBackend.BillingTest do
   describe "subscriptions" do
     setup do
       free_plan = free_plan_fixture()
-      pro_plan = pro_plan_fixture()
+      munch_plan = munch_plan_fixture()
       user = user_fixture()
 
       {:ok, user} =
@@ -103,23 +103,23 @@ defmodule PoddyclipBackend.BillingTest do
         |> Ecto.Changeset.change(plan_id: free_plan.id, seconds_available: 900)
         |> Repo.update()
 
-      %{user: user, free_plan: free_plan, pro_plan: pro_plan}
+      %{user: user, free_plan: free_plan, munch_plan: munch_plan}
     end
 
-    test "update_subscription/2 updates user billing fields", %{user: user, pro_plan: pro_plan} do
+    test "update_subscription/2 updates user billing fields", %{user: user, munch_plan: munch_plan} do
       period_end = DateTime.utc_now() |> DateTime.add(30, :day) |> DateTime.truncate(:second)
 
       assert {:ok, updated} =
                Billing.update_subscription(user, %{
-                 plan_id: pro_plan.id,
-                 seconds_available: pro_plan.seconds,
+                 plan_id: munch_plan.id,
+                 seconds_available: munch_plan.seconds,
                  subscription_status: "active",
                  polar_customer_id: "cus_123",
                  polar_subscription_id: "sub_456",
                  current_period_ends_at: period_end
                })
 
-      assert updated.plan_id == pro_plan.id
+      assert updated.plan_id == munch_plan.id
       assert updated.seconds_available == 54000
       assert updated.subscription_status == "active"
       assert updated.polar_customer_id == "cus_123"
@@ -127,11 +127,11 @@ defmodule PoddyclipBackend.BillingTest do
       assert DateTime.compare(updated.current_period_ends_at, period_end) == :eq
     end
 
-    test "reset_subscription_seconds/1 resets to plan amount", %{user: user, pro_plan: pro_plan} do
+    test "reset_subscription_seconds/1 resets to plan amount", %{user: user, munch_plan: munch_plan} do
       # First upgrade to pro
       {:ok, user} =
         Billing.update_subscription(user, %{
-          plan_id: pro_plan.id,
+          plan_id: munch_plan.id,
           seconds_available: 6000
         })
 
@@ -156,18 +156,18 @@ defmodule PoddyclipBackend.BillingTest do
   describe "subscription expiry" do
     setup do
       free_plan = free_plan_fixture()
-      pro_plan = pro_plan_fixture()
+      munch_plan = munch_plan_fixture()
       user = user_fixture()
 
       {:ok, user} =
         Billing.update_subscription(user, %{
-          plan_id: pro_plan.id,
+          plan_id: munch_plan.id,
           seconds_available: 30000,
           subscription_status: "cancelled",
           polar_subscription_id: "sub_expiry_test"
         })
 
-      %{user: user, free_plan: free_plan, pro_plan: pro_plan}
+      %{user: user, free_plan: free_plan, munch_plan: munch_plan}
     end
 
     test "check_subscription_expiry/1 downgrades expired cancelled subscription", %{user: user, free_plan: free_plan} do
@@ -184,23 +184,23 @@ defmodule PoddyclipBackend.BillingTest do
       assert updated.seconds_available == 30000
     end
 
-    test "check_subscription_expiry/1 keeps active cancelled subscription", %{user: user, pro_plan: pro_plan} do
+    test "check_subscription_expiry/1 keeps active cancelled subscription", %{user: user, munch_plan: munch_plan} do
       # Set period end in the future
       future = DateTime.utc_now() |> DateTime.add(10, :day) |> DateTime.truncate(:second)
       {:ok, user} = Billing.update_subscription(user, %{current_period_ends_at: future})
 
       {:ok, updated} = Billing.check_subscription_expiry(user)
 
-      assert updated.plan_id == pro_plan.id
+      assert updated.plan_id == munch_plan.id
       assert updated.subscription_status == "cancelled"
     end
 
-    test "check_subscription_expiry/1 ignores active subscriptions", %{user: user, pro_plan: pro_plan} do
+    test "check_subscription_expiry/1 ignores active subscriptions", %{user: user, munch_plan: munch_plan} do
       {:ok, user} = Billing.update_subscription(user, %{subscription_status: "active"})
 
       {:ok, updated} = Billing.check_subscription_expiry(user)
 
-      assert updated.plan_id == pro_plan.id
+      assert updated.plan_id == munch_plan.id
       assert updated.subscription_status == "active"
     end
 
@@ -224,14 +224,14 @@ defmodule PoddyclipBackend.BillingTest do
       refute Billing.subscription_expired?(user)
     end
 
-    test "check_subscription_expiry/1 ignores past_due subscriptions", %{user: user, pro_plan: pro_plan} do
+    test "check_subscription_expiry/1 ignores past_due subscriptions", %{user: user, munch_plan: munch_plan} do
       # past_due users keep access during grace period
       {:ok, user} = Billing.update_subscription(user, %{subscription_status: "past_due"})
 
       {:ok, updated} = Billing.check_subscription_expiry(user)
 
       # Should remain unchanged
-      assert updated.plan_id == pro_plan.id
+      assert updated.plan_id == munch_plan.id
       assert updated.subscription_status == "past_due"
     end
   end

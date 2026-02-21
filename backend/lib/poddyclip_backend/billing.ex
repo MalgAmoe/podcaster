@@ -572,20 +572,20 @@ defmodule PoddyclipBackend.Billing do
   end
 
   defp sync_active_subscription(user, sub) do
-    pro_plan = get_plan_by_name("pro")
+    munch_plan = get_plan_by_name("munch")
     period_end = parse_polar_datetime(sub["current_period_end"])
 
     attrs = %{
       subscription_status: "active",
       polar_subscription_id: sub["id"],
       current_period_ends_at: period_end,
-      plan_id: pro_plan && pro_plan.id
+      plan_id: munch_plan && munch_plan.id
     }
 
     # If upgrading from free/none, also set seconds
     attrs =
-      if user.subscription_status != "active" && pro_plan do
-        Map.put(attrs, :seconds_available, pro_plan.seconds)
+      if user.subscription_status != "active" && munch_plan do
+        Map.put(attrs, :seconds_available, munch_plan.seconds)
       else
         attrs
       end

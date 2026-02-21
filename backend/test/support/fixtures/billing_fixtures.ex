@@ -27,13 +27,13 @@ defmodule PoddyclipBackend.BillingFixtures do
     end
   end
 
-  def pro_plan_fixture(attrs \\ %{}) do
+  def munch_plan_fixture(attrs \\ %{}) do
     {:ok, plan} =
       %Plan{}
       |> Plan.changeset(
         Enum.into(attrs, %{
-          name: "pro",
-          display_name: "Pro",
+          name: "munch",
+          display_name: "Munch Plan",
           seconds: 54000,
           price_cents: 1500,
           polar_product_id: "prod_test_123",
@@ -43,7 +43,7 @@ defmodule PoddyclipBackend.BillingFixtures do
       |> Repo.insert(on_conflict: :nothing)
 
     case plan.id do
-      nil -> Repo.get_by!(Plan, name: attrs[:name] || "pro")
+      nil -> Repo.get_by!(Plan, name: attrs[:name] || "munch")
       _ -> plan
     end
   end

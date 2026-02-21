@@ -129,7 +129,7 @@ defmodule PoddyclipBackend.Admin do
 
       %{
         total: 150,
-        by_plan: %{"free" => 120, "pro" => 30},
+        by_plan: %{"free" => 120, "munch" => 30},
         by_subscription: %{"none" => 120, "active" => 25, "cancelled" => 5},
         total_seconds_available: 720000
       }
