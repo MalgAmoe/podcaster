@@ -89,6 +89,7 @@ defmodule PoddyclipBackend.Accounts do
     |> User.email_changeset(attrs)
     |> Ecto.Changeset.put_change(:plan_id, free_plan.id)
     |> Ecto.Changeset.put_change(:seconds_available, free_plan.seconds)
+    |> Ecto.Changeset.put_change(:current_period_ends_at, DateTime.utc_now() |> DateTime.add(30, :day) |> DateTime.truncate(:second))
     |> Repo.insert()
   end
 

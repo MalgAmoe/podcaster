@@ -401,8 +401,7 @@ defmodule PoddyclipBackend.Billing do
         plan_id: free_plan.id,
         subscription_status: "none",
         polar_subscription_id: nil,
-        current_period_ends_at: nil
-        # Keep remaining minutes
+        current_period_ends_at: DateTime.utc_now() |> DateTime.add(30, :day) |> DateTime.truncate(:second)
       })
     else
       {:ok, user}
@@ -631,7 +630,7 @@ defmodule PoddyclipBackend.Billing do
       update_subscription(user, %{
         subscription_status: "none",
         polar_subscription_id: nil,
-        current_period_ends_at: nil,
+        current_period_ends_at: DateTime.utc_now() |> DateTime.add(30, :day) |> DateTime.truncate(:second),
         plan_id: free_plan.id,
         seconds_available: free_plan.seconds
       })

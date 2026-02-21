@@ -32,11 +32,16 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
     {webhook_id, timestamp, "v1,#{signature}"}
   end
 
-  defp post_webhook(conn, body) when is_binary(body) do
+  defp post_webhook(conn, body, opts \\ []) when is_binary(body) do
     # Decode and re-encode to get canonical JSON that matches what controller will produce
     params = Jason.decode!(body)
     canonical_body = Jason.encode!(params)
-    {webhook_id, timestamp, signature} = sign_webhook(canonical_body)
+
+    {webhook_id, timestamp, signature} =
+      case Keyword.get(opts, :webhook_id) do
+        nil -> sign_webhook(canonical_body)
+        id -> sign_webhook(canonical_body, id)
+      end
 
     conn
     |> put_req_header("content-type", "application/json")
@@ -72,13 +77,14 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
 
     test "handles duplicate events gracefully", %{conn: conn} do
       body = ~s({"id": "evt_dup_test", "type": "subscription.created", "data": {}})
+      fixed_id = "wh_dup_test"
 
       # First request - event gets processed
-      conn1 = post_webhook(conn, body)
+      conn1 = post_webhook(conn, body, webhook_id: fixed_id)
       assert json_response(conn1, 200)["status"] == "ok"
 
-      # Second request (duplicate) - same event_id in payload
-      conn2 = post_webhook(build_conn(), body)
+      # Second request (duplicate) - same webhook-id header
+      conn2 = post_webhook(build_conn(), body, webhook_id: fixed_id)
       assert json_response(conn2, 200)["status"] == "already_processed"
     end
   end

@@ -51,7 +51,7 @@ defmodule PoddyclipBackend.Workers.SubscriptionExpiryWorker do
       |> Ecto.Changeset.change(%{
         subscription_status: "none",
         polar_subscription_id: nil,
-        current_period_ends_at: nil,
+        current_period_ends_at: DateTime.utc_now() |> DateTime.add(30, :day) |> DateTime.truncate(:second),
         plan_id: nil,
         seconds_available: 900
       })

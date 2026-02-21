@@ -29,35 +29,7 @@ defmodule PoddyclipBackendWeb.UserSettingsControllerTest do
     end
   end
 
-  describe "PUT /users/settings (change email form)" do
-    @tag :capture_log
-    test "updates the user email", %{conn: conn, user: user} do
-      conn =
-        put(conn, ~p"/users/settings", %{
-          "action" => "update_email",
-          "user" => %{"email" => unique_user_email()}
-        })
-
-      assert redirected_to(conn) == ~p"/users/settings"
-
-      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~
-               "A link to confirm your email"
-
-      assert Accounts.get_user_by_email(user.email)
-    end
-
-    test "does not update email on invalid data", %{conn: conn} do
-      conn =
-        put(conn, ~p"/users/settings", %{
-          "action" => "update_email",
-          "user" => %{"email" => "with spaces"}
-        })
-
-      response = html_response(conn, 200)
-      assert response =~ "Settings"
-      assert response =~ "must have the @ sign and no spaces"
-    end
-  end
+  # NOTE: PUT /users/settings tests were removed — email change was migrated to SettingsLive.
 
   describe "GET /users/settings/confirm-email/:token" do
     setup %{user: user} do

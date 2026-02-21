@@ -85,6 +85,16 @@ defmodule PoddyclipBackend.AccountsTest do
       assert is_nil(user.confirmed_at)
       assert is_nil(user.password)
     end
+
+    test "sets current_period_ends_at ~30 days in the future on registration" do
+      {:ok, user} = Accounts.register_user(valid_user_attributes())
+      assert user.current_period_ends_at != nil
+
+      # Should be approximately 30 days from now (within 1 minute tolerance)
+      expected = DateTime.add(DateTime.utc_now(), 30, :day)
+      diff = DateTime.diff(user.current_period_ends_at, expected, :second) |> abs()
+      assert diff < 60
+    end
   end
 
   describe "sudo_mode?/2" do

@@ -25,6 +25,8 @@ defmodule PoddyclipBackend.Application do
         PoddyclipBackend.Workers.SubscriptionExpiryWorker,
         # Expiry notification sender (7 days before subscription ends)
         PoddyclipBackend.Workers.ExpiryNotificationWorker,
+        # Free plan monthly reset checker
+        PoddyclipBackend.Workers.FreePlanResetWorker,
         # Start to serve requests, typically the last entry
         PoddyclipBackendWeb.Endpoint
       ] ++ admin_children()
