@@ -213,7 +213,14 @@ if config_env() == :prod do
   config :poddyclip_backend, PoddyclipBackend.Repo,
     url: database_url,
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
-    ssl: [verify: :verify_none]
+    ssl: [
+      verify: :verify_peer,
+      cacertfile: CAStore.file_path(),
+      server_name_indication: database_url |> URI.parse() |> Map.get(:host) |> to_charlist(),
+      customize_hostname_check: [
+        match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
+      ]
+    ]
 
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you

@@ -70,6 +70,8 @@ defmodule PoddyclipBackend.MixProject do
       # Database
       {:ecto_sql, "~> 3.10"},
       {:postgrex, ">= 0.0.0"},
+      # SSL CA certificates (for PlanetScale/cloud Postgres)
+      {:castore, "~> 1.0"},
       # Email
       {:swoosh, "~> 1.4"},
       # Background jobs

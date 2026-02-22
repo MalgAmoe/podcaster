@@ -18,7 +18,7 @@ plans = [
   %{
     name: "free",
     display_name: "Free",
-    minutes: 15,
+    seconds: 900,
     price_cents: 0,
     polar_product_id: nil,
     active: true
@@ -26,7 +26,7 @@ plans = [
   %{
     name: "munch",
     display_name: "Munch Plan",
-    minutes: 900,
+    seconds: 54000,
     price_cents: 1500,
     polar_product_id: System.get_env("POLAR_MUNCH_PRODUCT_ID"),
     active: true

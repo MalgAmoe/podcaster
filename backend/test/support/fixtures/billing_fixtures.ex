@@ -4,7 +4,7 @@ defmodule PoddyclipBackend.BillingFixtures do
   """
 
   alias PoddyclipBackend.Repo
-  alias PoddyclipBackend.Billing.Plan
+  alias PoddyclipBackend.Billing.{Plan, Promo}
 
   def free_plan_fixture(attrs \\ %{}) do
     {:ok, plan} =
@@ -46,6 +46,26 @@ defmodule PoddyclipBackend.BillingFixtures do
       nil -> Repo.get_by!(Plan, name: attrs[:name] || "munch")
       _ -> plan
     end
+  end
+
+  def promo_fixture(attrs \\ %{}) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    {:ok, promo} =
+      %Promo{}
+      |> Promo.changeset(
+        Enum.into(attrs, %{
+          name: "test-promo-#{System.unique_integer([:positive])}",
+          bonus_seconds: 1800,
+          max_claims: 20,
+          starts_at: DateTime.add(now, -1, :hour),
+          expires_at: DateTime.add(now, 24, :hour),
+          active: true
+        })
+      )
+      |> Repo.insert()
+
+    promo
   end
 
   def plan_fixture(attrs \\ %{}) do

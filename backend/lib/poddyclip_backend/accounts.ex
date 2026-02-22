@@ -82,15 +82,29 @@ defmodule PoddyclipBackend.Accounts do
 
   """
   def register_user(attrs) do
-    # Get or create the free plan
-    free_plan = PoddyclipBackend.Billing.get_or_create_free_plan()
+    alias PoddyclipBackend.Billing
 
-    %User{}
-    |> User.email_changeset(attrs)
-    |> Ecto.Changeset.put_change(:plan_id, free_plan.id)
-    |> Ecto.Changeset.put_change(:seconds_available, free_plan.seconds)
-    |> Ecto.Changeset.put_change(:current_period_ends_at, DateTime.utc_now() |> DateTime.add(30, :day) |> DateTime.truncate(:second))
-    |> Repo.insert()
+    # Get or create the free plan
+    free_plan = Billing.get_or_create_free_plan()
+
+    # Check for active promo — bonus seconds on top of plan seconds
+    promo = Billing.find_active_promo()
+    seconds = free_plan.seconds + if(promo, do: promo.bonus_seconds, else: 0)
+
+    result =
+      %User{}
+      |> User.email_changeset(attrs)
+      |> Ecto.Changeset.put_change(:plan_id, free_plan.id)
+      |> Ecto.Changeset.put_change(:seconds_available, seconds)
+      |> Ecto.Changeset.put_change(:current_period_ends_at, DateTime.utc_now() |> DateTime.add(30, :day) |> DateTime.truncate(:second))
+      |> Repo.insert()
+
+    # Claim the promo slot only after successful registration
+    if promo && match?({:ok, _}, result) do
+      Billing.claim_promo(promo)
+    end
+
+    result
   end
 
   ## Settings

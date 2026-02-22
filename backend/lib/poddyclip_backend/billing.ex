@@ -18,8 +18,47 @@ defmodule PoddyclipBackend.Billing do
   alias PoddyclipBackend.Repo
   alias PoddyclipBackend.Accounts
   alias PoddyclipBackend.Accounts.{User, UserNotifier}
-  alias PoddyclipBackend.Billing.{MinutePack, Plan, ProcessedWebhook}
+  alias PoddyclipBackend.Billing.{MinutePack, Plan, ProcessedWebhook, Promo}
   require Logger
+
+  # ----- Promos -----
+
+  @doc """
+  Finds the first active promo (within time window, under claim limit).
+  Returns the promo or nil.
+  """
+  def find_active_promo do
+    now = DateTime.utc_now()
+
+    from(p in Promo,
+      where: p.active == true,
+      where: p.starts_at <= ^now,
+      where: p.expires_at > ^now,
+      where: p.claims_count < p.max_claims,
+      order_by: [asc: p.starts_at],
+      limit: 1
+    )
+    |> Repo.one()
+  end
+
+  @doc """
+  Atomically increments claims_count for a promo, but only if still under limit.
+  Returns `{:ok, promo}` if claimed, `{:error, :exhausted}` if no slots left.
+  """
+  def claim_promo(%Promo{id: id}) do
+    {count, _} =
+      from(p in Promo,
+        where: p.id == ^id,
+        where: p.claims_count < p.max_claims
+      )
+      |> Repo.update_all(inc: [claims_count: 1])
+
+    if count == 1 do
+      {:ok, Repo.get!(Promo, id)}
+    else
+      {:error, :exhausted}
+    end
+  end
 
   # ----- PubSub -----
 
