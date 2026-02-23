@@ -270,10 +270,19 @@ export function WaveformPlayer(props) {
   }
 
   function handleEnded() {
+    // Reset to start so switching tracks doesn't seek to the end
+    if (props.onTimeUpdate) {
+      props.onTimeUpdate(0);
+    } else {
+      setLocalTime(0);
+    }
     if (props.onPlayingChange) {
       props.onPlayingChange(false);
     } else {
       setLocalPlaying(false);
+    }
+    if (audioRef) {
+      audioRef.currentTime = 0;
     }
   }
 
