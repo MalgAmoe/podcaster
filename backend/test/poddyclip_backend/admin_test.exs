@@ -6,6 +6,7 @@ defmodule PoddyclipBackend.AdminTest do
   alias PoddyclipBackend.Repo
 
   import PoddyclipBackend.AccountsFixtures
+  import PoddyclipBackend.BillingFixtures
 
   describe "job_stats/0" do
     test "returns correct counts for empty database" do
@@ -136,6 +137,184 @@ defmodule PoddyclipBackend.AdminTest do
 
       assert health.checks.oban.status == "ok"
       assert is_map(health.checks.oban.queues)
+    end
+  end
+
+  # ----- Billing Stats -----
+
+  describe "log_billing_event/3" do
+    test "inserts a billing event" do
+      user = user_fixture()
+
+      assert {:ok, event} =
+               Admin.log_billing_event("free_plan_reset", user.id, %{
+                 old_seconds: 0,
+                 new_seconds: 900
+               })
+
+      assert event.event_type == "free_plan_reset"
+      assert event.user_id == user.id
+      assert event.metadata[:old_seconds] == 0
+      assert event.metadata[:new_seconds] == 900
+    end
+
+    test "rejects invalid event types" do
+      user = user_fixture()
+
+      assert {:error, changeset} = Admin.log_billing_event("invalid_type", user.id, %{})
+      assert errors_on(changeset).event_type
+    end
+  end
+
+  describe "billing_stats/0" do
+    test "returns all zero stats for empty database" do
+      stats = Admin.billing_stats()
+
+      assert stats.upcoming.free_expiring_24h == 0
+      assert stats.upcoming.cancelled_expiring_24h == 0
+      assert stats.upcoming.expired_free_pending == 0
+      assert stats.upcoming.expired_cancelled_pending == 0
+      assert stats.upcoming.expiry_notifications_due == 0
+
+      assert stats.current_state.free_zero_seconds == 0
+      assert stats.current_state.low_seconds_users == 0
+      assert stats.current_state.past_due_subscriptions == 0
+      assert stats.current_state.minute_packs_expiring_30d == 0
+      assert stats.current_state.total_pack_seconds == 0
+
+      assert stats.recent_activity.free_resets_24h == 0
+      assert stats.recent_activity.downgrades_24h == 0
+      assert stats.recent_activity.expiry_notifications_sent_7d == 0
+    end
+
+    test "counts expired free users pending reset" do
+      free_plan = free_plan_fixture()
+      user = user_fixture()
+
+      # Expired free user (period ended yesterday)
+      Repo.update!(
+        Ecto.Changeset.change(user,
+          subscription_status: "none",
+          plan_id: free_plan.id,
+          current_period_ends_at:
+            DateTime.utc_now() |> DateTime.add(-1, :day) |> DateTime.truncate(:second)
+        )
+      )
+
+      stats = Admin.billing_stats()
+      assert stats.upcoming.expired_free_pending == 1
+    end
+
+    test "counts expired cancelled users pending downgrade" do
+      munch_plan = munch_plan_fixture()
+      user = user_fixture()
+
+      # Expired cancelled user
+      Repo.update!(
+        Ecto.Changeset.change(user,
+          subscription_status: "cancelled",
+          plan_id: munch_plan.id,
+          current_period_ends_at:
+            DateTime.utc_now() |> DateTime.add(-1, :hour) |> DateTime.truncate(:second)
+        )
+      )
+
+      stats = Admin.billing_stats()
+      assert stats.upcoming.expired_cancelled_pending == 1
+    end
+
+    test "counts free users expiring in next 24h" do
+      free_plan = free_plan_fixture()
+      user = user_fixture()
+
+      # Free user expiring in 12 hours
+      Repo.update!(
+        Ecto.Changeset.change(user,
+          subscription_status: "none",
+          plan_id: free_plan.id,
+          current_period_ends_at:
+            DateTime.utc_now() |> DateTime.add(12, :hour) |> DateTime.truncate(:second)
+        )
+      )
+
+      stats = Admin.billing_stats()
+      assert stats.upcoming.free_expiring_24h == 1
+    end
+
+    test "counts cancelled users expiring in next 24h" do
+      munch_plan = munch_plan_fixture()
+      user = user_fixture()
+
+      # Cancelled user expiring in 6 hours
+      Repo.update!(
+        Ecto.Changeset.change(user,
+          subscription_status: "cancelled",
+          plan_id: munch_plan.id,
+          current_period_ends_at:
+            DateTime.utc_now() |> DateTime.add(6, :hour) |> DateTime.truncate(:second)
+        )
+      )
+
+      stats = Admin.billing_stats()
+      assert stats.upcoming.cancelled_expiring_24h == 1
+    end
+
+    test "counts expiry notifications due" do
+      munch_plan = munch_plan_fixture()
+      user = user_fixture()
+
+      # Cancelled user expiring in 5 days, not yet notified
+      Repo.update!(
+        Ecto.Changeset.change(user,
+          subscription_status: "cancelled",
+          plan_id: munch_plan.id,
+          current_period_ends_at:
+            DateTime.utc_now() |> DateTime.add(5, :day) |> DateTime.truncate(:second),
+          expiry_notification_sent_at: nil
+        )
+      )
+
+      stats = Admin.billing_stats()
+      assert stats.upcoming.expiry_notifications_due == 1
+    end
+
+    test "counts free users with zero seconds" do
+      free_plan = free_plan_fixture()
+      user = user_fixture()
+
+      Repo.update!(
+        Ecto.Changeset.change(user,
+          subscription_status: "none",
+          plan_id: free_plan.id,
+          seconds_available: 0
+        )
+      )
+
+      stats = Admin.billing_stats()
+      assert stats.current_state.free_zero_seconds == 1
+    end
+
+    test "counts past_due subscriptions" do
+      user = user_fixture()
+
+      Repo.update!(Ecto.Changeset.change(user, subscription_status: "past_due"))
+
+      stats = Admin.billing_stats()
+      assert stats.current_state.past_due_subscriptions == 1
+    end
+
+    test "counts recent activity from audit log" do
+      user = user_fixture()
+
+      Admin.log_billing_event("free_plan_reset", user.id, %{})
+      Admin.log_billing_event("free_plan_reset", user.id, %{})
+      Admin.log_billing_event("subscription_downgraded", user.id, %{})
+      Admin.log_billing_event("expiry_notification_sent", user.id, %{})
+
+      stats = Admin.billing_stats()
+      assert stats.recent_activity.free_resets_24h == 2
+      assert stats.recent_activity.downgrades_24h == 1
+      assert stats.recent_activity.expiry_notifications_sent_7d == 1
     end
   end
 

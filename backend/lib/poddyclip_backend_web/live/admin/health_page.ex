@@ -18,23 +18,25 @@ defmodule PoddyclipBackendWeb.Live.Admin.HealthPage do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, health: nil, user_stats: nil)}
+    {:ok, assign(socket, health: nil, user_stats: nil, billing_stats: nil)}
   end
 
   @impl true
   def handle_refresh(socket) do
     health = Admin.health_check()
     user_stats = Admin.user_stats()
+    billing_stats = Admin.billing_stats()
 
-    {:noreply, assign(socket, health: health, user_stats: user_stats)}
+    {:noreply, assign(socket, health: health, user_stats: user_stats, billing_stats: billing_stats)}
   end
 
   @impl true
   def render(assigns) do
     health = assigns[:health] || Admin.health_check()
     user_stats = assigns[:user_stats] || Admin.user_stats()
+    billing_stats = assigns[:billing_stats] || Admin.billing_stats()
 
-    assigns = assign(assigns, health: health, user_stats: user_stats)
+    assigns = assign(assigns, health: health, user_stats: user_stats, billing_stats: billing_stats)
 
     ~H"""
     <.row>
@@ -80,6 +82,24 @@ defmodule PoddyclipBackendWeb.Live.Admin.HealthPage do
       title="Users by Subscription"
       inner_title="Status"
       fields={subscription_fields(@user_stats.by_subscription)}
+    />
+
+    <.fields_card
+      title="Billing: Upcoming"
+      inner_title="Workers will process soon"
+      fields={upcoming_fields(@billing_stats.upcoming)}
+    />
+
+    <.fields_card
+      title="Billing: Current State"
+      inner_title="Notable account states"
+      fields={current_state_fields(@billing_stats.current_state)}
+    />
+
+    <.fields_card
+      title="Billing: Recent Activity"
+      inner_title="From audit log"
+      fields={recent_activity_fields(@billing_stats.recent_activity)}
     />
 
     <.card title="Timestamp" inner_title="Last Updated">
@@ -135,6 +155,51 @@ defmodule PoddyclipBackendWeb.Live.Admin.HealthPage do
       {status, "#{count} users"}
     end)
   end
+
+  defp upcoming_fields(upcoming) do
+    [
+      {"Free expiring (24h)", "#{upcoming.free_expiring_24h}"},
+      {"Cancelled expiring (24h)", "#{upcoming.cancelled_expiring_24h}"},
+      {"Expired free (pending)", alert_if_nonzero(upcoming.expired_free_pending)},
+      {"Expired cancelled (pending)", alert_if_nonzero(upcoming.expired_cancelled_pending)},
+      {"Expiry notifications due", "#{upcoming.expiry_notifications_due}"}
+    ]
+  end
+
+  defp current_state_fields(current) do
+    [
+      {"Free with 0 seconds", "#{current.free_zero_seconds}"},
+      {"Low seconds users (<20%)", "#{current.low_seconds_users}"},
+      {"Past due subscriptions", alert_if_nonzero(current.past_due_subscriptions)},
+      {"Minute packs expiring (30d)", "#{current.minute_packs_expiring_30d}"},
+      {"Total pack seconds", format_seconds(current.total_pack_seconds)}
+    ]
+  end
+
+  defp recent_activity_fields(recent) do
+    [
+      {"Free resets (24h)", "#{recent.free_resets_24h}"},
+      {"Downgrades (24h)", "#{recent.downgrades_24h}"},
+      {"Expiry notifications (7d)", "#{recent.expiry_notifications_sent_7d}"}
+    ]
+  end
+
+  defp alert_if_nonzero(0), do: "0"
+  defp alert_if_nonzero(n), do: "!! #{n} !!"
+
+  defp format_seconds(0), do: "0"
+  defp format_seconds(seconds) when is_integer(seconds) do
+    minutes = div(seconds, 60)
+    hours = div(minutes, 60)
+    rem_minutes = rem(minutes, 60)
+
+    if hours > 0 do
+      "#{hours}h #{rem_minutes}m (#{seconds}s)"
+    else
+      "#{minutes}m (#{seconds}s)"
+    end
+  end
+  defp format_seconds(_), do: "0"
 
   defp truncate(nil, _), do: ""
   defp truncate(str, max) when byte_size(str) <= max, do: str

@@ -8,7 +8,7 @@ defmodule PoddyclipBackend.Workers.FreePlanResetWorker do
   """
   use GenServer
   require Logger
-  alias PoddyclipBackend.{Repo, Accounts.User}
+  alias PoddyclipBackend.{Repo, Admin, Accounts.User}
   import Ecto.Query
 
   @check_interval :timer.hours(6)
@@ -61,6 +61,11 @@ defmodule PoddyclipBackend.Workers.FreePlanResetWorker do
       |> Repo.update()
       |> case do
         {:ok, _updated} ->
+          Admin.log_billing_event("free_plan_reset", user.id, %{
+            old_seconds: user.seconds_available,
+            new_seconds: free_plan.seconds
+          })
+
           Logger.info("Reset free plan seconds for user #{user.id}, next period ends #{new_period_end}")
 
         {:error, changeset} ->

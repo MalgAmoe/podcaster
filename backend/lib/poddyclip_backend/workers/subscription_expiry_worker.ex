@@ -5,7 +5,7 @@ defmodule PoddyclipBackend.Workers.SubscriptionExpiryWorker do
   """
   use GenServer
   require Logger
-  alias PoddyclipBackend.{Repo, Accounts.User}
+  alias PoddyclipBackend.{Repo, Admin, Accounts.User}
   import Ecto.Query
 
   # Check every hour
@@ -45,12 +45,16 @@ defmodule PoddyclipBackend.Workers.SubscriptionExpiryWorker do
       from(u in User,
         where: u.subscription_status == "cancelled",
         where: not is_nil(u.current_period_ends_at),
-        where: u.current_period_ends_at < ^now
+        where: u.current_period_ends_at < ^now,
+        preload: [:plan]
       )
       |> Repo.all()
 
     for user <- expired_users do
       Logger.info("Expiring subscription for user #{user.id}")
+
+      old_plan_name = if user.plan, do: user.plan.name, else: "unknown"
+      old_seconds = user.seconds_available
 
       user
       |> Ecto.Changeset.change(%{
@@ -61,6 +65,17 @@ defmodule PoddyclipBackend.Workers.SubscriptionExpiryWorker do
         seconds_available: free_plan.seconds
       })
       |> Repo.update()
+      |> case do
+        {:ok, _updated} ->
+          Admin.log_billing_event("subscription_downgraded", user.id, %{
+            old_plan: old_plan_name,
+            old_seconds: old_seconds,
+            new_seconds: free_plan.seconds
+          })
+
+        {:error, changeset} ->
+          Logger.error("Failed to expire subscription for user #{user.id}: #{inspect(changeset.errors)}")
+      end
     end
 
     if length(expired_users) > 0 do

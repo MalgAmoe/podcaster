@@ -5,6 +5,7 @@ defmodule PoddyclipBackend.Admin do
   Provides query functions for:
   - Job statistics (queued, processing, completed, failed)
   - User statistics (by plan, subscription status)
+  - Billing statistics (upcoming worker actions, current state, audit log)
   - System health checks (database, S3, Rust API, Oban)
   """
 
@@ -12,6 +13,153 @@ defmodule PoddyclipBackend.Admin do
   alias PoddyclipBackend.Repo
   alias PoddyclipBackend.Processing.Job
   alias PoddyclipBackend.Accounts.User
+  alias PoddyclipBackend.Billing.{BillingEvent, MinutePack}
+
+  # ----- Billing Audit Log -----
+
+  @doc """
+  Logs a billing event for audit purposes.
+
+  ## Examples
+
+      log_billing_event("free_plan_reset", user_id, %{old_seconds: 0, new_seconds: 900})
+      log_billing_event("subscription_downgraded", user_id, %{old_plan: "munch"})
+  """
+  def log_billing_event(event_type, user_id, metadata \\ %{}) do
+    %BillingEvent{}
+    |> BillingEvent.changeset(%{
+      event_type: event_type,
+      user_id: user_id,
+      metadata: metadata
+    })
+    |> Repo.insert()
+  end
+
+  # ----- Billing Stats -----
+
+  @doc """
+  Returns billing statistics in 3 sections: upcoming worker actions,
+  current account states, and recent activity from the audit log.
+  """
+  def billing_stats do
+    %{
+      upcoming: upcoming_stats(),
+      current_state: current_state_stats(),
+      recent_activity: recent_activity_stats()
+    }
+  end
+
+  defp upcoming_stats do
+    now = DateTime.utc_now()
+    in_24h = DateTime.add(now, 24, :hour)
+    in_7d = DateTime.add(now, 7, :day)
+
+    %{
+      free_expiring_24h:
+        from(u in User,
+          where: u.subscription_status == "none",
+          where: not is_nil(u.current_period_ends_at),
+          where: u.current_period_ends_at > ^now,
+          where: u.current_period_ends_at <= ^in_24h
+        )
+        |> Repo.aggregate(:count),
+      cancelled_expiring_24h:
+        from(u in User,
+          where: u.subscription_status == "cancelled",
+          where: not is_nil(u.current_period_ends_at),
+          where: u.current_period_ends_at > ^now,
+          where: u.current_period_ends_at <= ^in_24h
+        )
+        |> Repo.aggregate(:count),
+      expired_free_pending:
+        from(u in User,
+          where: u.subscription_status == "none",
+          where: not is_nil(u.current_period_ends_at),
+          where: u.current_period_ends_at < ^now
+        )
+        |> Repo.aggregate(:count),
+      expired_cancelled_pending:
+        from(u in User,
+          where: u.subscription_status == "cancelled",
+          where: not is_nil(u.current_period_ends_at),
+          where: u.current_period_ends_at < ^now
+        )
+        |> Repo.aggregate(:count),
+      expiry_notifications_due:
+        from(u in User,
+          where: u.subscription_status == "cancelled",
+          where: not is_nil(u.current_period_ends_at),
+          where: u.current_period_ends_at > ^now,
+          where: u.current_period_ends_at <= ^in_7d,
+          where: is_nil(u.expiry_notification_sent_at)
+        )
+        |> Repo.aggregate(:count)
+    }
+  end
+
+  defp current_state_stats do
+    now = DateTime.utc_now()
+    in_30d = DateTime.add(now, 30, :day)
+
+    %{
+      free_zero_seconds:
+        from(u in User,
+          where: u.subscription_status == "none",
+          where: u.seconds_available == 0
+        )
+        |> Repo.aggregate(:count),
+      low_seconds_users:
+        from(u in User,
+          join: p in assoc(u, :plan),
+          where: u.seconds_available > 0,
+          where: u.seconds_available < fragment("? * 0.2", p.seconds)
+        )
+        |> Repo.aggregate(:count),
+      past_due_subscriptions:
+        from(u in User, where: u.subscription_status == "past_due")
+        |> Repo.aggregate(:count),
+      minute_packs_expiring_30d:
+        from(mp in MinutePack,
+          where: mp.expires_at <= ^in_30d,
+          where: mp.expires_at > ^now,
+          where: mp.seconds_remaining > 0
+        )
+        |> Repo.aggregate(:count),
+      total_pack_seconds:
+        from(mp in MinutePack,
+          where: mp.expires_at > ^now,
+          where: mp.seconds_remaining > 0,
+          select: sum(mp.seconds_remaining)
+        )
+        |> Repo.one() || 0
+    }
+  end
+
+  defp recent_activity_stats do
+    cutoff_24h = DateTime.utc_now() |> DateTime.add(-24, :hour)
+    cutoff_7d = DateTime.utc_now() |> DateTime.add(-7, :day)
+
+    %{
+      free_resets_24h:
+        from(be in BillingEvent,
+          where: be.event_type == "free_plan_reset",
+          where: be.inserted_at > ^cutoff_24h
+        )
+        |> Repo.aggregate(:count),
+      downgrades_24h:
+        from(be in BillingEvent,
+          where: be.event_type == "subscription_downgraded",
+          where: be.inserted_at > ^cutoff_24h
+        )
+        |> Repo.aggregate(:count),
+      expiry_notifications_sent_7d:
+        from(be in BillingEvent,
+          where: be.event_type == "expiry_notification_sent",
+          where: be.inserted_at > ^cutoff_7d
+        )
+        |> Repo.aggregate(:count)
+    }
+  end
 
   # ----- Job Stats -----
 

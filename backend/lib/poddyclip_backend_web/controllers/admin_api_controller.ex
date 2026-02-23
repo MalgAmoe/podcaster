@@ -78,6 +78,20 @@ defmodule PoddyclipBackendWeb.AdminApiController do
     })
   end
 
+  @doc """
+  GET /admin/api/billing/stats
+
+  Returns billing statistics: upcoming worker actions, current state, and recent activity.
+  """
+  def billing_stats(conn, _params) do
+    stats = Admin.billing_stats()
+
+    json(conn, %{
+      billing: stats,
+      timestamp: DateTime.utc_now()
+    })
+  end
+
   defp parse_limit(nil, default), do: default
   defp parse_limit(value, default) when is_binary(value) do
     case Integer.parse(value) do

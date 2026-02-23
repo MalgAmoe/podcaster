@@ -145,6 +145,37 @@ defmodule PoddyclipBackendWeb.AdminApiControllerTest do
       end
     end
 
+    describe "GET /admin/api/billing/stats" do
+      test "returns billing statistics structure", %{conn: conn} do
+        conn = get(conn, ~p"/admin/api/billing/stats")
+
+        assert %{
+                 "billing" => %{
+                   "upcoming" => %{
+                     "free_expiring_24h" => _,
+                     "cancelled_expiring_24h" => _,
+                     "expired_free_pending" => _,
+                     "expired_cancelled_pending" => _,
+                     "expiry_notifications_due" => _
+                   },
+                   "current_state" => %{
+                     "free_zero_seconds" => _,
+                     "low_seconds_users" => _,
+                     "past_due_subscriptions" => _,
+                     "minute_packs_expiring_30d" => _,
+                     "total_pack_seconds" => _
+                   },
+                   "recent_activity" => %{
+                     "free_resets_24h" => _,
+                     "downgrades_24h" => _,
+                     "expiry_notifications_sent_7d" => _
+                   }
+                 },
+                 "timestamp" => _
+               } = json_response(conn, 200)
+      end
+    end
+
     defp insert_job(user_id, status, opts \\ []) do
       %Job{}
       |> Job.changeset(%{

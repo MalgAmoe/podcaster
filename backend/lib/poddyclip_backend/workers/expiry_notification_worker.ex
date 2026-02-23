@@ -5,7 +5,7 @@ defmodule PoddyclipBackend.Workers.ExpiryNotificationWorker do
   """
   use GenServer
   require Logger
-  alias PoddyclipBackend.{Repo, Accounts, Accounts.User, Accounts.UserNotifier}
+  alias PoddyclipBackend.{Repo, Admin, Accounts, Accounts.User, Accounts.UserNotifier}
   import Ecto.Query
 
   # Check once per day
@@ -71,6 +71,10 @@ defmodule PoddyclipBackend.Workers.ExpiryNotificationWorker do
     try do
       UserNotifier.deliver_subscription_expiring(user, days_remaining, end_date)
       Accounts.record_expiry_notification(user)
+
+      Admin.log_billing_event("expiry_notification_sent", user.id, %{
+        days_until_expiry: days_remaining
+      })
 
       Logger.info("Expiry notification sent",
         user_id: user.id,

@@ -32,6 +32,7 @@ defmodule PoddyclipBackendWeb.AdminRouter do
     get "/jobs/active", AdminApiController, :active_jobs
     get "/errors", AdminApiController, :errors
     get "/users/stats", AdminApiController, :user_stats
+    get "/billing/stats", AdminApiController, :billing_stats
   end
 
   # Admin LiveDashboard
