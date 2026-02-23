@@ -40,6 +40,7 @@ defmodule PoddyclipBackend.Workers.FreePlanResetWorker do
   """
   def reset_free_plans do
     now = DateTime.utc_now()
+    free_plan = PoddyclipBackend.Billing.get_or_create_free_plan()
 
     expired_free_users =
       from(u in User,
@@ -54,7 +55,7 @@ defmodule PoddyclipBackend.Workers.FreePlanResetWorker do
 
       user
       |> Ecto.Changeset.change(%{
-        seconds_available: 900,
+        seconds_available: free_plan.seconds,
         current_period_ends_at: new_period_end
       })
       |> Repo.update()

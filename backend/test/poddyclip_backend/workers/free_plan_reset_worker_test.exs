@@ -113,7 +113,7 @@ defmodule PoddyclipBackend.Workers.FreePlanResetWorkerTest do
   end
 
   describe "subscription downgrade sets free period" do
-    test "expiry worker sets current_period_ends_at on downgrade" do
+    test "Billing.check_subscription_expiry sets current_period_ends_at on downgrade" do
       munch_plan = munch_plan_fixture()
       user = user_fixture()
 
@@ -133,9 +133,95 @@ defmodule PoddyclipBackend.Workers.FreePlanResetWorkerTest do
       {:ok, updated} = Billing.check_subscription_expiry(user)
 
       assert updated.subscription_status == "none"
+      # Seconds reset to free plan amount — paid period is over
+      assert updated.seconds_available == 900
       # Should have a new 30-day period, not nil
       assert updated.current_period_ends_at != nil
       assert DateTime.compare(updated.current_period_ends_at, DateTime.utc_now()) == :gt
+    end
+  end
+
+  describe "SubscriptionExpiryWorker.expire_subscriptions/0" do
+    alias PoddyclipBackend.Workers.SubscriptionExpiryWorker
+
+    test "downgrades expired cancelled subscription to free plan" do
+      free_plan = free_plan_fixture()
+      munch_plan = munch_plan_fixture()
+      user = user_fixture()
+
+      past = DateTime.utc_now() |> DateTime.add(-1, :hour) |> DateTime.truncate(:second)
+
+      {:ok, user} =
+        user
+        |> Ecto.Changeset.change(
+          plan_id: munch_plan.id,
+          subscription_status: "cancelled",
+          polar_subscription_id: "sub_expire_test",
+          current_period_ends_at: past,
+          seconds_available: 5000
+        )
+        |> Repo.update()
+
+      SubscriptionExpiryWorker.expire_subscriptions()
+
+      updated = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
+      assert updated.subscription_status == "none"
+      assert updated.plan_id == free_plan.id
+      assert updated.polar_subscription_id == nil
+      # Seconds reset to free plan amount — paid period is over
+      assert updated.seconds_available == free_plan.seconds
+      # Should start a new 30-day free period
+      assert updated.current_period_ends_at != nil
+      assert DateTime.compare(updated.current_period_ends_at, DateTime.utc_now()) == :gt
+    end
+
+    test "does not expire cancelled subscription with future period" do
+      munch_plan = munch_plan_fixture()
+      user = user_fixture()
+
+      future = DateTime.utc_now() |> DateTime.add(10, :day) |> DateTime.truncate(:second)
+
+      {:ok, user} =
+        user
+        |> Ecto.Changeset.change(
+          plan_id: munch_plan.id,
+          subscription_status: "cancelled",
+          polar_subscription_id: "sub_future_test",
+          current_period_ends_at: future,
+          seconds_available: 30000
+        )
+        |> Repo.update()
+
+      SubscriptionExpiryWorker.expire_subscriptions()
+
+      updated = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
+      assert updated.subscription_status == "cancelled"
+      assert updated.plan_id == munch_plan.id
+      assert updated.seconds_available == 30000
+    end
+
+    test "does not expire active subscriptions" do
+      munch_plan = munch_plan_fixture()
+      user = user_fixture()
+
+      past = DateTime.utc_now() |> DateTime.add(-1, :hour) |> DateTime.truncate(:second)
+
+      {:ok, user} =
+        user
+        |> Ecto.Changeset.change(
+          plan_id: munch_plan.id,
+          subscription_status: "active",
+          polar_subscription_id: "sub_active_test",
+          current_period_ends_at: past,
+          seconds_available: 30000
+        )
+        |> Repo.update()
+
+      SubscriptionExpiryWorker.expire_subscriptions()
+
+      updated = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
+      assert updated.subscription_status == "active"
+      assert updated.plan_id == munch_plan.id
     end
   end
 end

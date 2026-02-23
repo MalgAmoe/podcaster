@@ -32,8 +32,13 @@ defmodule PoddyclipBackend.Workers.SubscriptionExpiryWorker do
     Process.send_after(self(), :check_expiry, @check_interval)
   end
 
-  defp expire_subscriptions do
+  @doc """
+  Finds cancelled subscriptions whose period has ended and downgrades to free.
+  Can be called manually for testing.
+  """
+  def expire_subscriptions do
     now = DateTime.utc_now()
+    free_plan = PoddyclipBackend.Billing.get_or_create_free_plan()
 
     # Find users with cancelled subscriptions whose period has ended
     expired_users =
@@ -52,8 +57,8 @@ defmodule PoddyclipBackend.Workers.SubscriptionExpiryWorker do
         subscription_status: "none",
         polar_subscription_id: nil,
         current_period_ends_at: DateTime.utc_now() |> DateTime.add(30, :day) |> DateTime.truncate(:second),
-        plan_id: nil,
-        seconds_available: 900
+        plan_id: free_plan.id,
+        seconds_available: free_plan.seconds
       })
       |> Repo.update()
     end

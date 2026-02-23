@@ -358,6 +358,9 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
       # Should keep remaining minutes
       assert updated_user.seconds_available == 30000
       assert updated_user.polar_subscription_id == nil
+      # Should start a new 30-day free period (not nil)
+      assert updated_user.current_period_ends_at != nil
+      assert DateTime.compare(updated_user.current_period_ends_at, DateTime.utc_now()) == :gt
     end
   end
 

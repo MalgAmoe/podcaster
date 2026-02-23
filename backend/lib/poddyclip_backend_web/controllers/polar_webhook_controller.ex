@@ -241,7 +241,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookController do
         plan_id: free_plan.id,
         subscription_status: "none",
         polar_subscription_id: nil,
-        current_period_ends_at: nil
+        current_period_ends_at: DateTime.utc_now() |> DateTime.add(30, :day) |> DateTime.truncate(:second)
         # Keep seconds_available as is - don't take away remaining time
       })
 

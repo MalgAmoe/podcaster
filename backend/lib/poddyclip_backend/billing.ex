@@ -377,53 +377,6 @@ defmodule PoddyclipBackend.Billing do
     deduct_from_packs_recursive(rest, new_remaining)
   end
 
-  @doc """
-  Refunds seconds to a user's balance.
-
-  Used when a job fails and the estimated seconds should be returned.
-
-  ## Examples
-
-      iex> refund_seconds(user, 300)
-      {:ok, %User{seconds_available: 1200}}
-  """
-  def refund_seconds(%User{seconds_available: available} = user, amount) when amount > 0 do
-    case user
-         |> Ecto.Changeset.change(seconds_available: available + amount)
-         |> Repo.update() do
-      {:ok, updated_user} ->
-        Logger.info("Seconds refunded",
-          user_id: user.id,
-          amount: amount,
-          previous: available,
-          new_balance: updated_user.seconds_available
-        )
-        {:ok, updated_user}
-
-      error ->
-        error
-    end
-  end
-
-  @doc """
-  Adjusts seconds after job completion.
-
-  If actual usage differs from estimated, adjusts the user's balance.
-  Positive adjustment = refund (job used less), negative = deduct more.
-
-  ## Examples
-
-      iex> adjust_seconds(user, 120)  # Job used 120 fewer seconds
-      {:ok, %User{}}
-  """
-  def adjust_seconds(%User{seconds_available: available} = user, adjustment) do
-    new_balance = max(0, available + adjustment)
-
-    user
-    |> Ecto.Changeset.change(seconds_available: new_balance)
-    |> Repo.update()
-  end
-
   # ----- Subscriptions -----
 
   @doc """
@@ -440,7 +393,8 @@ defmodule PoddyclipBackend.Billing do
         plan_id: free_plan.id,
         subscription_status: "none",
         polar_subscription_id: nil,
-        current_period_ends_at: DateTime.utc_now() |> DateTime.add(30, :day) |> DateTime.truncate(:second)
+        current_period_ends_at: DateTime.utc_now() |> DateTime.add(30, :day) |> DateTime.truncate(:second),
+        seconds_available: free_plan.seconds
       })
     else
       {:ok, user}
@@ -455,23 +409,6 @@ defmodule PoddyclipBackend.Billing do
   def subscription_expired?(%User{current_period_ends_at: nil}), do: false
   def subscription_expired?(%User{current_period_ends_at: period_end}) do
     DateTime.compare(DateTime.utc_now(), period_end) == :gt
-  end
-
-  @doc """
-  Resets a user's seconds to their plan amount.
-
-  Called when a subscription renews.
-  """
-  def reset_subscription_seconds(%User{} = user) do
-    user = Repo.preload(user, :plan)
-
-    if user.plan do
-      user
-      |> Ecto.Changeset.change(seconds_available: user.plan.seconds)
-      |> Repo.update()
-    else
-      {:error, :no_plan}
-    end
   end
 
   @doc """

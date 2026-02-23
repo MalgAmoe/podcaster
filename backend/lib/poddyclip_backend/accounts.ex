@@ -420,7 +420,7 @@ defmodule PoddyclipBackend.Accounts do
     Logger.info("Deleting user account", user_id: user.id, email: user.email)
 
     # 1. Revoke Polar subscription if active (immediate termination)
-    if user.polar_subscription_id && user.subscription_status == "active" do
+    if user.polar_subscription_id && user.subscription_status in ["active", "past_due"] do
       case Polar.revoke_subscription(user.polar_subscription_id) do
         {:ok, _} ->
           Logger.info("Revoked Polar subscription for deleted user",

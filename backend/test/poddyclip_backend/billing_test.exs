@@ -71,25 +71,6 @@ defmodule PoddyclipBackend.BillingTest do
       assert {:error, :insufficient_seconds} = Billing.deduct_seconds(user, 6000)
     end
 
-    test "refund_seconds/2 adds to available seconds", %{user: user} do
-      assert {:ok, updated} = Billing.refund_seconds(user, 300)
-      assert updated.seconds_available == 1200
-    end
-
-    test "adjust_seconds/2 adjusts balance", %{user: user} do
-      # Positive adjustment (refund)
-      assert {:ok, updated} = Billing.adjust_seconds(user, 300)
-      assert updated.seconds_available == 1200
-
-      # Negative adjustment (deduct more)
-      assert {:ok, updated2} = Billing.adjust_seconds(updated, -600)
-      assert updated2.seconds_available == 600
-    end
-
-    test "adjust_seconds/2 doesn't go below zero", %{user: user} do
-      assert {:ok, updated} = Billing.adjust_seconds(user, -6000)
-      assert updated.seconds_available == 0
-    end
   end
 
   describe "subscriptions" do
@@ -125,19 +106,6 @@ defmodule PoddyclipBackend.BillingTest do
       assert updated.polar_customer_id == "cus_123"
       assert updated.polar_subscription_id == "sub_456"
       assert DateTime.compare(updated.current_period_ends_at, period_end) == :eq
-    end
-
-    test "reset_subscription_seconds/1 resets to plan amount", %{user: user, munch_plan: munch_plan} do
-      # First upgrade to pro
-      {:ok, user} =
-        Billing.update_subscription(user, %{
-          plan_id: munch_plan.id,
-          seconds_available: 6000
-        })
-
-      # Now reset
-      assert {:ok, updated} = Billing.reset_subscription_seconds(user)
-      assert updated.seconds_available == 54000
     end
 
     test "get_user_by_subscription_id/1 finds user", %{user: user} do
@@ -180,8 +148,8 @@ defmodule PoddyclipBackend.BillingTest do
       assert updated.plan_id == free_plan.id
       assert updated.subscription_status == "none"
       assert updated.polar_subscription_id == nil
-      # Should keep remaining seconds
-      assert updated.seconds_available == 30000
+      # Seconds reset to free plan amount — paid period is over
+      assert updated.seconds_available == free_plan.seconds
     end
 
     test "check_subscription_expiry/1 keeps active cancelled subscription", %{user: user, munch_plan: munch_plan} do
