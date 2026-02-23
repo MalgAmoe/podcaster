@@ -80,6 +80,25 @@ defmodule PoddyclipBackend.Workers.FreePlanResetWorkerTest do
       assert updated.seconds_available == 100
     end
 
+    test "does not reset cancelled subscribers", %{user: user} do
+      # Cancelled users are handled by SubscriptionExpiryWorker, not this worker
+      past = DateTime.utc_now() |> DateTime.add(-1, :hour) |> DateTime.truncate(:second)
+
+      {:ok, user} =
+        user
+        |> Ecto.Changeset.change(
+          subscription_status: "cancelled",
+          current_period_ends_at: past,
+          seconds_available: 5000
+        )
+        |> Repo.update()
+
+      FreePlanResetWorker.reset_free_plans()
+
+      updated = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
+      assert updated.seconds_available == 5000
+    end
+
     test "does not reset user with nil period", %{user: user} do
       {:ok, user} =
         user
