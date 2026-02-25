@@ -5,11 +5,13 @@ defmodule Mix.Tasks.Promo do
   ## Create a promo
 
       mix promo create NAME --bonus 1800 --max 5 --hours 24
+      mix promo create NAME --bonus 1800 --max 5 --minutes 30
 
   Options:
-    --bonus   Bonus seconds to give new signups (required)
-    --max     Maximum number of claims (required)
-    --hours   How many hours the promo lasts from now (default: 24)
+    --bonus     Bonus seconds to give new signups (required)
+    --max       Maximum number of claims (required)
+    --hours     How many hours the promo lasts from now (default: 24)
+    --minutes   How many minutes the promo lasts (overrides --hours)
 
   ## List active promos
 
@@ -45,17 +47,23 @@ defmodule Mix.Tasks.Promo do
   defp create(args) do
     {opts, rest, _} =
       OptionParser.parse(args,
-        strict: [bonus: :integer, max: :integer, hours: :integer]
+        strict: [bonus: :integer, max: :integer, hours: :integer, minutes: :integer]
       )
 
     name = List.first(rest)
     bonus = opts[:bonus]
     max_claims = opts[:max]
-    hours = opts[:hours] || 24
+
+    duration_minutes =
+      cond do
+        opts[:minutes] -> opts[:minutes]
+        opts[:hours] -> opts[:hours] * 60
+        true -> 24 * 60
+      end
 
     cond do
       is_nil(name) ->
-        Mix.shell().error("Usage: mix promo create NAME --bonus SECONDS --max CLAIMS [--hours HOURS]")
+        Mix.shell().error("Usage: mix promo create NAME --bonus SECONDS --max CLAIMS [--hours H | --minutes M]")
 
       is_nil(bonus) or is_nil(max_claims) ->
         Mix.shell().error("--bonus and --max are required")
@@ -70,7 +78,7 @@ defmodule Mix.Tasks.Promo do
             bonus_seconds: bonus,
             max_claims: max_claims,
             starts_at: now,
-            expires_at: DateTime.add(now, hours, :hour),
+            expires_at: DateTime.add(now, duration_minutes, :minute),
             active: true
           })
           |> Repo.insert()
@@ -82,7 +90,7 @@ defmodule Mix.Tasks.Promo do
               Name:    #{promo.name}
               Bonus:   #{promo.bonus_seconds}s (#{div(promo.bonus_seconds, 60)}min)
               Claims:  0/#{promo.max_claims}
-              Expires: #{promo.expires_at} (#{hours}h from now)
+              Expires: #{promo.expires_at} (#{format_duration(duration_minutes)} from now)
             """)
 
           {:error, changeset} ->
@@ -135,4 +143,12 @@ defmodule Mix.Tasks.Promo do
     {count, _} = Repo.delete_all(Promo)
     Mix.shell().info("Deleted #{count} promo(s).")
   end
+
+  defp format_duration(minutes) when minutes >= 60 do
+    h = div(minutes, 60)
+    m = rem(minutes, 60)
+    if m == 0, do: "#{h}h", else: "#{h}h #{m}min"
+  end
+
+  defp format_duration(minutes), do: "#{minutes}min"
 end
