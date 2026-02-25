@@ -88,14 +88,12 @@
                   <% end %>
                 </div>
               </li>
-              <%= if @current_scope.user.subscription_status != "active" do %>
-                <li class="text-xs text-base-content/50 px-4 py-1">
-                  <% total = PoddyclipBackendWeb.Layouts.total_seconds_available(@current_scope.user) %>
-                  <% mins = div(total, 60) %>
-                  <% secs = rem(total, 60) %>
-                  <%= "#{mins}m #{secs}s" %> <%= gettext("remaining") %>
-                </li>
-              <% end %>
+              <div class="text-xs text-base-content/50 px-3 py-1">
+                <% total = PoddyclipBackendWeb.Layouts.total_seconds_available(@current_scope.user) %>
+                <% mins = div(total, 60) %>
+                <% secs = rem(total, 60) %>
+                <span id="navbar-remaining"><%= "#{mins}m #{secs}s" %></span> <%= gettext("remaining") %>
+              </div>
               <li><.link href={locale_path(@locale, "/account")}><%= gettext("Account") %></.link></li>
               <li><.link href={locale_path(@locale, "/users/settings")}><%= gettext("Settings") %></.link></li>
               <li><.link href={locale_path(@locale, "/help")}><%= gettext("Help & FAQ") %></.link></li>

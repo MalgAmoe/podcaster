@@ -4,6 +4,7 @@ defmodule PoddyclipBackendWeb.UserSocket do
   alias PoddyclipBackend.Accounts
 
   channel "job:*", PoddyclipBackendWeb.JobChannel
+  channel "user:*", PoddyclipBackendWeb.UserChannel
 
   @doc """
   Connect to socket using a signed user token.

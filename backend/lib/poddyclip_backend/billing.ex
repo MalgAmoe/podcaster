@@ -330,6 +330,7 @@ defmodule PoddyclipBackend.Billing do
           # Check if crossing 80% threshold and send notification
           maybe_send_low_seconds_notification(updated_user, subscription_seconds, amount)
 
+          broadcast_user_update(Repo.preload(updated_user, :plan))
           {:ok, updated_user}
 
         {:error, reason} ->
