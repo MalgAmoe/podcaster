@@ -98,6 +98,7 @@ defmodule Mix.Tasks.Polar.ImportSubscribers do
       |> Ecto.Changeset.put_change(:current_period_ends_at, period_end)
       |> Ecto.Changeset.put_change(:plan_id, munch_plan.id)
       |> Ecto.Changeset.put_change(:seconds_available, munch_plan.seconds)
+      |> Ecto.Changeset.put_change(:seconds_allocated, munch_plan.seconds)
 
     case Repo.insert(changeset) do
       {:ok, user} ->

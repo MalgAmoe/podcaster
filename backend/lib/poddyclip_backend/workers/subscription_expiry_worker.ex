@@ -62,7 +62,8 @@ defmodule PoddyclipBackend.Workers.SubscriptionExpiryWorker do
         polar_subscription_id: nil,
         current_period_ends_at: DateTime.utc_now() |> DateTime.add(30, :day) |> DateTime.truncate(:second),
         plan_id: free_plan.id,
-        seconds_available: free_plan.seconds
+        seconds_available: free_plan.seconds,
+        seconds_allocated: free_plan.seconds
       })
       |> Repo.update()
       |> case do

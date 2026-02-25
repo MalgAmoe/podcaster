@@ -81,11 +81,13 @@ defmodule PoddyclipBackend.Billing.PromoTest do
       {:ok, user} = Accounts.register_user(valid_user_attributes())
       # 900 (free plan) + 1800 (promo bonus) = 2700
       assert user.seconds_available == 2700
+      assert user.seconds_allocated == 2700
     end
 
     test "new user gets normal seconds when no promo exists" do
       {:ok, user} = Accounts.register_user(valid_user_attributes())
       assert user.seconds_available == 900
+      assert user.seconds_allocated == 900
     end
 
     test "promo claims_count increments on registration" do
@@ -108,6 +110,34 @@ defmodule PoddyclipBackend.Billing.PromoTest do
       # Second signup gets normal amount
       {:ok, user2} = Accounts.register_user(valid_user_attributes())
       assert user2.seconds_available == 900
+    end
+
+    test "user gets base seconds if promo exhausted between find and claim" do
+      promo = promo_fixture(%{bonus_seconds: 1800, max_claims: 1})
+
+      # Simulate another process claiming the last slot before our registration
+      {:ok, _} = Billing.claim_promo(promo)
+
+      # Promo is now exhausted — registration should still succeed with base seconds
+      {:ok, user} = Accounts.register_user(valid_user_attributes())
+      assert user.seconds_available == 900
+      assert user.seconds_allocated == 900
+    end
+
+    test "promo claim is rolled back if user insert fails" do
+      promo = promo_fixture(%{bonus_seconds: 1800, max_claims: 1})
+
+      # Try to register with a duplicate email to trigger insert failure
+      {:ok, _existing} = Accounts.register_user(valid_user_attributes(%{email: "dupe@test.com"}))
+
+      # Promo was claimed once
+      assert Repo.get!(Billing.Promo, promo.id).claims_count == 1
+
+      # Attempt duplicate registration — should fail and rollback the claim
+      {:error, _changeset} = Accounts.register_user(valid_user_attributes(%{email: "dupe@test.com"}))
+
+      # Claims count should still be 1, not 2
+      assert Repo.get!(Billing.Promo, promo.id).claims_count == 1
     end
   end
 end

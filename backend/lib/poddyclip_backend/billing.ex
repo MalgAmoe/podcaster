@@ -394,7 +394,8 @@ defmodule PoddyclipBackend.Billing do
         subscription_status: "none",
         polar_subscription_id: nil,
         current_period_ends_at: DateTime.utc_now() |> DateTime.add(30, :day) |> DateTime.truncate(:second),
-        seconds_available: free_plan.seconds
+        seconds_available: free_plan.seconds,
+        seconds_allocated: free_plan.seconds
       })
     else
       {:ok, user}
@@ -561,7 +562,9 @@ defmodule PoddyclipBackend.Billing do
     # If upgrading from free/none, also set seconds
     attrs =
       if user.subscription_status != "active" && munch_plan do
-        Map.put(attrs, :seconds_available, munch_plan.seconds)
+        attrs
+        |> Map.put(:seconds_available, munch_plan.seconds)
+        |> Map.put(:seconds_allocated, munch_plan.seconds)
       else
         attrs
       end
@@ -608,7 +611,8 @@ defmodule PoddyclipBackend.Billing do
         polar_subscription_id: nil,
         current_period_ends_at: DateTime.utc_now() |> DateTime.add(30, :day) |> DateTime.truncate(:second),
         plan_id: free_plan.id,
-        seconds_available: free_plan.seconds
+        seconds_available: free_plan.seconds,
+        seconds_allocated: free_plan.seconds
       })
     else
       {:ok, user}

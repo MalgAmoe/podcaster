@@ -41,7 +41,7 @@ defmodule PoddyclipBackendWeb.AccountLive do
   defp assign_user_data(socket, user) do
     plan = user.plan || Billing.get_or_create_free_plan()
     is_pro = plan.name == "munch"
-    max_seconds = plan.seconds
+    max_seconds = user.seconds_allocated
     used_seconds = max(0, max_seconds - user.seconds_available)
     usage_percent = if max_seconds > 0, do: round(used_seconds / max_seconds * 100), else: 0
     # Convert to minutes and seconds for display

@@ -56,6 +56,7 @@ defmodule PoddyclipBackend.Workers.FreePlanResetWorker do
       user
       |> Ecto.Changeset.change(%{
         seconds_available: free_plan.seconds,
+        seconds_allocated: free_plan.seconds,
         current_period_ends_at: new_period_end
       })
       |> Repo.update()
