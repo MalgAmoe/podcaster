@@ -7,7 +7,7 @@ use crate::models::{Job, JobStatus};
 use crate::storage::Storage;
 use crate::webhook::WebhookClient;
 
-const DEFAULT_MAX_FILE_SIZE_MB: usize = 500;
+const DEFAULT_MAX_FILE_SIZE_MB: usize = 2048;
 
 /// Maximum concurrent processing tasks (matches CCX13 2 vCPU)
 const MAX_CONCURRENT_PROCESSING: usize = 2;

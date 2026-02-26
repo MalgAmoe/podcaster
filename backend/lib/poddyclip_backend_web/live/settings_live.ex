@@ -38,12 +38,7 @@ defmodule PoddyclipBackendWeb.SettingsLive do
   end
 
   defp default_notification_prefs do
-    %{
-      "job_complete" => true,
-      "job_failed" => true,
-      "low_time" => true,
-      "subscription_expiry" => true
-    }
+    Map.new(PoddyclipBackend.Accounts.User.notification_types(), &{&1, true})
   end
 
   @impl true

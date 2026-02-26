@@ -95,15 +95,21 @@ defmodule PoddyclipBackendWeb.PageController do
 
     jobs
     |> Enum.filter(&(&1.result_s3_key && MapSet.member?(existing_keys, &1.result_s3_key)))
-    |> Enum.map(fn job ->
+    |> Enum.flat_map(fn job ->
       filename = job.result_s3_key |> String.split("/") |> List.last() || "processed.mp3"
-      {:ok, download_url} = Storage.presign_download(job.result_s3_key, filename: filename)
-      %{
-        id: job.id,
-        filename: filename,
-        inserted_at: job.inserted_at,
-        download_url: download_url
-      }
+
+      case Storage.presign_download(job.result_s3_key, filename: filename) do
+        {:ok, download_url} ->
+          [%{
+            id: job.id,
+            filename: filename,
+            inserted_at: job.inserted_at,
+            download_url: download_url
+          }]
+
+        {:error, _reason} ->
+          []
+      end
     end)
   end
 end

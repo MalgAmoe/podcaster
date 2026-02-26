@@ -2,6 +2,9 @@ defmodule PoddyclipBackend.Accounts.User do
   use Ecto.Schema
   import Ecto.Changeset
 
+  @notification_types ["job_complete", "job_failed", "low_time", "subscription_expiry"]
+  def notification_types, do: @notification_types
+
   schema "users" do
     field :email, :string
     field :password, :string, virtual: true, redact: true
@@ -19,12 +22,8 @@ defmodule PoddyclipBackend.Accounts.User do
     field :current_period_ends_at, :utc_datetime
 
     # Notification preferences
-    field :notification_preferences, :map, default: %{
-      "job_complete" => true,
-      "job_failed" => true,
-      "low_time" => true,
-      "subscription_expiry" => true
-    }
+    field :notification_preferences, :map,
+      default: Map.new(@notification_types, &{&1, true})
     field :last_low_time_notification_at, :utc_datetime
     field :expiry_notification_sent_at, :utc_datetime
 
@@ -164,7 +163,7 @@ defmodule PoddyclipBackend.Accounts.User do
         changeset
 
       prefs when is_map(prefs) ->
-        valid_keys = MapSet.new(["job_complete", "job_failed", "low_time", "subscription_expiry"])
+        valid_keys = MapSet.new(@notification_types)
         pref_keys = MapSet.new(Map.keys(prefs))
 
         if MapSet.subset?(pref_keys, valid_keys) do

@@ -30,18 +30,16 @@ window.liveSocket = liveSocket
 
 // Connect to user channel for navbar seconds updates
 if (window.userToken) {
+  const updateNavbar = ({mins, secs}) => {
+    const el = document.getElementById("navbar-remaining")
+    if (el) el.textContent = `${mins}m ${secs}s`
+    window.userTotalSeconds = mins * 60 + secs
+  }
   const userSocket = new Socket("/socket", { params: { token: window.userToken } })
   userSocket.connect()
   const navbarChannel = userSocket.channel("user:navbar", {})
-  navbarChannel.join()
-    .receive("ok", ({mins, secs}) => {
-      const el = document.getElementById("navbar-remaining")
-      if (el) el.textContent = `${mins}m ${secs}s`
-    })
-  navbarChannel.on("seconds_updated", ({mins, secs}) => {
-    const el = document.getElementById("navbar-remaining")
-    if (el) el.textContent = `${mins}m ${secs}s`
-  })
+  navbarChannel.join().receive("ok", updateNavbar)
+  navbarChannel.on("seconds_updated", updateNavbar)
 }
 
 // Mount Solid app if container exists

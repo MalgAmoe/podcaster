@@ -12,7 +12,8 @@ export default {
 
   // Validation errors
   selectAudioFile: "Seleziona un file audio (WAV, MP3, FLAC, ecc.)",
-  fileTooLarge: "File troppo grande. Dimensione massima: 500MB.",
+  fileTooLarge: "File troppo grande. Dimensione massima: 2GB.",
+  durationWarning: "Questo file dura {needed} ma hai solo {available} disponibili.",
   uploadFirst: "Prima carica un file",
 
   // AI Clean

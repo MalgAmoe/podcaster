@@ -10,7 +10,7 @@ export function UploadZone() {
   let fileInput;
   const [isDragging, setIsDragging] = createSignal(false);
 
-  const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
+  const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
 
   async function handleFile(file) {
     if (!file) return;
@@ -109,6 +109,12 @@ export function UploadZone() {
             <p class="text-sm text-primary">{t("readyToMunch")}</p>
             <Show when={store.estimatedSeconds}>
               <p class="text-xs text-base-content/50">{tt("estimatedTime", { time: `${Math.floor(store.estimatedSeconds / 60)}m ${store.estimatedSeconds % 60}s` })}</p>
+              <Show when={window.userTotalSeconds !== undefined && store.estimatedSeconds > window.userTotalSeconds}>
+                <p class="text-xs text-warning mt-0.5">{tt("durationWarning", {
+                  needed: `${Math.floor(store.estimatedSeconds / 60)}m ${store.estimatedSeconds % 60}s`,
+                  available: `${Math.floor(window.userTotalSeconds / 60)}m ${window.userTotalSeconds % 60}s`
+                })}</p>
+              </Show>
             </Show>
           </Show>
           <Show when={store.uploadState === "uploading" && store.uploadProgress >= 100}>
