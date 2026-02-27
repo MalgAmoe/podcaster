@@ -619,3 +619,33 @@ impl crate::traits::AudioProcessor for StreamingDenoiser {
 }
 
 impl crate::traits::MonoProcessor for StreamingDenoiser {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_process_preserves_length() {
+        let mut denoiser = RealtimeDenoiser::new(48000);
+
+        // Test various lengths including non-multiples of hop size
+        for &len in &[48000, 44100, 10000, 3333, 1024, 2048, 5000] {
+            denoiser.reset();
+            let input: Vec<f32> = (0..len).map(|i| (i as f32 * 0.01).sin() * 0.5).collect();
+            let output = denoiser.process(&input);
+            assert_eq!(
+                output.len(),
+                input.len(),
+                "Length mismatch for input size {}",
+                len
+            );
+        }
+    }
+
+    #[test]
+    fn test_process_empty() {
+        let mut denoiser = RealtimeDenoiser::new(48000);
+        let output = denoiser.process(&[]);
+        assert!(output.is_empty());
+    }
+}
