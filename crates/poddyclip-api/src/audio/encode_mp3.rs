@@ -1,7 +1,7 @@
 use std::mem::MaybeUninit;
 
 use anyhow::Result;
-use mp3lame_encoder::{Builder, FlushNoGap, InterleavedPcm};
+use mp3lame_encoder::{Builder, DualPcm, FlushNoGap, MonoPcm};
 
 /// Default MP3 bitrate in kbps
 pub const DEFAULT_MP3_BITRATE: u32 = 192;
@@ -13,16 +13,6 @@ pub fn encode_mp3(samples: &[Vec<f32>], sample_rate: u32, bitrate_kbps: u32) -> 
 
     if num_samples == 0 {
         anyhow::bail!("No samples to encode");
-    }
-
-    // Convert f32 to i16 and interleave
-    let mut interleaved: Vec<i16> = Vec::with_capacity(num_samples * channels);
-    for i in 0..num_samples {
-        for channel in samples {
-            let sample = channel[i].clamp(-1.0, 1.0);
-            let sample_i16 = (sample * 32767.0) as i16;
-            interleaved.push(sample_i16);
-        }
     }
 
     let mut builder = Builder::new().ok_or_else(|| anyhow::anyhow!("Failed to create LAME encoder"))?;
@@ -58,16 +48,31 @@ pub fn encode_mp3(samples: &[Vec<f32>], sample_rate: u32, bitrate_kbps: u32) -> 
         .build()
         .map_err(|e| anyhow::anyhow!("Failed to build encoder: {:?}", e))?;
 
-    // Encode in chunks
-    let input = InterleavedPcm(&interleaved);
+    // Convert f32 to i16
+    let convert = |ch: &[f32]| -> Vec<i16> {
+        ch.iter()
+            .map(|&s| (s.clamp(-1.0, 1.0) * 32767.0) as i16)
+            .collect()
+    };
 
-    // Allocate output buffer (worst case: 1.25 * input + 7200)
-    let max_output_size = (interleaved.len() * 5 / 4) + 7200;
+    // Allocate output buffer (worst case: 1.25 * num_samples + 7200)
+    let max_output_size = (num_samples * 5 / 4) + 7200;
     let mut output: Vec<MaybeUninit<u8>> = vec![MaybeUninit::uninit(); max_output_size];
 
-    let encoded_size = encoder
-        .encode(input, &mut output)
-        .map_err(|e| anyhow::anyhow!("Encoding error: {:?}", e))?;
+    // Use MonoPcm for mono, DualPcm for stereo.
+    // InterleavedPcm always divides by 2 (assumes stereo), which halves mono audio.
+    let encoded_size = if channels == 1 {
+        let pcm = convert(&samples[0]);
+        encoder
+            .encode(MonoPcm(&pcm), &mut output)
+            .map_err(|e| anyhow::anyhow!("Encoding error: {:?}", e))?
+    } else {
+        let left = convert(&samples[0]);
+        let right = convert(&samples[1]);
+        encoder
+            .encode(DualPcm { left: &left, right: &right }, &mut output)
+            .map_err(|e| anyhow::anyhow!("Encoding error: {:?}", e))?
+    };
 
     // Flush remaining data
     let flush_size = encoder
@@ -83,4 +88,73 @@ pub fn encode_mp3(samples: &[Vec<f32>], sample_rate: u32, bitrate_kbps: u32) -> 
         .collect();
 
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mono_mp3_duration() {
+        // Create 5 seconds of mono audio at 48kHz
+        let sample_rate = 48000u32;
+        let duration_secs = 5.0;
+        let num_samples = (sample_rate as f32 * duration_secs) as usize;
+        let mono: Vec<f32> = (0..num_samples)
+            .map(|i| (2.0 * std::f32::consts::PI * 440.0 * i as f32 / sample_rate as f32).sin() * 0.5)
+            .collect();
+
+        let mp3 = encode_mp3(&[mono], sample_rate, 192).unwrap();
+
+        // Decode the MP3 back and check duration
+        let (decoded, metadata) = crate::audio::decode_audio(&mp3, Some("test.mp3")).unwrap();
+        assert_eq!(decoded.len(), 1, "Should decode as mono");
+
+        let decoded_duration = decoded[0].len() as f32 / metadata.sample_rate as f32;
+        // MP3 has codec delay, so allow some tolerance, but it must not be half duration
+        assert!(
+            decoded_duration > duration_secs * 0.9,
+            "Mono MP3 duration {:.2}s is too short (expected ~{:.1}s) — likely encoding only half the samples",
+            decoded_duration,
+            duration_secs
+        );
+        assert!(
+            decoded_duration < duration_secs * 1.1,
+            "Mono MP3 duration {:.2}s is too long (expected ~{:.1}s)",
+            decoded_duration,
+            duration_secs
+        );
+    }
+
+    #[test]
+    fn test_stereo_mp3_duration() {
+        let sample_rate = 48000u32;
+        let duration_secs = 5.0;
+        let num_samples = (sample_rate as f32 * duration_secs) as usize;
+        let left: Vec<f32> = (0..num_samples)
+            .map(|i| (2.0 * std::f32::consts::PI * 440.0 * i as f32 / sample_rate as f32).sin() * 0.5)
+            .collect();
+        let right: Vec<f32> = (0..num_samples)
+            .map(|i| (2.0 * std::f32::consts::PI * 880.0 * i as f32 / sample_rate as f32).sin() * 0.3)
+            .collect();
+
+        let mp3 = encode_mp3(&[left, right], sample_rate, 192).unwrap();
+
+        let (decoded, metadata) = crate::audio::decode_audio(&mp3, Some("test.mp3")).unwrap();
+        assert_eq!(decoded.len(), 2, "Should decode as stereo");
+
+        let decoded_duration = decoded[0].len() as f32 / metadata.sample_rate as f32;
+        assert!(
+            decoded_duration > duration_secs * 0.9,
+            "Stereo MP3 duration {:.2}s is too short (expected ~{:.1}s)",
+            decoded_duration,
+            duration_secs
+        );
+        assert!(
+            decoded_duration < duration_secs * 1.1,
+            "Stereo MP3 duration {:.2}s is too long (expected ~{:.1}s)",
+            decoded_duration,
+            duration_secs
+        );
+    }
 }

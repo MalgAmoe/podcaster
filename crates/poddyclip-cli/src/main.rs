@@ -1220,12 +1220,26 @@ fn load_audio(input_path: &Path) -> Result<(Vec<Vec<f32>>, u32)> {
         hint.with_extension(ext);
     }
 
-    let probed = symphonia::default::get_probe().format(
+    let probed = match symphonia::default::get_probe().format(
         &hint,
         mss,
         &FormatOptions::default(),
         &MetadataOptions::default(),
-    )?;
+    ) {
+        Ok(probed) => probed,
+        Err(_) => {
+            // Extension hint may be wrong (e.g. .mp3 that's actually MP4/AAC).
+            // Retry without hint so Symphonia probes the actual content.
+            let file = std::fs::File::open(input_path)?;
+            let mss = MediaSourceStream::new(Box::new(file), Default::default());
+            symphonia::default::get_probe().format(
+                &Hint::new(),
+                mss,
+                &FormatOptions::default(),
+                &MetadataOptions::default(),
+            )?
+        }
+    };
 
     let mut format = probed.format;
     let track = format

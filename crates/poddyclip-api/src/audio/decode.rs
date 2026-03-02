@@ -32,9 +32,21 @@ pub fn decode_audio(data: &[u8], filename: Option<&str>) -> Result<(Vec<Vec<f32>
         }
     }
 
-    let probed = symphonia::default::get_probe()
+    let probed = match symphonia::default::get_probe()
         .format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default())
-        .map_err(|e| anyhow::anyhow!("Failed to probe audio format: {}", e))?;
+    {
+        Ok(probed) => probed,
+        Err(_) if filename.is_some() => {
+            // Extension hint may be wrong (e.g. .mp3 file that's actually MP4/AAC).
+            // Retry without the hint so Symphonia probes the actual content.
+            let cursor = Cursor::new(data.to_vec());
+            let mss = MediaSourceStream::new(Box::new(cursor), Default::default());
+            symphonia::default::get_probe()
+                .format(&Hint::new(), mss, &FormatOptions::default(), &MetadataOptions::default())
+                .map_err(|e| anyhow::anyhow!("Failed to probe audio format: {}", e))?
+        }
+        Err(e) => return Err(anyhow::anyhow!("Failed to probe audio format: {}", e)),
+    };
 
     let mut format = probed.format;
     let track = format
