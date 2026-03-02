@@ -29,6 +29,8 @@ defmodule PoddyclipBackendWeb.CoreComponents do
   use Phoenix.Component
   use Gettext, backend: PoddyclipBackendWeb.Gettext
 
+  import PoddyclipBackendWeb.LocaleHelpers, only: [locale_path: 2]
+
   alias Phoenix.LiveView.JS
 
   @doc """
@@ -494,5 +496,28 @@ defmodule PoddyclipBackendWeb.CoreComponents do
   """
   def translate_errors(errors, field) when is_list(errors) do
     for {^field, {msg, opts}} <- errors, do: translate_error({msg, opts})
+  end
+
+  @doc """
+  Renders a minimal footer with copyright and legal links.
+  """
+  attr :locale, :string, default: "en"
+
+  def mini_footer(assigns) do
+    ~H"""
+    <footer class="py-6 mt-12 border-t border-base-300">
+      <div class="max-w-3xl mx-auto px-6 flex flex-col sm:flex-row justify-center items-center gap-2 text-sm text-base-content/50">
+        <span>&copy; 2026 Munchy Cow</span>
+        <span class="hidden sm:inline">&middot;</span>
+        <nav class="flex gap-1 items-center">
+          <.link href={locale_path(@locale, "/privacy")} class="hover:text-base-content transition-colors"><%= gettext("Privacy") %></.link>
+          <span>&middot;</span>
+          <.link href={locale_path(@locale, "/terms")} class="hover:text-base-content transition-colors"><%= gettext("Terms") %></.link>
+          <span>&middot;</span>
+          <.link href={locale_path(@locale, "/legal")} class="hover:text-base-content transition-colors">Aviso Legal</.link>
+        </nav>
+      </div>
+    </footer>
+    """
   end
 end

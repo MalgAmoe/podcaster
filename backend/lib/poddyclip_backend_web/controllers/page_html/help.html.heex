@@ -109,10 +109,6 @@
       </a>
     </div>
 
-    <div class="mt-12 pt-8 border-t border-base-300">
-      <.link href={locale_path(@locale, "/app")} class="btn btn-ghost">
-        &larr; <%= gettext("Back to app") %>
-      </.link>
-    </div>
+    <.mini_footer locale={@locale} />
   </div>
 </div>
