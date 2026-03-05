@@ -79,6 +79,8 @@ defmodule PoddyclipBackendWeb.Router do
     get "/privacy", PageController, :privacy
     get "/legal", PageController, :legal
     get "/help", PageController, :help
+    get "/blog", BlogController, :index
+    get "/blog/:slug", BlogController, :show
   end
 
   # Authenticated app - Spanish
@@ -103,6 +105,8 @@ defmodule PoddyclipBackendWeb.Router do
     get "/privacy", PageController, :privacy
     get "/legal", PageController, :legal
     get "/help", PageController, :help
+    get "/blog", BlogController, :index
+    get "/blog/:slug", BlogController, :show
   end
 
   # Authenticated app - Italian
@@ -127,6 +131,8 @@ defmodule PoddyclipBackendWeb.Router do
     get "/privacy", PageController, :privacy
     get "/legal", PageController, :legal
     get "/help", PageController, :help
+    get "/blog", BlogController, :index
+    get "/blog/:slug", BlogController, :show
   end
 
   # Authenticated app - French
@@ -151,6 +157,8 @@ defmodule PoddyclipBackendWeb.Router do
     get "/privacy", PageController, :privacy
     get "/legal", PageController, :legal
     get "/help", PageController, :help
+    get "/blog", BlogController, :index
+    get "/blog/:slug", BlogController, :show
   end
 
   # Authenticated app (SolidJS handles client-side routing for /app/*)

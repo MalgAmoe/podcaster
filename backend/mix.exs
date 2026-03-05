@@ -84,7 +84,10 @@ defmodule PoddyclipBackend.MixProject do
       {:sweet_xml, "~> 0.7"},
       {:hackney, "~> 1.20"},
       # Error tracking
-      {:sentry, "~> 11.0"}
+      {:sentry, "~> 11.0"},
+      # Blog (compile-time markdown posts)
+      {:nimble_publisher, "~> 1.1"},
+      {:earmark, "~> 1.4"}
     ]
   end
 
