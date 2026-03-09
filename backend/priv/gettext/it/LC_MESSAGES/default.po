@@ -778,30 +778,10 @@ msgstr "Conosci la sensazione"
 msgid "Your podcast deserves"
 msgstr "Il tuo podcast merita"
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:62
-#, elixir-autogen, elixir-format
-msgid "analog transformer warmth, presence & air enhancement"
-msgstr "calore da trasformatore analogico, miglioramento di presenza e aria"
-
 #: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:9
 #, elixir-autogen, elixir-format
 msgid "better audio"
 msgstr "un audio migliore"
-
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:66
-#, elixir-autogen, elixir-format
-msgid "broadcast loudness targeting, true peak limiting"
-msgstr "loudness per trasmissione, limiting di picco reale"
-
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:58
-#, elixir-autogen, elixir-format
-msgid "dual-stage studio compression, dynamic corrective EQ"
-msgstr "compressione da studio a due stadi, EQ correttivo dinamico"
-
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:54
-#, elixir-autogen, elixir-format
-msgid "spectral noise removal, de-reverb, click & pop repair, sibilance control"
-msgstr "rimozione spettrale del rumore, de-reverb, riparazione di click e pop, controllo delle sibilanti"
 
 #: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:49
 #, elixir-autogen, elixir-format
@@ -828,11 +808,6 @@ msgstr "Potresti passare ore in un DAW a regolare parametri che capisci a metà.
 msgid "You spent an hour getting a great conversation. You listen back and... it sounds like a bedroom. Hum, reverb, volume all over the place. It's fine, but it's not good."
 msgstr "Hai passato un'ora a ottenere una conversazione fantastica. La riascolti e... sembra una cameretta. Ronzio, riverbero, volume ovunque. È ok, ma non è buono."
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:93
-#, elixir-autogen, elixir-format
-msgid "YouTubers who treat audio as an afterthought."
-msgstr "YouTuber che trattano l'audio come un dettaglio."
-
 #: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:13
 #, elixir-autogen, elixir-format
 msgid "Get back broadcast-ready audio in minutes."
@@ -842,3 +817,28 @@ msgstr "Ricevi audio pronto per la trasmissione in pochi minuti."
 #, elixir-autogen, elixir-format
 msgid "Upload your raw recording."
 msgstr "Carica la tua registrazione grezza."
+
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:62
+#, elixir-autogen, elixir-format
+msgid "adds the warmth and clarity that makes audio sound expensive"
+msgstr "aggiunge il calore e la chiarezza che fanno suonare l'audio professionale"
+
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:58
+#, elixir-autogen, elixir-format
+msgid "evens out the volume so nobody's too loud or too quiet"
+msgstr "bilancia il volume perché nessuno sia troppo forte o troppo basso"
+
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:66
+#, elixir-autogen, elixir-format
+msgid "hits the right loudness for every platform"
+msgstr "raggiunge il volume giusto per ogni piattaforma"
+
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:54
+#, elixir-autogen, elixir-format
+msgid "removes the hum, the echo, the mouth clicks"
+msgstr "rimuove il ronzio, l'eco, i click della bocca"
+
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:93
+#, elixir-autogen, elixir-format
+msgid "YouTubers who know their audio could be better."
+msgstr "YouTuber che sanno che il loro audio potrebbe essere migliore."
