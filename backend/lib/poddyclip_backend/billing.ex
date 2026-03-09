@@ -4,7 +4,7 @@ defmodule PoddyclipBackend.Billing do
 
   ## Plans
 
-  - **free**: 900 seconds (15 minutes), no card required
+  - **free**: 10800 seconds (3 hours), no card required
   - **pro**: $15/mo, 54000 seconds (15 hours)
 
   ## Seconds Management
@@ -108,7 +108,7 @@ defmodule PoddyclipBackend.Billing do
         |> Plan.changeset(%{
           name: "free",
           display_name: "Free",
-          seconds: 900,
+          seconds: 10800,
           price_cents: 0
         })
         |> Repo.insert!()
@@ -635,7 +635,7 @@ defmodule PoddyclipBackend.Billing do
   defp maybe_send_low_seconds_notification(user, previous_seconds, _deducted_amount) do
     # Get user's plan to calculate percentage
     user = Repo.preload(user, :plan)
-    plan_seconds = (user.plan && user.plan.seconds) || 900
+    plan_seconds = (user.plan && user.plan.seconds) || 10_800
 
     # Calculate usage percentages before and after deduction
     previous_used_pct = (plan_seconds - previous_seconds) / plan_seconds

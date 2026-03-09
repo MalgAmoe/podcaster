@@ -28,7 +28,7 @@ Each stage is calibrated to do just enough, never too much. The result is audio 
 
 We also rethought pricing. Why pay a monthly fee when you only clean up a few recordings? With Munchy Cow, you only pay for the seconds of audio you process. Upload a 5-minute clip, pay for 5 minutes. Simple.
 
-Free accounts get 15 minutes to try it out, no credit card required.
+Free accounts get 3 hours to try it out, no credit card required.
 
 ## Try it yourself
 

@@ -19,7 +19,7 @@ defmodule PoddyclipBackend.BillingTest do
     test "get_or_create_free_plan/0 creates free plan if not exists" do
       plan = Billing.get_or_create_free_plan()
       assert plan.name == "free"
-      assert plan.seconds == 900
+      assert plan.seconds == 10_800
       assert plan.price_cents == 0
     end
 
@@ -46,7 +46,7 @@ defmodule PoddyclipBackend.BillingTest do
       # Update user with plan and seconds
       {:ok, user} =
         user
-        |> Ecto.Changeset.change(plan_id: plan.id, seconds_available: 900)
+        |> Ecto.Changeset.change(plan_id: plan.id, seconds_available: 10_800)
         |> Repo.update()
 
       %{user: user, plan: plan}
@@ -54,21 +54,21 @@ defmodule PoddyclipBackend.BillingTest do
 
     test "has_seconds?/2 returns true when user has enough seconds", %{user: user} do
       assert Billing.has_seconds?(user, 300)
-      assert Billing.has_seconds?(user, 900)
+      assert Billing.has_seconds?(user, 10_800)
     end
 
     test "has_seconds?/2 returns false when user doesn't have enough", %{user: user} do
-      refute Billing.has_seconds?(user, 901)
-      refute Billing.has_seconds?(user, 6000)
+      refute Billing.has_seconds?(user, 10_801)
+      refute Billing.has_seconds?(user, 11_000)
     end
 
     test "deduct_seconds/2 subtracts from available seconds", %{user: user} do
       assert {:ok, updated} = Billing.deduct_seconds(user, 300)
-      assert updated.seconds_available == 600
+      assert updated.seconds_available == 10_500
     end
 
     test "deduct_seconds/2 returns error when insufficient", %{user: user} do
-      assert {:error, :insufficient_seconds} = Billing.deduct_seconds(user, 6000)
+      assert {:error, :insufficient_seconds} = Billing.deduct_seconds(user, 11_000)
     end
 
   end
@@ -81,7 +81,7 @@ defmodule PoddyclipBackend.BillingTest do
 
       {:ok, user} =
         user
-        |> Ecto.Changeset.change(plan_id: free_plan.id, seconds_available: 900)
+        |> Ecto.Changeset.change(plan_id: free_plan.id, seconds_available: 10_800)
         |> Repo.update()
 
       %{user: user, free_plan: free_plan, munch_plan: munch_plan}

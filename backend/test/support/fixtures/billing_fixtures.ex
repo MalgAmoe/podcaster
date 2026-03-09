@@ -13,7 +13,7 @@ defmodule PoddyclipBackend.BillingFixtures do
         Enum.into(attrs, %{
           name: "free",
           display_name: "Free",
-          seconds: 900,
+          seconds: 10_800,
           price_cents: 0,
           active: true
         })

@@ -15,7 +15,7 @@ defmodule PoddyclipBackend.Workers.FreePlanResetWorkerTest do
       user
       |> Ecto.Changeset.change(
         plan_id: free_plan.id,
-        seconds_available: 900,
+        seconds_available: 10_800,
         subscription_status: "none",
         current_period_ends_at: DateTime.utc_now() |> DateTime.add(30, :day) |> DateTime.truncate(:second)
       )
@@ -44,7 +44,7 @@ defmodule PoddyclipBackend.Workers.FreePlanResetWorkerTest do
       FreePlanResetWorker.reset_free_plans()
 
       updated = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
-      assert updated.seconds_available == 900
+      assert updated.seconds_available == 10_800
       assert DateTime.compare(updated.current_period_ends_at, DateTime.utc_now()) == :gt
     end
 
@@ -153,7 +153,7 @@ defmodule PoddyclipBackend.Workers.FreePlanResetWorkerTest do
 
       assert updated.subscription_status == "none"
       # Seconds reset to free plan amount — paid period is over
-      assert updated.seconds_available == 900
+      assert updated.seconds_available == 10_800
       # Should have a new 30-day period, not nil
       assert updated.current_period_ends_at != nil
       assert DateTime.compare(updated.current_period_ends_at, DateTime.utc_now()) == :gt

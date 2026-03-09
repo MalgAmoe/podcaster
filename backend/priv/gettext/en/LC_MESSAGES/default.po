@@ -16,19 +16,9 @@ msgstr ""
 msgid "chef's kiss"
 msgstr ""
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:59
-#, elixir-autogen, elixir-format
-msgid "15 free minutes. No credit card. No sales calls."
-msgstr ""
-
 #: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:40
 #, elixir-autogen, elixir-format
 msgid "15 hours per month"
-msgstr ""
-
-#: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:22
-#, elixir-autogen, elixir-format
-msgid "15 minutes of processing"
 msgstr ""
 
 #: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:41
@@ -594,11 +584,6 @@ msgstr[1] ""
 msgid "Buy Snack (%{minutes} min) - %{price}"
 msgstr ""
 
-#: lib/poddyclip_backend_web/controllers/page_html/help.html.heex:74
-#, elixir-autogen, elixir-format, fuzzy
-msgid "Free accounts get 15 minutes of audio processing to try out the service. Once you've used your free minutes, you can upgrade to Munch Plan for more processing time."
-msgstr ""
-
 #: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:33
 #: lib/poddyclip_backend_web/live/account_live.html.heex:48
 #, elixir-autogen, elixir-format
@@ -776,4 +761,19 @@ msgstr ""
 #: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:16
 #, elixir-autogen, elixir-format
 msgid "Try it free"
+msgstr ""
+
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:59
+#, elixir-autogen, elixir-format, fuzzy
+msgid "3 free hours. No credit card. No sales calls."
+msgstr ""
+
+#: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:22
+#, elixir-autogen, elixir-format
+msgid "3 hours of processing"
+msgstr ""
+
+#: lib/poddyclip_backend_web/controllers/page_html/help.html.heex:74
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Free accounts get 3 hours of audio processing to try out the service. Once you've used your free hours, you can upgrade to Munch Plan for more processing time."
 msgstr ""

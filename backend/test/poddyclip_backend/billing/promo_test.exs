@@ -79,15 +79,15 @@ defmodule PoddyclipBackend.Billing.PromoTest do
       _promo = promo_fixture(%{bonus_seconds: 1800})
 
       {:ok, user} = Accounts.register_user(valid_user_attributes())
-      # 900 (free plan) + 1800 (promo bonus) = 2700
-      assert user.seconds_available == 2700
-      assert user.seconds_allocated == 2700
+      # 10800 (free plan) + 1800 (promo bonus) = 12600
+      assert user.seconds_available == 12600
+      assert user.seconds_allocated == 12600
     end
 
     test "new user gets normal seconds when no promo exists" do
       {:ok, user} = Accounts.register_user(valid_user_attributes())
-      assert user.seconds_available == 900
-      assert user.seconds_allocated == 900
+      assert user.seconds_available == 10_800
+      assert user.seconds_allocated == 10_800
     end
 
     test "promo claims_count increments on registration" do
@@ -105,11 +105,11 @@ defmodule PoddyclipBackend.Billing.PromoTest do
 
       # First signup gets the bonus
       {:ok, user1} = Accounts.register_user(valid_user_attributes())
-      assert user1.seconds_available == 2700
+      assert user1.seconds_available == 12600
 
       # Second signup gets normal amount
       {:ok, user2} = Accounts.register_user(valid_user_attributes())
-      assert user2.seconds_available == 900
+      assert user2.seconds_available == 10_800
     end
 
     test "user gets base seconds if promo exhausted between find and claim" do
@@ -120,8 +120,8 @@ defmodule PoddyclipBackend.Billing.PromoTest do
 
       # Promo is now exhausted — registration should still succeed with base seconds
       {:ok, user} = Accounts.register_user(valid_user_attributes())
-      assert user.seconds_available == 900
-      assert user.seconds_allocated == 900
+      assert user.seconds_available == 10_800
+      assert user.seconds_allocated == 10_800
     end
 
     test "promo claim is rolled back if user insert fails" do

@@ -340,7 +340,7 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   Response: {
     "id": 123,
     "email": "user@example.com",
-    "plan": {"name": "free", "display_name": "Free", "seconds": 900},
+    "plan": {"name": "free", "display_name": "Free", "seconds": 10800},
     "seconds_available": 720,
     "subscription_status": "none",
     "purchased_seconds": 9000,
@@ -367,7 +367,7 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
         %{
           name: "free",
           display_name: "Free",
-          seconds: 900
+          seconds: 10_800
         }
       end
 

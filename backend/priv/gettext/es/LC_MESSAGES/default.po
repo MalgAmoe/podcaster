@@ -16,20 +16,10 @@ msgstr ""
 msgid "chef's kiss"
 msgstr "una delicia"
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:59
-#, elixir-autogen, elixir-format
-msgid "15 free minutes. No credit card. No sales calls."
-msgstr "15 minutos gratis. Sin tarjeta de crédito. Sin llamadas de ventas."
-
 #: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:40
 #, elixir-autogen, elixir-format
 msgid "15 hours per month"
 msgstr "15 horas por mes"
-
-#: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:22
-#, elixir-autogen, elixir-format
-msgid "15 minutes of processing"
-msgstr "15 minutos de procesamiento"
 
 #: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:41
 #: lib/poddyclip_backend_web/live/account_live.html.heex:160
@@ -594,11 +584,6 @@ msgstr[1] "%{count} snacks"
 msgid "Buy Snack (%{minutes} min) - %{price}"
 msgstr "Comprar Snack (%{minutes} min) - %{price}"
 
-#: lib/poddyclip_backend_web/controllers/page_html/help.html.heex:74
-#, elixir-autogen, elixir-format
-msgid "Free accounts get 15 minutes of audio processing to try out the service. Once you've used your free minutes, you can upgrade to Munch Plan for more processing time."
-msgstr "Las cuentas gratuitas tienen 15 minutos de procesamiento de audio para probar el servicio. Una vez que uses tus minutos gratis, puedes pasar al Munch Plan para más tiempo de procesamiento."
-
 #: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:33
 #: lib/poddyclip_backend_web/live/account_live.html.heex:48
 #, elixir-autogen, elixir-format
@@ -777,3 +762,18 @@ msgstr "Consejos, novedades e historias sobre limpieza de audio"
 #, elixir-autogen, elixir-format
 msgid "Try it free"
 msgstr ""
+
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:59
+#, elixir-autogen, elixir-format
+msgid "3 free hours. No credit card. No sales calls."
+msgstr "3 horas gratis. Sin tarjeta de crédito. Sin llamadas de ventas."
+
+#: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:22
+#, elixir-autogen, elixir-format
+msgid "3 hours of processing"
+msgstr "3 horas de procesamiento"
+
+#: lib/poddyclip_backend_web/controllers/page_html/help.html.heex:74
+#, elixir-autogen, elixir-format
+msgid "Free accounts get 3 hours of audio processing to try out the service. Once you've used your free hours, you can upgrade to Munch Plan for more processing time."
+msgstr "Las cuentas gratuitas tienen 3 horas de procesamiento de audio para probar el servicio. Una vez que uses tus horas gratis, puedes pasar al Munch Plan para más tiempo de procesamiento."

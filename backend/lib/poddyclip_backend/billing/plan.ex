@@ -3,7 +3,7 @@ defmodule PoddyclipBackend.Billing.Plan do
   Schema for subscription plans.
 
   Plans define the available subscription tiers:
-  - free: 900 seconds (15 minutes), no payment required
+  - free: 10800 seconds (3 hours), no payment required
   - pro: 54000 seconds (15 hours), $15/month
   """
   use Ecto.Schema

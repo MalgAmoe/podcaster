@@ -149,13 +149,13 @@ defmodule PoddyclipBackend.AdminTest do
       assert {:ok, event} =
                Admin.log_billing_event("free_plan_reset", user.id, %{
                  old_seconds: 0,
-                 new_seconds: 900
+                 new_seconds: 10_800
                })
 
       assert event.event_type == "free_plan_reset"
       assert event.user_id == user.id
       assert event.metadata[:old_seconds] == 0
-      assert event.metadata[:new_seconds] == 900
+      assert event.metadata[:new_seconds] == 10_800
     end
 
     test "rejects invalid event types" do
