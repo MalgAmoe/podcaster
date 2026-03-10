@@ -21,13 +21,15 @@
     <meta property="og:url" content={canonical_url(assigns)} />
     <meta property="og:title" content={assigns[:page_title] || gettext("Munchy Cow - Audio Cleanup with Per-Second Billing")} />
     <meta property="og:description" content={assigns[:meta_description] || gettext("Natural-sounding audio repair with honest per-second billing. Only pay for what you use.")} />
-    <meta property="og:image" content={assigns[:meta_image] || "/images/munchy_cow.svg"} />
+    <meta property="og:image" content={assigns[:meta_image] || "https://munchycow.com/images/munchycow-social.png"} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
 
     <!-- Twitter Card -->
-    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={assigns[:page_title] || gettext("Munchy Cow - Audio Cleanup with Per-Second Billing")} />
     <meta property="twitter:description" content={assigns[:meta_description] || gettext("Natural-sounding audio repair with honest per-second billing. Only pay for what you use.")} />
-    <meta name="twitter:image" content={assigns[:meta_image] || "/images/munchy_cow.svg"} />
+    <meta name="twitter:image" content={assigns[:meta_image] || "https://munchycow.com/images/munchycow-social.png"} />
 
     <link rel="icon" type="image/svg+xml" href="/images/munchy_cow_head.svg" />
     <link rel="apple-touch-icon" href="/images/munchy_cow_head.svg" />
