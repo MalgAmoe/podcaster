@@ -6,8 +6,19 @@
     <meta name="description" content={assigns[:meta_description] || gettext("Natural-sounding audio repair with honest per-second billing. Only pay for what you use.")} />
     <meta name="theme-color" content="#9333ea" />
 
+    <!-- Canonical & Hreflang -->
+    <%= unless @current_scope do %>
+      <link rel="canonical" href={canonical_url(assigns)} />
+      <link rel="alternate" hreflang="en" href={hreflang_url(assigns, "en")} />
+      <link rel="alternate" hreflang="es" href={hreflang_url(assigns, "es")} />
+      <link rel="alternate" hreflang="fr" href={hreflang_url(assigns, "fr")} />
+      <link rel="alternate" hreflang="it" href={hreflang_url(assigns, "it")} />
+      <link rel="alternate" hreflang="x-default" href={hreflang_url(assigns, "en")} />
+    <% end %>
+
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonical_url(assigns)} />
     <meta property="og:title" content={assigns[:page_title] || gettext("Munchy Cow - Audio Cleanup with Per-Second Billing")} />
     <meta property="og:description" content={assigns[:meta_description] || gettext("Natural-sounding audio repair with honest per-second billing. Only pay for what you use.")} />
     <meta property="og:image" content={assigns[:meta_image] || "/images/munchy_cow.svg"} />

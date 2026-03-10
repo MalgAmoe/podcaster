@@ -1,3 +1,23 @@
+<script type="application/ld+json">
+<%= raw(Jason.encode!(%{
+  "@context" => "https://schema.org",
+  "@type" => "Article",
+  "headline" => @post.title,
+  "description" => @post.description,
+  "datePublished" => Date.to_iso8601(@post.date),
+  "inLanguage" => @post.locale,
+  "url" => canonical_url(assigns),
+  "publisher" => %{
+    "@type" => "Organization",
+    "name" => "Munchy Cow",
+    "url" => "https://munchycow.com",
+    "logo" => %{
+      "@type" => "ImageObject",
+      "url" => "https://munchycow.com/images/munchy_cow.svg"
+    }
+  }
+})) %>
+</script>
 <div class="min-h-screen bg-base-100">
   <div class="max-w-3xl mx-auto py-16 px-6">
     <.link href={locale_path(@locale, "/blog")} class="text-sm text-base-content/50 hover:text-primary transition-colors mb-8 inline-block">

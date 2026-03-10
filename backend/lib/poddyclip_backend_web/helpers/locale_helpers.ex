@@ -4,6 +4,7 @@ defmodule PoddyclipBackendWeb.LocaleHelpers do
   """
 
   @supported_locales ~w(en es it fr)
+  @base_url "https://munchycow.com"
 
   @doc """
   Returns the path with locale prefix.
@@ -31,6 +32,34 @@ defmodule PoddyclipBackendWeb.LocaleHelpers do
       if base_path == "", do: "/", else: base_path
     else
       "/" <> new_locale <> base_path
+    end
+  end
+
+  @doc """
+  Returns the full canonical URL for the current page.
+  """
+  def canonical_url(assigns) do
+    @base_url <> get_current_path(assigns)
+  end
+
+  @doc """
+  Returns the locale-stripped base path for the current page.
+  Used for generating hreflang URLs.
+  """
+  def base_path(assigns) do
+    path = get_current_path(assigns) |> strip_locale_prefix()
+    if path == "", do: "/", else: path
+  end
+
+  @doc """
+  Returns the full URL for a given locale and the current page's base path.
+  """
+  def hreflang_url(assigns, locale) do
+    path = base_path(assigns)
+    case {locale, path} do
+      {"en", _} -> @base_url <> path
+      {_, "/"} -> @base_url <> "/" <> locale
+      _ -> @base_url <> "/" <> locale <> path
     end
   end
 
