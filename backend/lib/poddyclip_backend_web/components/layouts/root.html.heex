@@ -112,9 +112,23 @@
             </ul>
           </div>
         <% else %>
-          <.link href={locale_path(@locale, "/pricing")} class="text-sm px-3 hover:text-primary transition-colors"><%= gettext("Pricing") %></.link>
-          <.link href={locale_path(@locale, "/blog")} class="text-sm px-3 hover:text-primary transition-colors"><%= gettext("Blog") %></.link>
-          <.link href={locale_path(@locale, "/users/log-in")} class="btn btn-primary btn-sm"><%= gettext("Sign in") %></.link>
+          <!-- Desktop nav -->
+          <.link href={locale_path(@locale, "/pricing")} class="hidden sm:inline text-sm px-3 hover:text-primary transition-colors"><%= gettext("Pricing") %></.link>
+          <.link href={locale_path(@locale, "/blog")} class="hidden sm:inline text-sm px-3 hover:text-primary transition-colors"><%= gettext("Blog") %></.link>
+          <.link href={locale_path(@locale, "/users/log-in")} class="hidden sm:inline-flex btn btn-primary btn-sm"><%= gettext("Sign in") %></.link>
+          <!-- Mobile hamburger -->
+          <div class="dropdown dropdown-end sm:hidden">
+            <button tabindex="0" class="btn btn-ghost btn-sm">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+              </svg>
+            </button>
+            <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-2xl z-50 w-48 p-2 shadow-lg border border-base-300 mt-2">
+              <li><.link href={locale_path(@locale, "/pricing")}><%= gettext("Pricing") %></.link></li>
+              <li><.link href={locale_path(@locale, "/blog")}><%= gettext("Blog") %></.link></li>
+              <li><.link href={locale_path(@locale, "/users/log-in")}><%= gettext("Sign in") %></.link></li>
+            </ul>
+          </div>
         <% end %>
       </div>
     </div>
