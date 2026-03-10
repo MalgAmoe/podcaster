@@ -9,6 +9,11 @@ defmodule PoddyclipBackendWeb.Router do
     get "/", HealthController, :index
   end
 
+  # Sitemap for search engines
+  scope "/", PoddyclipBackendWeb do
+    get "/sitemap.xml", SitemapController, :index
+  end
+
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
