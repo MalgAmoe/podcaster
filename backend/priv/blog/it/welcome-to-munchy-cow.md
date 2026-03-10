@@ -32,4 +32,4 @@ Gli account gratuiti hanno 3 ore per provare, senza carta di credito.
 
 ## Provalo tu stesso
 
-Il modo migliore per capire la differenza è sentirla. [Registrati gratis](/users/log-in) e pulisci la tua prima registrazione. Pensiamo che noterai la differenza subito.
+Il modo migliore per capire la differenza è sentirla. [Registrati gratis](/) e pulisci la tua prima registrazione. Pensiamo che noterai la differenza subito.

@@ -86,4 +86,6 @@ La reducción de ruido en la edición siempre es un compromiso. Mucho mejor elim
 
 Aplica estas bases y tus grabaciones sonarán más limpias que la mayoría de los podcasts — antes siquiera de abrir un plugin.
 
-Y cuando quieras pulirlas, [prueba Munchy Cow](/users/log-in). Sube tu grabación y nos encargamos del resto — ruido de fondo, reverberación, niveles desiguales — sin hacerte sonar como un robot.
+¿Ya grabaste algo que no salió bien? Lee [Cómo rescatar una mala grabación de podcast](/blog/fix-bad-podcast-recording) antes de regrabar.
+
+Y cuando quieras pulirlas, [prueba Munchy Cow](/). Sube tu grabación y nos encargamos del resto — ruido de fondo, reverberación, niveles desiguales — sin hacerte sonar como un robot.

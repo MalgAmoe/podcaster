@@ -45,7 +45,7 @@ La sibilanza (suoni acuti di S e SC), le plosive (pop su P e B), e un accumulo f
 
 Ogni piattaforma podcast ha un obiettivo di loudness. Se il tuo podcast è troppo basso, gli ascoltatori devono alzare il volume al massimo. Troppo alto, distorce o suona schiacciato. E se il tuo loudness varia da episodio a episodio, gli ascoltatori lo notano.
 
-**Cosa lo risolve:** Normalizzazione del loudness e limiting di picco reale. La normalizzazione regola il livello complessivo per raggiungere uno standard obiettivo (-16 LUFS è il più comune per i podcast). Un limiter cattura i picchi rimanenti per prevenire la distorsione.
+**Cosa lo risolve:** Normalizzazione del loudness e limiting di picco reale. La normalizzazione regola il livello complessivo per raggiungere uno standard obiettivo (-16 LUFS è il più comune per i podcast). Un limiter cattura i picchi rimanenti per prevenire la distorsione. Abbiamo scritto una [guida completa sui LUFS e il loudness targeting](/blog/podcast-loudness-lufs) se vuoi capire perché quel numero conta.
 
 ## La catena di processing di un ingegnere professionista
 
@@ -87,4 +87,4 @@ Due cose faranno la più grande differenza immediatamente:
 
 Non devi imparare un DAW. Non devi comprare plugin. Non devi capire cos'è un ratio di compressione.
 
-[Carica il tuo audio grezzo su Munchy Cow](/users/log-in) e senti la differenza. 3 ore gratis, senza carta di credito.
+[Carica il tuo audio grezzo su Munchy Cow](/) e senti la differenza. 3 ore gratis, senza carta di credito.

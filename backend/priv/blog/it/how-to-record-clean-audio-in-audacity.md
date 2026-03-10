@@ -86,4 +86,6 @@ La riduzione del rumore in post-produzione è sempre un compromesso. Molto megli
 
 Segui queste basi e le tue registrazioni saranno già più pulite della maggior parte dei podcast — prima ancora di aprire un plugin.
 
-E quando vorrai rifinirle, [prova Munchy Cow](/users/log-in). Carica la registrazione e pensiamo noi al resto — rumore di fondo, riverbero, livelli irregolari — senza farti sembrare un robot.
+Hai già registrato qualcosa che non è venuto bene? Leggi [Come salvare una registrazione podcast venuta male](/blog/fix-bad-podcast-recording) prima di riregistrare.
+
+E quando vorrai rifinirle, [prova Munchy Cow](/). Carica la registrazione e pensiamo noi al resto — rumore di fondo, riverbero, livelli irregolari — senza farti sembrare un robot.

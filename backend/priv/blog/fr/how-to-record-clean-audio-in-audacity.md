@@ -86,4 +86,6 @@ La réduction de bruit au montage est toujours un compromis. Autant éliminer le
 
 Applique ces bases et tes enregistrements seront déjà plus propres que la plupart des podcasts — avant même d'ouvrir un plugin.
 
-Et quand tu voudras aller plus loin, [essaie Munchy Cow](/users/log-in). Envoie ton enregistrement et on s'occupe du reste — bruit de fond, réverbération, niveaux inégaux — sans te faire sonner comme un robot.
+Tu as déjà enregistré quelque chose qui n'est pas top ? Lis [Comment sauver un mauvais enregistrement de podcast](/blog/fix-bad-podcast-recording) avant de réenregistrer.
+
+Et quand tu voudras aller plus loin, [essaie Munchy Cow](/). Envoie ton enregistrement et on s'occupe du reste — bruit de fond, réverbération, niveaux inégaux — sans te faire sonner comme un robot.

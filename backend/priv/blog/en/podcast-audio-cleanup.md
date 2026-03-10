@@ -45,7 +45,7 @@ Sibilance (sharp S and SH sounds), plosives (P and B pops), and a muddy low-mid 
 
 Every podcast platform has a loudness target. If your podcast is too quiet, listeners have to crank the volume. Too loud, it distorts or sounds squashed. And if your loudness varies episode to episode, listeners notice.
 
-**What fixes it:** Loudness normalization and true peak limiting. Normalization adjusts the overall level to hit a target standard (-16 LUFS is the most common for podcasts). A limiter catches any remaining peaks to prevent distortion.
+**What fixes it:** Loudness normalization and true peak limiting. Normalization adjusts the overall level to hit a target standard (-16 LUFS is the most common for podcasts). A limiter catches any remaining peaks to prevent distortion. We wrote a [full breakdown of LUFS and loudness targeting](/blog/podcast-loudness-lufs) if you want to understand why that number matters.
 
 ## The processing chain a professional engineer runs
 
@@ -87,4 +87,4 @@ Two things will make the biggest difference immediately:
 
 You don't need to learn a DAW. You don't need to buy plugins. You don't need to understand what a compressor ratio is.
 
-[Upload your raw audio to Munchy Cow](/users/log-in) and hear the difference. 3 free hours, no credit card required.
+[Upload your raw audio to Munchy Cow](/) and hear the difference. 3 free hours, no credit card required.

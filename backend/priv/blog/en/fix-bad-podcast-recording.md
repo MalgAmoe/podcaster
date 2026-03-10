@@ -90,11 +90,13 @@ If you have a bad recording that you need to save, here's the order of operation
 
 The order matters — EQ before noise removal makes the noise harder to remove. Compression before de-clicking makes the clicks louder.
 
+For a deeper look at what each processing stage does, see [How to Make Your Podcast Sound Professional](/blog/podcast-audio-cleanup).
+
 ## The automated option
 
 You can do all of this manually in a DAW with the right plugins. If you know what you're doing, you'll get great results. If you don't, you might make things worse — too much noise reduction sounds robotic, wrong EQ settings sound hollow, over-compression sounds squashed.
 
-[Munchy Cow](/users/log-in) runs this entire chain automatically. Every file is analyzed first — noise floor, reverb characteristics, spectral balance, dynamics — then each processing stage is tuned to what was found.
+[Munchy Cow](/) runs this entire chain automatically. Every file is analyzed first — noise floor, reverb characteristics, spectral balance, dynamics — then each processing stage is tuned to what was found.
 
 3 free hours. No credit card. Upload your worst recording and see what comes back.
 

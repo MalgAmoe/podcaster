@@ -90,11 +90,13 @@ Si tienes una mala grabación que necesitas salvar, este es el orden de operacio
 
 El orden importa — EQ antes de la reducción de ruido hace el ruido más difícil de eliminar. Compresión antes del de-clicking hace los clicks más fuertes.
 
+Para una mirada más profunda a lo que hace cada etapa de procesamiento, lee [Cómo hacer que tu podcast suene profesional](/blog/podcast-audio-cleanup).
+
 ## La opción automática
 
 Puedes hacer todo esto manualmente en un DAW con los plugins adecuados. Si sabes lo que haces, obtendrás buenos resultados. Si no, podrías empeorar las cosas — demasiada reducción de ruido suena robótica, EQ mal configurado suena hueco, sobre-compresión suena aplastada.
 
-[Munchy Cow](/users/log-in) ejecuta toda esta cadena automáticamente. Cada archivo se analiza primero — piso de ruido, características de reverb, balance espectral, dinámica — luego cada etapa de procesamiento se ajusta a lo que se encontró.
+[Munchy Cow](/) ejecuta toda esta cadena automáticamente. Cada archivo se analiza primero — piso de ruido, características de reverb, balance espectral, dinámica — luego cada etapa de procesamiento se ajusta a lo que se encontró.
 
 3 horas gratis. Sin tarjeta de crédito. Sube tu peor grabación y mira qué sale.
 

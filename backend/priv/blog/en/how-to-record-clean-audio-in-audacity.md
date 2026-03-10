@@ -86,4 +86,6 @@ Noise reduction in post-processing is always a compromise. It's far better to el
 
 Get these fundamentals right and your recordings will be cleaner than most podcasts out there — before you even touch a plugin.
 
-And when you do want to polish things further, [give Munchy Cow a try](/users/log-in). Upload your recording and we'll clean up whatever's left — background noise, room reverb, uneven levels — without making you sound like a robot.
+Already recorded something that didn't turn out great? Read [How to Rescue a Bad Podcast Recording](/blog/fix-bad-podcast-recording) before you re-record.
+
+And when you do want to polish things further, [give Munchy Cow a try](/). Upload your recording and we'll clean up whatever's left — background noise, room reverb, uneven levels — without making you sound like a robot.

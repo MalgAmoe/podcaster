@@ -74,7 +74,7 @@ Des outils comme Auphonic, Munchy Cow et d'autres peuvent gérer le loudness cib
 
 ### Normaliser sans traiter d'abord
 
-Si ton audio brut est à -24 LUFS et que tu le normalises simplement à -16, tu montes tout de 8 dB — y compris le bruit, la réverb et les clics de bouche. Traite d'abord, normalise en dernier.
+Si ton audio brut est à -24 LUFS et que tu le normalises simplement à -16, tu montes tout de 8 dB — y compris le bruit, la réverb et les clics de bouche. Traite d'abord, normalise en dernier. Tu ne sais pas ce que « traite d'abord » veut dire concrètement ? Voici [la chaîne complète qu'un ingénieur pro utilise](/blog/podcast-audio-cleanup).
 
 ### Sur-comprimer pour atteindre le chiffre
 
@@ -97,4 +97,4 @@ L'épisode 1 est à -14 LUFS. L'épisode 2 est à -18 LUFS. L'épisode 3 est à 
 
 ---
 
-Tu ne veux pas t'embêter avec des meters et des limiteurs ? [Envoie sur Munchy Cow](/users/log-in) et le loudness est géré automatiquement — avec la chaîne de traitement complète qui fait que ça sonne vraiment bien à ce niveau. 3 heures gratuites, sans carte bancaire.
+Tu ne veux pas t'embêter avec des meters et des limiteurs ? [Envoie sur Munchy Cow](/) et le loudness est géré automatiquement — avec la chaîne de traitement complète qui fait que ça sonne vraiment bien à ce niveau. 3 heures gratuites, sans carte bancaire.

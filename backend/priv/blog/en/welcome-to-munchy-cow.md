@@ -32,4 +32,4 @@ Free accounts get 3 hours to try it out, no credit card required.
 
 ## Try it yourself
 
-The best way to understand the difference is to hear it. [Sign up for free](/users/log-in) and clean up your first recording. We think you'll hear the difference right away.
+The best way to understand the difference is to hear it. [Sign up for free](/) and clean up your first recording. We think you'll hear the difference right away.

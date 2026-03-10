@@ -74,7 +74,7 @@ Strumenti come Auphonic, Munchy Cow e altri possono gestire l'obiettivo di loudn
 
 ### Normalizzare senza processare prima
 
-Se il tuo audio grezzo è a -24 LUFS e lo normalizzi semplicemente a -16, stai alzando tutto di 8 dB — inclusi il rumore, il riverbero e i click della bocca. Processa prima, normalizza per ultimo.
+Se il tuo audio grezzo è a -24 LUFS e lo normalizzi semplicemente a -16, stai alzando tutto di 8 dB — inclusi il rumore, il riverbero e i click della bocca. Processa prima, normalizza per ultimo. Non sai cosa significa "processa prima" in pratica? Ecco [la catena completa che usa un ingegnere professionista](/blog/podcast-audio-cleanup).
 
 ### Sovra-comprimere per raggiungere il numero
 
@@ -97,4 +97,4 @@ L'episodio 1 è a -14 LUFS. L'episodio 2 è a -18 LUFS. L'episodio 3 è a -15 LU
 
 ---
 
-Non vuoi impazzire con meter e limiter? [Carica su Munchy Cow](/users/log-in) e il loudness viene gestito automaticamente — insieme alla catena di processing completa che fa sì che suoni davvero bene a quel livello. 3 ore gratis, senza carta di credito.
+Non vuoi impazzire con meter e limiter? [Carica su Munchy Cow](/) e il loudness viene gestito automaticamente — insieme alla catena di processing completa che fa sì che suoni davvero bene a quel livello. 3 ore gratis, senza carta di credito.

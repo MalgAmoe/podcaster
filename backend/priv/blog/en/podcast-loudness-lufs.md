@@ -74,7 +74,7 @@ Tools like Auphonic, Munchy Cow, and others can handle loudness targeting automa
 
 ### Normalizing without processing first
 
-If your raw audio is at -24 LUFS and you just normalize it to -16, you're turning everything up by 8 dB — including the noise, the reverb, and the mouth clicks. Process first, normalize last.
+If your raw audio is at -24 LUFS and you just normalize it to -16, you're turning everything up by 8 dB — including the noise, the reverb, and the mouth clicks. Process first, normalize last. Not sure what "process first" means in practice? Here's [the full chain a professional engineer runs](/blog/podcast-audio-cleanup).
 
 ### Over-compressing to hit the number
 
@@ -97,4 +97,4 @@ Episode 1 is at -14 LUFS. Episode 2 is at -18 LUFS. Episode 3 is at -15 LUFS. Li
 
 ---
 
-Don't want to deal with meters and limiters? [Upload to Munchy Cow](/users/log-in) and it handles loudness targeting automatically — along with the full processing chain that makes it actually sound good at that level. 3 free hours, no credit card.
+Don't want to deal with meters and limiters? [Upload to Munchy Cow](/) and it handles loudness targeting automatically — along with the full processing chain that makes it actually sound good at that level. 3 free hours, no credit card.

@@ -32,4 +32,4 @@ Les comptes gratuits ont 3 heures pour essayer, sans carte bancaire.
 
 ## Essaie par toi-même
 
-La meilleure façon de comprendre la différence, c'est de l'entendre. [Inscris-toi gratuitement](/users/log-in) et nettoie ton premier enregistrement. On pense que tu entendras la différence tout de suite.
+La meilleure façon de comprendre la différence, c'est de l'entendre. [Inscris-toi gratuitement](/) et nettoie ton premier enregistrement. On pense que tu entendras la différence tout de suite.

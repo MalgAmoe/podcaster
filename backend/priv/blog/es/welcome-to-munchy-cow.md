@@ -32,4 +32,4 @@ Las cuentas gratuitas tienen 3 horas para probarlo, sin tarjeta de crédito.
 
 ## Pruébalo tú mismo
 
-La mejor forma de entender la diferencia es escucharla. [Regístrate gratis](/users/log-in) y limpia tu primera grabación. Creemos que notarás la diferencia de inmediato.
+La mejor forma de entender la diferencia es escucharla. [Regístrate gratis](/) y limpia tu primera grabación. Creemos que notarás la diferencia de inmediato.
