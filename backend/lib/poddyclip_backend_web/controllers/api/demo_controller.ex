@@ -1,7 +1,7 @@
 defmodule PoddyclipBackendWeb.Api.DemoController do
   @moduledoc """
   API endpoints for anonymous demo processing.
-  Allows visitors to try 10 seconds of audio processing without signing up.
+  Allows visitors to try 30 seconds of audio processing without signing up.
   """
   use PoddyclipBackendWeb, :controller
 

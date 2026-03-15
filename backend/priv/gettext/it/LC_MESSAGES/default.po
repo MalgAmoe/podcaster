@@ -32,7 +32,7 @@ msgstr "900 minuti al mese (15 ore)"
 msgid "Access until"
 msgstr "Accesso fino a"
 
-#: lib/poddyclip_backend_web/components/layouts/root.html.heex:97
+#: lib/poddyclip_backend_web/components/layouts/root.html.heex:110
 #, elixir-autogen, elixir-format
 msgid "Account"
 msgstr "Account"
@@ -124,14 +124,14 @@ msgstr "Inserisci la tua email per accedere o creare un account."
 msgid "Feed me more"
 msgstr "Dammi di più"
 
-#: lib/poddyclip_backend_web/components/layouts/root.html.heex:87
+#: lib/poddyclip_backend_web/components/layouts/root.html.heex:100
 #: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:18
 #: lib/poddyclip_backend_web/live/account_live.html.heex:50
 #, elixir-autogen, elixir-format
 msgid "Free"
 msgstr "Gratis"
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:20
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:30
 #, elixir-autogen, elixir-format
 msgid "Free to try. No credit card required."
 msgstr "Prova gratis. Niente carta di credito."
@@ -166,7 +166,7 @@ msgstr "Al secondo. Un file di 3:42 usa esattamente 3 minuti e 42 secondi. Nessu
 msgid "How much hay?"
 msgstr "Quanto fieno?"
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:80
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:53
 #, elixir-autogen, elixir-format
 msgid "I just make you sound like you recorded somewhere nicer."
 msgstr "Ti faccio sembrare come se avessi registrato in un posto migliore."
@@ -181,7 +181,7 @@ msgstr "Mantienimi connesso su questo dispositivo"
 msgid "Kick the tires"
 msgstr "Prova senza impegno"
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:113
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:119
 #, elixir-autogen, elixir-format
 msgid "Let's go"
 msgstr "Andiamo"
@@ -196,7 +196,7 @@ msgstr "Accedi"
 msgid "Log me in only this time"
 msgstr "Accedi solo questa volta"
 
-#: lib/poddyclip_backend_web/components/layouts/root.html.heex:100
+#: lib/poddyclip_backend_web/components/layouts/root.html.heex:113
 #, elixir-autogen, elixir-format
 msgid "Log out"
 msgstr "Esci"
@@ -223,8 +223,8 @@ msgstr "Il link magico non è valido o è scaduto."
 msgid "Manage Subscription"
 msgstr "Gestisci Abbonamento"
 
-#: lib/poddyclip_backend_web/components/layouts/root.html.heex:11
-#: lib/poddyclip_backend_web/components/layouts/root.html.heex:17
+#: lib/poddyclip_backend_web/components/layouts/root.html.heex:22
+#: lib/poddyclip_backend_web/components/layouts/root.html.heex:30
 #, elixir-autogen, elixir-format
 msgid "Munchy Cow - Audio Cleanup with Per-Second Billing"
 msgstr "Munchy Cow - Pulizia Audio con Fatturazione al Secondo"
@@ -239,7 +239,7 @@ msgstr "Prossimo rinnovo"
 msgid "No credit card required"
 msgstr "Niente carta di credito"
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:79
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:52
 #, elixir-autogen, elixir-format
 msgid "Other tools make you sound like a robot."
 msgstr "Altri strumenti ti fanno sembrare un robot."
@@ -249,13 +249,14 @@ msgstr "Altri strumenti ti fanno sembrare un robot."
 msgid "Past Due"
 msgstr "Scaduto"
 
-#: lib/poddyclip_backend_web/components/layouts/root.html.heex:45
+#: lib/poddyclip_backend_web/components/layouts/root.html.heex:58
 #, elixir-autogen, elixir-format
 msgid "Past Munchings"
 msgstr "Masticamenti Precedenti"
 
-#: lib/poddyclip_backend_web/components/layouts/root.html.heex:104
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:127
+#: lib/poddyclip_backend_web/components/layouts/root.html.heex:118
+#: lib/poddyclip_backend_web/components/layouts/root.html.heex:129
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:133
 #, elixir-autogen, elixir-format
 msgid "Pricing"
 msgstr "Prezzi"
@@ -271,7 +272,7 @@ msgid "Priority queue"
 msgstr "Coda prioritaria"
 
 #: lib/poddyclip_backend_web/components/core_components.ex:513
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:129
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:135
 #: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:112
 #, elixir-autogen, elixir-format
 msgid "Privacy"
@@ -282,17 +283,18 @@ msgstr "Privacy"
 msgid "Processing your upgrade..."
 msgstr "Elaborazione dell'upgrade in corso..."
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:107
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:113
 #, elixir-autogen, elixir-format
 msgid "See what happens."
 msgstr "Guarda cosa succede."
 
-#: lib/poddyclip_backend_web/components/layouts/root.html.heex:98
+#: lib/poddyclip_backend_web/components/layouts/root.html.heex:111
 #, elixir-autogen, elixir-format
 msgid "Settings"
 msgstr "Impostazioni"
 
-#: lib/poddyclip_backend_web/components/layouts/root.html.heex:106
+#: lib/poddyclip_backend_web/components/layouts/root.html.heex:120
+#: lib/poddyclip_backend_web/components/layouts/root.html.heex:131
 #: lib/poddyclip_backend_web/controllers/user_session_html/new.html.heex:5
 #, elixir-autogen, elixir-format
 msgid "Sign in"
@@ -329,7 +331,7 @@ msgid "Status"
 msgstr "Stato"
 
 #: lib/poddyclip_backend_web/components/core_components.ex:515
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:128
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:134
 #: lib/poddyclip_backend_web/controllers/page_html/pricing.html.heex:111
 #, elixir-autogen, elixir-format
 msgid "Terms"
@@ -345,7 +347,7 @@ msgstr "Il link non è valido o è scaduto."
 msgid "Unknown"
 msgstr "Sconosciuto"
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:104
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:110
 #, elixir-autogen, elixir-format
 msgid "Upload something."
 msgstr "Carica qualcosa."
@@ -390,7 +392,7 @@ msgstr "Devi autenticarti di nuovo per eseguire azioni sensibili sul tuo account
 msgid "Your Account"
 msgstr "Il Tuo Account"
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:116
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:122
 #, elixir-autogen, elixir-format
 msgid "Your audio stays private. Files deleted after 7 days."
 msgstr "Il tuo audio resta privato. I file vengono eliminati dopo 7 giorni."
@@ -415,7 +417,7 @@ msgstr "Risposte alle domande frequenti su Munchy Cow"
 msgid "Can I cancel my subscription?"
 msgstr "Posso annullare il mio abbonamento?"
 
-#: lib/poddyclip_backend_web/components/layouts/root.html.heex:99
+#: lib/poddyclip_backend_web/components/layouts/root.html.heex:112
 #: lib/poddyclip_backend_web/controllers/page_html/help.html.heex:3
 #, elixir-autogen, elixir-format
 msgid "Help & FAQ"
@@ -506,7 +508,7 @@ msgstr "Qual è la differenza tra le modalità Naturale e Studio?"
 msgid "Yes. Your audio is processed securely and only accessible to you. We don't listen to, share, or use your audio for any purpose other than processing it. Files are automatically deleted after 7 days."
 msgstr "Sì. Il tuo audio viene elaborato in modo sicuro ed è accessibile solo a te. Non ascoltiamo, condividiamo o utilizziamo il tuo audio per nessun altro scopo oltre all'elaborazione. I file vengono eliminati automaticamente dopo 7 giorni."
 
-#: lib/poddyclip_backend_web/components/layouts/root.html.heex:95
+#: lib/poddyclip_backend_web/components/layouts/root.html.heex:108
 #: lib/poddyclip_backend_web/live/account_live.html.heex:67
 #, elixir-autogen, elixir-format
 msgid "remaining"
@@ -596,13 +598,13 @@ msgid "Processing your snack purchase..."
 msgstr "Elaborazione del tuo acquisto snack..."
 
 #: lib/poddyclip_backend_web/components/layouts/root.html.heex:6
-#: lib/poddyclip_backend_web/components/layouts/root.html.heex:12
-#: lib/poddyclip_backend_web/components/layouts/root.html.heex:18
+#: lib/poddyclip_backend_web/components/layouts/root.html.heex:23
+#: lib/poddyclip_backend_web/components/layouts/root.html.heex:31
 #, elixir-autogen, elixir-format
 msgid "Natural-sounding audio repair with honest per-second billing. Only pay for what you use."
 msgstr "Riparazione audio dal suono naturale con fatturazione al secondo. Senza sprechi."
 
-#: lib/poddyclip_backend_web/components/layouts/root.html.heex:85
+#: lib/poddyclip_backend_web/components/layouts/root.html.heex:98
 #, elixir-autogen, elixir-format
 msgid "Munch"
 msgstr "Munch"
@@ -666,12 +668,13 @@ msgstr "Il tempo dell'abbonamento viene usato per primo"
 msgid "AI Clean uses deep learning to isolate voice from everything else. It's great for removing complex background noise like traffic, music, or fans. It takes longer to process but produces cleaner results for noisy recordings."
 msgstr "Pulizia IA usa il deep learning per isolare la voce da tutto il resto. È ottimo per rimuovere rumori di fondo complessi come traffico, musica o ventilatori. Richiede più tempo per elaborare ma produce risultati più puliti per registrazioni rumorose."
 
-#: lib/poddyclip_backend_web/controllers/blog_html/show.html.heex:4
+#: lib/poddyclip_backend_web/controllers/blog_html/show.html.heex:24
 #, elixir-autogen, elixir-format
 msgid "Back to blog"
 msgstr "Torna al blog"
 
-#: lib/poddyclip_backend_web/components/layouts/root.html.heex:105
+#: lib/poddyclip_backend_web/components/layouts/root.html.heex:119
+#: lib/poddyclip_backend_web/components/layouts/root.html.heex:130
 #: lib/poddyclip_backend_web/controllers/blog_controller.ex:12
 #: lib/poddyclip_backend_web/controllers/blog_html/index.html.heex:3
 #, elixir-autogen, elixir-format
@@ -693,12 +696,12 @@ msgstr "Leggi di più"
 msgid "Tips, updates, and stories about audio cleanup"
 msgstr "Consigli, novità e storie sulla pulizia audio"
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:17
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:27
 #, elixir-autogen, elixir-format
 msgid "Try it free"
 msgstr "Provalo gratis"
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:110
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:116
 #, elixir-autogen, elixir-format
 msgid "3 free hours. No credit card. No sales calls."
 msgstr "3 ore gratis. Niente carta di credito. Niente chiamate commerciali."
@@ -713,17 +716,17 @@ msgstr "3 ore di elaborazione"
 msgid "Free accounts get 3 hours of audio processing to try out the service. Once you've used your free hours, you can upgrade to Munch Plan for more processing time."
 msgstr "Gli account gratuiti hanno 3 ore di elaborazione audio per provare il servizio. Una volta esaurite le ore gratuite, puoi passare a Munch Plan per più tempo di elaborazione."
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:95
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:101
 #, elixir-autogen, elixir-format
 msgid "Anyone who's ever googled \"why does my podcast sound bad\" at midnight."
 msgstr "Chiunque abbia mai googlato \"perché il mio podcast suona male\" a mezzanotte."
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:53
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:69
 #, elixir-autogen, elixir-format
 msgid "Clean"
 msgstr "Pulire"
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:65
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:81
 #, elixir-autogen, elixir-format
 msgid "Deliver"
 msgstr "Consegnare"
@@ -733,7 +736,7 @@ msgstr "Consegnare"
 msgid "How does it compare?"
 msgstr "Come si confronta?"
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:89
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:95
 #, elixir-autogen, elixir-format
 msgid "Made for people who'd rather be talking"
 msgstr "Fatto per chi preferisce parlare"
@@ -743,102 +746,97 @@ msgstr "Fatto per chi preferisce parlare"
 msgid "Most audio processing services give you noise reduction and loudness normalization. Two steps. Munchy Cow runs your audio through a full broadcast chain — noise removal, de-reverb, compression, corrective EQ, de-essing, analog warmth, loudness targeting, and true peak limiting. Automatically tuned to each file. Same upload-and-forget simplicity. Way more under the hood."
 msgstr "La maggior parte dei servizi di elaborazione audio ti dà riduzione del rumore e normalizzazione del loudness. Due passaggi. Munchy Cow fa passare il tuo audio attraverso una catena broadcast completa — rimozione del rumore, de-reverb, compressione, EQ correttivo, de-essing, calore analogico, loudness per trasmissione e limiting di picco reale. Calibrato automaticamente su ogni file. La stessa semplicità di carica e dimentica. Molto di più sotto il cofano."
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:14
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:24
 #, elixir-autogen, elixir-format
 msgid "No plugins. No knobs. No audio degree."
 msgstr "Niente plugin. Niente manopole. Niente laurea in audio."
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:61
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:77
 #, elixir-autogen, elixir-format
 msgid "Polish"
 msgstr "Lucidare"
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:57
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:73
 #, elixir-autogen, elixir-format
 msgid "Shape"
 msgstr "Modellare"
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:94
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:100
 #, elixir-autogen, elixir-format
 msgid "Voice actors tired of tweaking plugin chains before every audition."
 msgstr "Doppiatori stanchi di regolare catene di plugin prima di ogni provino."
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:46
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:62
 #, elixir-autogen, elixir-format
 msgid "What the cow does to your audio"
 msgstr "Cosa fa la mucca al tuo audio"
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:29
-#, elixir-autogen, elixir-format
-msgid "You know the feeling"
-msgstr "Conosci la sensazione"
-
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:9
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:19
 #, elixir-autogen, elixir-format
 msgid "Your podcast deserves"
 msgstr "Il tuo podcast merita"
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:9
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:19
 #, elixir-autogen, elixir-format
 msgid "better audio"
 msgstr "un audio migliore"
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:49
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:65
 #, elixir-autogen, elixir-format
 msgid "Each file is analyzed first, then run through a chain that adapts to what it finds."
 msgstr "Ogni file viene prima analizzato, poi passa attraverso una catena che si adatta a quello che trova."
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:92
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:98
 #, elixir-autogen, elixir-format
 msgid "Podcasters who don't want to learn a DAW."
 msgstr "Podcaster che non vogliono imparare un DAW."
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:70
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:86
 #, elixir-autogen, elixir-format
 msgid "The difference between 'recorded at home' and 'sounds like a studio' isn't one thing. It's a dozen things in the right order."
 msgstr "La differenza tra 'registrato in casa' e 'sembra uno studio' non è una cosa sola. Sono una dozzina di cose nell'ordine giusto."
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:36
-#, elixir-autogen, elixir-format
-msgid "You could spend hours in a DAW tweaking settings you half understand. Or feed it to the cow."
-msgstr "Potresti passare ore in un DAW a regolare parametri che capisci a metà. Oppure darlo in pasto alla mucca."
-
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:33
-#, elixir-autogen, elixir-format
-msgid "You spent an hour getting a great conversation. You listen back and... it sounds like a bedroom. Hum, reverb, volume all over the place. It's fine, but it's not good."
-msgstr "Hai passato un'ora a ottenere una conversazione fantastica. La riascolti e... sembra una cameretta. Ronzio, riverbero, volume ovunque. È ok, ma non è buono."
-
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:13
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:23
 #, elixir-autogen, elixir-format
 msgid "Get back broadcast-ready audio in minutes."
 msgstr "Ricevi audio pronto per la trasmissione in pochi minuti."
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:12
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:22
 #, elixir-autogen, elixir-format
 msgid "Upload your raw recording."
 msgstr "Carica la tua registrazione grezza."
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:62
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:78
 #, elixir-autogen, elixir-format
 msgid "adds the warmth and clarity that makes audio sound expensive"
 msgstr "aggiunge il calore e la chiarezza che fanno suonare l'audio professionale"
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:58
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:74
 #, elixir-autogen, elixir-format
 msgid "evens out the volume so nobody's too loud or too quiet"
 msgstr "bilancia il volume perché nessuno sia troppo forte o troppo basso"
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:66
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:82
 #, elixir-autogen, elixir-format
 msgid "hits the right loudness for every platform"
 msgstr "raggiunge il volume giusto per ogni piattaforma"
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:54
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:70
 #, elixir-autogen, elixir-format
 msgid "removes the hum, the echo, the mouth clicks"
 msgstr "rimuove il ronzio, l'eco, i click della bocca"
 
-#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:93
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:99
 #, elixir-autogen, elixir-format
 msgid "YouTubers who know their audio could be better."
 msgstr "YouTuber che sanno che il loro audio potrebbe essere migliore."
+
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:39
+#, elixir-autogen, elixir-format
+msgid "Hear it for yourself"
+msgstr "Ascolta la differenza"
+
+#: lib/poddyclip_backend_web/controllers/page_html/landing.html.heex:42
+#, elixir-autogen, elixir-format
+msgid "Upload up to 30 seconds. No signup required."
+msgstr "Carica fino a 30 secondi. Nessuna registrazione."
