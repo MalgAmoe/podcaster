@@ -53,6 +53,14 @@ if (solidRoot) {
   });
 }
 
+// Mount demo widget if container exists
+const demoWidget = document.getElementById("demo-widget");
+if (demoWidget) {
+  import("./demo.js").then(({ initDemo }) => {
+    initDemo(demoWidget);
+  });
+}
+
 // The lines below enable quality of life phoenix_live_reload
 // development features:
 //

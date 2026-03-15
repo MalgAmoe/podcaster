@@ -174,6 +174,15 @@ defmodule PoddyclipBackendWeb.Router do
     get "/*path", PageController, :process
   end
 
+  # Anonymous demo API (no auth, IP rate limited)
+  scope "/api/demo", PoddyclipBackendWeb.Api do
+    pipe_through :api
+
+    post "/presign-upload", DemoController, :presign_upload
+    post "/process", DemoController, :process
+    get "/jobs/:id/status", DemoController, :job_status
+  end
+
   # Internal API for Rust service webhooks
   scope "/api/internal", PoddyclipBackendWeb do
     pipe_through :api

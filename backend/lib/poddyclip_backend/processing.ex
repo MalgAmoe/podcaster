@@ -38,7 +38,8 @@ defmodule PoddyclipBackend.Processing do
         status: :queued,
         input_s3_key: input_s3_key,
         user_id: user_id,
-        estimated_seconds: opts[:estimated_seconds]
+        estimated_seconds: opts[:estimated_seconds],
+        is_demo: opts[:is_demo] || false
       })
       |> Repo.insert!()
 
@@ -260,14 +261,15 @@ defmodule PoddyclipBackend.Processing do
         end
 
         # Deduct actual seconds on completion (no refunds needed - we only charge on success)
-        if new_status == :completed and old_status != :completed do
+        # Skip billing for demo jobs
+        if new_status == :completed and old_status != :completed and not updated_job.is_demo do
           deduct_actual_seconds(updated_job)
         end
 
         broadcast_update(updated_job)
 
-        # Send email notifications for completed/failed jobs
-        if new_status in [:completed, :failed] and old_status != new_status do
+        # Send email notifications for completed/failed jobs (skip for demo)
+        if new_status in [:completed, :failed] and old_status != new_status and not updated_job.is_demo do
           send_job_notification(updated_job, new_status)
         end
 
