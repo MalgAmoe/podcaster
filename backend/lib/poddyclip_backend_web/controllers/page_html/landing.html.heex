@@ -32,25 +32,31 @@
     </div>
   </section>
 
-  <!-- Problem -->
-  <section class="py-24 px-6 bg-base-200/50">
-    <div class="max-w-3xl mx-auto">
-      <h2 class="text-4xl font-bold mb-12 text-center">
-        <%= gettext("You know the feeling") %>
+  <!-- Demo -->
+  <section id="demo-section" class="py-24 px-6 bg-base-200/50">
+    <div class="max-w-3xl mx-auto text-center">
+      <h2 class="text-4xl font-bold mb-4">
+        <%= gettext("Hear it for yourself") %>
       </h2>
-      <div class="space-y-4 text-xl text-base-content/70">
-        <p>
-          <%= gettext("You spent an hour getting a great conversation. You listen back and... it sounds like a bedroom. Hum, reverb, volume all over the place. It's fine, but it's not good.") %>
-        </p>
-        <p class="text-base-content font-medium">
-          <%= gettext("You could spend hours in a DAW tweaking settings you half understand. Or feed it to the cow.") %>
-        </p>
-      </div>
+      <p class="text-xl text-base-content/70 mb-10">
+        <%= gettext("Upload up to 30 seconds. No signup required.") %>
+      </p>
+      <div id="demo-widget" data-csrf={get_csrf_token()}></div>
+    </div>
+  </section>
+
+  <!-- The promise -->
+  <section class="py-24 px-6">
+    <div class="max-w-2xl mx-auto text-center">
+      <p class="text-3xl md:text-4xl font-medium mb-6 leading-snug">
+        <%= gettext("Other tools make you sound like a robot.") %><br/>
+        <span class="text-base-content/60"><%= gettext("I just make you sound like you recorded somewhere nicer.") %></span>
+      </p>
     </div>
   </section>
 
   <!-- What happens inside -->
-  <section class="py-24 px-6">
+  <section class="py-24 px-6 bg-base-200/50">
     <div class="max-w-3xl mx-auto">
       <h2 class="text-4xl font-bold mb-6 text-center">
         <%= gettext("What the cow does to your audio") %>
@@ -78,29 +84,6 @@
       </div>
       <p class="text-base-content/60 mt-12 text-center text-lg">
         <%= gettext("The difference between 'recorded at home' and 'sounds like a studio' isn't one thing. It's a dozen things in the right order.") %>
-      </p>
-    </div>
-  </section>
-
-  <!-- Demo -->
-  <section id="demo-section" class="py-24 px-6 bg-base-200/50">
-    <div class="max-w-3xl mx-auto text-center">
-      <h2 class="text-4xl font-bold mb-4">
-        <%= gettext("Hear it for yourself") %>
-      </h2>
-      <p class="text-xl text-base-content/70 mb-10">
-        <%= gettext("Upload up to 30 seconds. No signup required.") %>
-      </p>
-      <div id="demo-widget" data-csrf={get_csrf_token()}></div>
-    </div>
-  </section>
-
-  <!-- The promise -->
-  <section class="py-24 px-6 bg-base-200/50">
-    <div class="max-w-2xl mx-auto text-center">
-      <p class="text-3xl md:text-4xl font-medium mb-6 leading-snug">
-        <%= gettext("Other tools make you sound like a robot.") %><br/>
-        <span class="text-base-content/60"><%= gettext("I just make you sound like you recorded somewhere nicer.") %></span>
       </p>
     </div>
   </section>
