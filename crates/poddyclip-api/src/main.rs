@@ -216,14 +216,9 @@ async fn cleanup_task(state: AppState) {
             }
         }
 
-        for (id, s3_key) in to_remove {
-            // Delete from S3 if present
-            if let (Some(key), Some(ref storage)) = (s3_key, &state.storage) {
-                if let Err(e) = storage.delete(&key).await {
-                    warn!("Failed to delete S3 object {} during cleanup: {}", key, e);
-                }
-            }
-
+        for (id, _s3_key) in to_remove {
+            // Only clean up in-memory job state.
+            // S3 files are managed by Phoenix (7-day retention via CleanupJobs worker).
             state.jobs.remove(&id);
             info!("Cleaned up expired job {}", id);
         }
