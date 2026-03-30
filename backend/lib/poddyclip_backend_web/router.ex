@@ -68,6 +68,8 @@ defmodule PoddyclipBackendWeb.Router do
     pipe_through [:browser, :locale_en]
 
     get "/", PageController, :redirect_to_app
+    get "/feedback", PageController, :feedback
+    post "/feedback", PageController, :submit_feedback
     get "/terms", PageController, :terms
     get "/privacy", PageController, :privacy
     get "/legal", PageController, :legal

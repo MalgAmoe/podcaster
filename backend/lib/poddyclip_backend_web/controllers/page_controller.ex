@@ -44,6 +44,33 @@ defmodule PoddyclipBackendWeb.PageController do
     |> render(:help)
   end
 
+  def feedback(conn, _params) do
+    conn
+    |> put_layout(false)
+    |> assign(:conn, conn)
+    |> assign(:submitted, false)
+    |> render(:feedback)
+  end
+
+  def submit_feedback(conn, %{"value" => value}) do
+    conn = PoddyclipBackendWeb.Plugs.EnsureGuestUser.call(conn, [])
+    user_id = conn.assigns[:current_scope] && conn.assigns.current_scope.user && conn.assigns.current_scope.user.id
+
+    if user_id && String.trim(value) != "" do
+      PoddyclipBackend.Feedback.create_feedback(%{
+        user_id: user_id,
+        prompt_key: "open",
+        value: String.trim(value)
+      })
+    end
+
+    conn
+    |> put_layout(false)
+    |> assign(:conn, conn)
+    |> assign(:submitted, true)
+    |> render(:feedback)
+  end
+
   def legal(conn, _params) do
     conn
     |> put_layout(false)

@@ -40,6 +40,11 @@ export function ProcessPage() {
 
   return (
     <div class="min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center p-4">
+      <div class="w-full max-w-lg text-center mb-4">
+        <a href="/feedback" rel="external" class="text-sm text-base-content/40 hover:text-primary transition-colors">
+          Give feedback
+        </a>
+      </div>
       <div class="card bg-base-200 w-full max-w-lg border border-base-300 rounded-3xl">
         <div class="card-body">
           <Show when={!store.initializing} fallback={

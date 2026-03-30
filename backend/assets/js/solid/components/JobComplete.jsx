@@ -2,7 +2,8 @@ import { Show, createSignal, createMemo, onCleanup } from "solid-js";
 import { useProcess } from "../context/ProcessContext";
 import { useI18n } from "../context/I18nContext";
 import { WaveformPlayer } from "./WaveformPlayer";
-import { FeedbackPrompt } from "./FeedbackPrompt";
+import { QualityRating } from "./QualityRating";
+import { PmfSurvey } from "./PmfSurvey";
 
 export function JobComplete() {
   const { store, reset } = useProcess();
@@ -47,7 +48,6 @@ export function JobComplete() {
   function isValidDownloadUrl(url) {
     try {
       const parsed = new URL(url, window.location.origin);
-      // Allow same-origin, localhost (dev), or trusted S3 domains
       return (
         parsed.origin === window.location.origin ||
         parsed.hostname === "localhost" ||
@@ -130,9 +130,11 @@ export function JobComplete() {
           </button>
         </div>
 
-        {/* Feedback prompt (shown occasionally) */}
-        <FeedbackPrompt jobId={store.job?.id} />
-
+        {/* Quality rating - shown after they've listened */}
+        <div class="w-full max-w-sm">
+          <QualityRating jobId={store.job?.id} />
+          <PmfSurvey jobId={store.job?.id} />
+        </div>
       </div>
     </Show>
   );
