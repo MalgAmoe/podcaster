@@ -1,14 +1,17 @@
 import { createSignal, Show } from "solid-js";
 import { api } from "../utils/api";
 
-function hasAnsweredPmf() {
+const PMF_THRESHOLDS = [3, 20];
+
+function shouldShowPmf(count) {
   try {
-    return localStorage.getItem("pmf_answered") === "true";
+    const lastShown = parseInt(localStorage.getItem("pmf_last_shown") || "0", 10);
+    return PMF_THRESHOLDS.some(t => count >= t && lastShown < t);
   } catch { return false; }
 }
 
-function markPmfAnswered() {
-  try { localStorage.setItem("pmf_answered", "true"); } catch {}
+function markPmfAnswered(count) {
+  try { localStorage.setItem("pmf_last_shown", String(count)); } catch {}
 }
 
 export function PmfSurvey(props) {
@@ -19,7 +22,7 @@ export function PmfSurvey(props) {
 
   if (window.isGuest) return null;
   const count = window.completedJobsCount || 0;
-  if (count < 3 || hasAnsweredPmf()) return null;
+  if (!shouldShowPmf(count)) return null;
 
   async function selectPmf(value) {
     setPmfAnswer(value);
@@ -35,13 +38,13 @@ export function PmfSurvey(props) {
         await api.submitFeedback({ job_id: props.jobId, prompt_key: "improvement", value: improvementText() });
       } catch { /* silent */ }
     }
-    markPmfAnswered();
+    markPmfAnswered(count);
     setSubmitted(true);
     setSubmitting(false);
   }
 
   function skip() {
-    markPmfAnswered();
+    markPmfAnswered(count);
     setSubmitted(true);
   }
 
