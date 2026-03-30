@@ -1,18 +1,6 @@
 // Standalone translation helper for use outside component tree
-// (e.g., in context providers or utility functions)
 
 import en from "../locales/en";
-import es from "../locales/es";
-import it from "../locales/it";
-import fr from "../locales/fr";
-
-const dictionaries = { en, es, it, fr };
-
-// Get the current locale from HTML lang attribute
-function getLocale() {
-  const locale = document.documentElement.lang || "en";
-  return locale in dictionaries ? locale : "en";
-}
 
 // Flatten nested objects for translation lookup
 function flattenDict(dict, prefix = "") {
@@ -27,35 +15,16 @@ function flattenDict(dict, prefix = "") {
   }, {});
 }
 
-const flatDictionaries = {
-  en: flattenDict(en),
-  es: flattenDict(es),
-  it: flattenDict(it),
-  fr: flattenDict(fr)
-};
+const flatDict = flattenDict(en);
 
-/**
- * Get a translation by key
- * @param {string} key - Translation key (e.g., "uploadFirst" or "stages.decoding")
- * @returns {string} - Translated string or key if not found
- */
 export function t(key) {
-  const locale = getLocale();
-  const dict = flatDictionaries[locale];
-  return dict[key] || key;
+  return flatDict[key] || key;
 }
 
-/**
- * Get a translation with parameter interpolation
- * @param {string} key - Translation key
- * @param {object} params - Parameters to interpolate (e.g., { count: 5 })
- * @returns {string} - Translated string with parameters replaced
- */
 export function tt(key, params = {}) {
   let text = t(key);
   if (!text || text === key) return key;
 
-  // Replace {param} placeholders
   Object.entries(params).forEach(([param, value]) => {
     text = text.replace(new RegExp(`\\{${param}\\}`, "g"), value);
   });

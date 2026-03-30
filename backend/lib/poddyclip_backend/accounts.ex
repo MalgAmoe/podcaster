@@ -118,6 +118,81 @@ defmodule PoddyclipBackend.Accounts do
     end)
   end
 
+  @doc """
+  Creates a guest user with no real email.
+  Guest users can use the app without signing up.
+  """
+  def create_guest_user do
+    alias PoddyclipBackend.Billing
+
+    free_plan = Billing.get_or_create_free_plan()
+    guest_email = "guest_#{:crypto.strong_rand_bytes(8) |> Base.url_encode64(padding: false)}@guest.munchycow.com"
+
+    %User{}
+    |> Ecto.Changeset.change(%{
+      email: guest_email,
+      is_guest: true,
+      plan_id: free_plan.id,
+      seconds_available: 999_999_999,
+      seconds_allocated: 999_999_999,
+      subscription_status: "none",
+      confirmed_at: DateTime.utc_now() |> DateTime.truncate(:second)
+    })
+    |> Repo.insert()
+  end
+
+  @doc """
+  Upgrades a guest user to a real user by setting their email.
+  Returns {:ok, user} or {:error, changeset}.
+  """
+  def upgrade_guest_to_user(%User{is_guest: true} = user, email) do
+    user
+    |> User.email_changeset(%{email: email})
+    |> Ecto.Changeset.put_change(:is_guest, false)
+    |> Repo.update()
+  end
+
+  def upgrade_guest_to_user(_, _), do: {:error, :not_a_guest}
+
+  @doc """
+  Increments the completed jobs counter for a user.
+  """
+  def increment_completed_jobs_count(user_id) do
+    from(u in User, where: u.id == ^user_id)
+    |> Repo.update_all(inc: [completed_jobs_count: 1])
+  end
+
+  @doc """
+  Merges a guest user's data into a real user account.
+  Transfers jobs and feedback, then deletes the guest.
+  """
+  def merge_guest_into_user(guest_id, real_user_id) when guest_id != real_user_id do
+    alias PoddyclipBackend.Processing.Job
+    alias PoddyclipBackend.Feedback.Entry
+
+    Repo.transaction(fn ->
+      # Transfer jobs
+      from(j in Job, where: j.user_id == ^guest_id)
+      |> Repo.update_all(set: [user_id: real_user_id])
+
+      # Transfer feedback
+      from(f in Entry, where: f.user_id == ^guest_id)
+      |> Repo.update_all(set: [user_id: real_user_id])
+
+      # Delete guest tokens
+      from(t in UserToken, where: t.user_id == ^guest_id)
+      |> Repo.delete_all()
+
+      # Delete guest user
+      case get_user(guest_id) do
+        nil -> :ok
+        guest -> Repo.delete(guest)
+      end
+    end)
+  end
+
+  def merge_guest_into_user(_, _), do: {:ok, :same_user}
+
   ## Settings
 
   @doc """

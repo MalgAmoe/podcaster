@@ -4,7 +4,7 @@
       <.header>
         <p><%= gettext("Sign in") %></p>
         <:subtitle>
-          <%= if @current_scope do %>
+          <%= if @current_scope && @current_scope.user && !@current_scope.user.is_guest do %>
             <%= gettext("You need to reauthenticate to perform sensitive actions on your account.") %>
           <% else %>
             <%= gettext("Enter your email to sign in or create an account.") %>
@@ -25,7 +25,7 @@
 
     <.form :let={f} for={@form} as={:user} id="login_form_magic" action={locale_path(@locale, "/users/log-in")}>
       <.input
-        readonly={!!@current_scope}
+        readonly={@current_scope && @current_scope.user && !@current_scope.user.is_guest}
         field={f[:email]}
         type="email"
         label={gettext("Email")}

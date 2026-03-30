@@ -151,4 +151,9 @@ export const api = {
   async getDownloadUrl(jobId) {
     return request("GET", `/api/jobs/${jobId}/download_url`);
   },
+
+  async submitFeedback(data) {
+    return request("POST", "/api/feedback", data);
+  },
+
 };

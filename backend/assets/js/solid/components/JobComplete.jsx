@@ -2,6 +2,7 @@ import { Show, createSignal, createMemo, onCleanup } from "solid-js";
 import { useProcess } from "../context/ProcessContext";
 import { useI18n } from "../context/I18nContext";
 import { WaveformPlayer } from "./WaveformPlayer";
+import { FeedbackPrompt } from "./FeedbackPrompt";
 
 export function JobComplete() {
   const { store, reset } = useProcess();
@@ -128,6 +129,10 @@ export function JobComplete() {
             {t("feedMeMore")}
           </button>
         </div>
+
+        {/* Feedback prompt (shown occasionally) */}
+        <FeedbackPrompt jobId={store.job?.id} />
+
       </div>
     </Show>
   );

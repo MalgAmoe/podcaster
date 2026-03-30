@@ -21,6 +21,10 @@ defmodule PoddyclipBackend.Accounts.User do
     field :polar_subscription_id, :string
     field :current_period_ends_at, :utc_datetime
 
+    # Guest user fields
+    field :is_guest, :boolean, default: false
+    field :completed_jobs_count, :integer, default: 0
+
     # Notification preferences
     field :notification_preferences, :map,
       default: Map.new(@notification_types, &{&1, true})

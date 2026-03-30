@@ -285,6 +285,12 @@ export function ProcessProvider(props) {
       const job = await api.createJob(store.s3Key, store.filename, config);
       setStore({ job });
     } catch (err) {
+      // Guest limit reached - set flag so ProcessPage shows sign-in card
+      if (err instanceof ApiError && err.code === "guest_limit_reached") {
+        setStore("guestLimitReached", true);
+        setStore("submitting", false);
+        return;
+      }
       // Billing errors get persistent notification with upgrade action
       if (err instanceof ApiError && err.code === "insufficient_seconds") {
         const details = err.details;

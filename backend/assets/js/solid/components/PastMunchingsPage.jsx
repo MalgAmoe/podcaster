@@ -6,6 +6,14 @@ import { useI18n } from "../context/I18nContext";
 export function PastMunchingsPage() {
   const { t, tt } = useI18n();
 
+  // Redirect guests to login
+  if (window.isGuest) {
+    const locale = document.documentElement.lang || "en";
+    const loginPath = locale === "en" ? "/users/log-in" : `/${locale}/users/log-in`;
+    window.location.href = loginPath;
+    return null;
+  }
+
   const [jobs, { refetch }] = createResource(async () => {
     try {
       const data = await api.getJobHistory();

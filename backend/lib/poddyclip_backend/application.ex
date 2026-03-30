@@ -19,8 +19,6 @@ defmodule PoddyclipBackend.Application do
         PoddyclipBackend.LogShipper,
         # Rate limiter for data exports
         PoddyclipBackend.RateLimiter,
-        # Rate limiter for anonymous demos
-        PoddyclipBackend.DemoRateLimiter,
         # Oban job queue
         {Oban, Application.fetch_env!(:poddyclip_backend, Oban)},
         # Subscription expiry checker

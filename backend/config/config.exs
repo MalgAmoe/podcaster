@@ -87,7 +87,7 @@ config :phoenix, :json_library, Jason
 # Gettext i18n configuration
 config :poddyclip_backend, PoddyclipBackendWeb.Gettext,
   default_locale: "en",
-  locales: ~w(en es it fr)
+  locales: ~w(en)
 
 # Swoosh - disable API client for local adapter
 config :swoosh, :api_client, false
@@ -102,8 +102,6 @@ config :poddyclip_backend, Oban,
      crontab: [
        # Cleanup old jobs every hour
        {"0 * * * *", PoddyclipBackend.Workers.CleanupJobs},
-       # Cleanup demo jobs every hour
-       {"30 * * * *", PoddyclipBackend.Workers.CleanupDemoJobs},
        # Cleanup orphaned S3 files daily at 3am
        {"0 3 * * *", PoddyclipBackend.Workers.CleanupOrphanedFiles},
        # Cleanup expired minute packs daily at 4am

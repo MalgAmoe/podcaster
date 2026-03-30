@@ -70,6 +70,7 @@ export default {
   unableToConnect: "Unable to connect. Please refresh the page.",
 
   // Billing
+  guestLimitReached: "You've used your 3 free files. Add your email to keep processing.",
   notEnoughTime: "Not enough time available. Upgrade to Munch Plan or buy a Snack for more processing time.",
   needTime: " You need {needed} but only have {available} available.",
   upgrade: "See options",

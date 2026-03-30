@@ -1,15 +1,11 @@
 defmodule PoddyclipBackendWeb.SitemapController do
   use PoddyclipBackendWeb, :controller
 
-  alias PoddyclipBackend.Blog
-
   @base_url "https://munchycow.com"
-  @locales ["en", "es", "fr", "it"]
+  @locales ["en"]
 
   @static_pages [
     {"/", "weekly", "1.0"},
-    {"/pricing", "monthly", "0.8"},
-    {"/blog", "weekly", "0.8"},
     {"/help", "monthly", "0.5"},
     {"/terms", "yearly", "0.3"},
     {"/privacy", "yearly", "0.3"},
@@ -17,35 +13,18 @@ defmodule PoddyclipBackendWeb.SitemapController do
   ]
 
   def index(conn, _params) do
-    blog_posts =
-      Blog.all_posts()
-      |> Enum.map(& &1.slug)
-      |> Enum.uniq()
-
-    post_dates =
-      Blog.all_posts()
-      |> Enum.group_by(& &1.slug)
-      |> Map.new(fn {slug, posts} ->
-        latest = posts |> Enum.max_by(& &1.date)
-        {slug, latest.date}
-      end)
-
-    xml = build_sitemap(blog_posts, post_dates)
+    xml = build_sitemap()
 
     conn
     |> put_resp_content_type("application/xml")
     |> send_resp(200, xml)
   end
 
-  defp build_sitemap(blog_slugs, post_dates) do
+  defp build_sitemap do
     urls =
       Enum.map(@static_pages, fn {path, changefreq, priority} ->
         url_entry(path, changefreq, priority)
-      end) ++
-        Enum.map(blog_slugs, fn slug ->
-          lastmod = Map.get(post_dates, slug)
-          url_entry("/blog/#{slug}", "monthly", "0.6", lastmod)
-        end)
+      end)
 
     """
     <?xml version="1.0" encoding="UTF-8"?>
@@ -57,7 +36,7 @@ defmodule PoddyclipBackendWeb.SitemapController do
     |> String.trim()
   end
 
-  defp url_entry(path, changefreq, priority, lastmod \\ nil) do
+  defp url_entry(path, changefreq, priority) do
     loc = locale_url("en", path)
 
     alternates =
@@ -69,16 +48,9 @@ defmodule PoddyclipBackendWeb.SitemapController do
       |> Kernel.++([~s(    <xhtml:link rel="alternate" hreflang="x-default" href="#{loc}"/>)])
       |> Enum.join("\n")
 
-    lastmod_tag =
-      if lastmod do
-        "\n    <lastmod>#{Date.to_iso8601(lastmod)}</lastmod>"
-      else
-        ""
-      end
-
     """
       <url>
-        <loc>#{loc}</loc>#{lastmod_tag}
+        <loc>#{loc}</loc>
         <changefreq>#{changefreq}</changefreq>
         <priority>#{priority}</priority>
     #{alternates}

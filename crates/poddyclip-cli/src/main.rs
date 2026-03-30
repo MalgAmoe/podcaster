@@ -1253,21 +1253,37 @@ fn load_audio(input_path: &Path) -> Result<(Vec<Vec<f32>>, u32)> {
         symphonia::default::get_codecs().make(&track.codec_params, &DecoderOptions::default())?;
 
     let mut all_samples: Vec<Vec<f32>> = vec![Vec::new(); channels];
+    let mut consecutive_errors: usize = 0;
+    let mut total_errors: usize = 0;
+    let max_consecutive_errors: usize = 50;
 
     loop {
         match format.next_packet() {
             Ok(packet) => {
-                let decoded = decoder.decode(&packet)?;
-                let spec = *decoded.spec();
-                let duration = decoded.capacity() as u64;
+                match decoder.decode(&packet) {
+                    Ok(decoded) => {
+                        consecutive_errors = 0;
 
-                let mut sample_buf = SampleBuffer::<f32>::new(duration, spec);
-                sample_buf.copy_interleaved_ref(decoded);
+                        let spec = *decoded.spec();
+                        let duration = decoded.capacity() as u64;
 
-                let samples = sample_buf.samples();
+                        let mut sample_buf = SampleBuffer::<f32>::new(duration, spec);
+                        sample_buf.copy_interleaved_ref(decoded);
 
-                for (i, sample) in samples.iter().enumerate() {
-                    all_samples[i % channels].push(*sample);
+                        let samples = sample_buf.samples();
+
+                        for (i, sample) in samples.iter().enumerate() {
+                            all_samples[i % channels].push(*sample);
+                        }
+                    }
+                    Err(symphonia::core::errors::Error::DecodeError(_)) => {
+                        consecutive_errors += 1;
+                        total_errors += 1;
+                        if consecutive_errors >= max_consecutive_errors {
+                            bail!("File appears to be corrupt (too many consecutive decode errors)");
+                        }
+                    }
+                    Err(e) => return Err(e.into()),
                 }
             }
             Err(symphonia::core::errors::Error::IoError(e))
@@ -1277,6 +1293,10 @@ fn load_audio(input_path: &Path) -> Result<(Vec<Vec<f32>>, u32)> {
             }
             Err(e) => return Err(e.into()),
         }
+    }
+
+    if total_errors > 0 {
+        eprintln!("Warning: skipped {} malformed audio frames during decode", total_errors);
     }
 
     if all_samples.is_empty() || all_samples[0].is_empty() {

@@ -6,7 +6,8 @@ defmodule PoddyclipBackendWeb.UserSessionController do
   alias PoddyclipBackendWeb.LocaleHelpers
 
   def new(conn, _params) do
-    email = get_in(conn.assigns, [:current_scope, Access.key(:user), Access.key(:email)])
+    user = get_in(conn.assigns, [:current_scope, Access.key(:user)])
+    email = if user && !user.is_guest, do: user.email, else: nil
     form = Phoenix.Component.to_form(%{"email" => email}, as: "user")
 
     conn
@@ -30,7 +31,15 @@ defmodule PoddyclipBackendWeb.UserSessionController do
 
     case Accounts.login_user_by_magic_link(token) do
       {:ok, {user, _expired_tokens}} ->
+        # Merge guest jobs into this account if logging in from a guest session
+        guest_id = get_session(conn, :guest_user_id)
+
+        if guest_id && guest_id != user.id do
+          Accounts.merge_guest_into_user(guest_id, user.id)
+        end
+
         conn
+        |> delete_session(:guest_user_id)
         |> put_flash(:info, info)
         |> UserAuth.log_in_user(user, user_params)
 

@@ -85,10 +85,10 @@ defmodule PoddyclipBackendWeb.UserSessionControllerTest do
       assert get_session(conn, :user_token)
       assert redirected_to(conn) == ~p"/app"
 
-      # Now do a logged in request - homepage redirects to /app for logged in users
+      # Now do a logged in request
       conn = get(conn, ~p"/app")
       response = html_response(conn, 200)
-      assert response =~ user.email
+      assert response =~ "solid-process-app"
     end
 
     test "confirms unconfirmed user", %{conn: conn, unconfirmed_user: user} do
@@ -110,7 +110,7 @@ defmodule PoddyclipBackendWeb.UserSessionControllerTest do
       # Now do a logged in request
       conn = get(conn, ~p"/app")
       response = html_response(conn, 200)
-      assert response =~ user.email
+      assert response =~ "solid-process-app"
     end
 
     test "emits error message when magic link is invalid", %{conn: conn} do

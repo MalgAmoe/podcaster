@@ -38,8 +38,7 @@ defmodule PoddyclipBackend.Processing do
         status: :queued,
         input_s3_key: input_s3_key,
         user_id: user_id,
-        estimated_seconds: opts[:estimated_seconds],
-        is_demo: opts[:is_demo] || false
+        estimated_seconds: opts[:estimated_seconds]
       })
       |> Repo.insert!()
 
@@ -260,17 +259,26 @@ defmodule PoddyclipBackend.Processing do
           log_status_change(updated_job, old_status, new_status, params["error"])
         end
 
-        # Deduct actual seconds on completion (no refunds needed - we only charge on success)
-        # Skip billing for demo jobs
-        if new_status == :completed and old_status != :completed and not updated_job.is_demo do
-          deduct_actual_seconds(updated_job)
+        # Deduct actual seconds on completion (skip for guest users)
+        if new_status == :completed and old_status != :completed do
+          user = Accounts.get_user(updated_job.user_id)
+
+          if user && !user.is_guest do
+            deduct_actual_seconds(updated_job)
+          end
+
+          Accounts.increment_completed_jobs_count(updated_job.user_id)
         end
 
         broadcast_update(updated_job)
 
-        # Send email notifications for completed/failed jobs (skip for demo)
-        if new_status in [:completed, :failed] and old_status != new_status and not updated_job.is_demo do
-          send_job_notification(updated_job, new_status)
+        # Send email notifications for completed/failed jobs (skip for guests)
+        if new_status in [:completed, :failed] and old_status != new_status do
+          notif_user = Accounts.get_user(updated_job.user_id)
+
+          if notif_user && !notif_user.is_guest do
+            send_job_notification(updated_job, new_status)
+          end
         end
 
         {:ok, updated_job}

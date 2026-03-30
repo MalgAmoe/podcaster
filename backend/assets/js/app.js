@@ -28,8 +28,8 @@ liveSocket.connect()
 // >> liveSocket.disableLatencySim()
 window.liveSocket = liveSocket
 
-// Connect to user channel for navbar seconds updates
-if (window.userToken) {
+// Connect to user channel for navbar seconds updates (skip for guests)
+if (window.userToken && !window.isGuest) {
   const updateNavbar = ({mins, secs}) => {
     const el = document.getElementById("navbar-remaining")
     if (el) el.textContent = `${mins}m ${secs}s`
@@ -46,18 +46,9 @@ if (window.userToken) {
 const solidRoot = document.getElementById("solid-process-app");
 if (solidRoot) {
   import("./solid/index.jsx").then(({ mountApp }) => {
-    // Determine base path from locale (set on html lang attribute)
     const locale = document.documentElement.lang || "en";
     const basePath = locale === "en" ? "/app" : `/${locale}/app`;
     mountApp(solidRoot, basePath);
-  });
-}
-
-// Mount demo widget if container exists
-const demoWidget = document.getElementById("demo-widget");
-if (demoWidget) {
-  import("./demo.js").then(({ initDemo }) => {
-    initDemo(demoWidget);
   });
 }
 

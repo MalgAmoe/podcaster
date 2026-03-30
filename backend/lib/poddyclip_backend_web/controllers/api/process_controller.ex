@@ -87,15 +87,32 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   defp validate_strength(strength) when strength in @valid_strengths, do: :ok
   defp validate_strength(strength), do: {:error, "Invalid strength: #{inspect(strength)}"}
 
-  defp create_job_validated(conn, user, s3_key, filename, params, strength) do
-    # Check if cancelled subscription has expired
-    {:ok, user} = Billing.check_subscription_expiry(user)
+  @guest_file_limit 3
 
-    # Use exact seconds from duration for validation (actual deduction happens on completion)
+  defp create_job_validated(conn, user, s3_key, filename, params, strength) do
+    # Guest users limited to 3 files
+    if user.is_guest and user.completed_jobs_count >= @guest_file_limit do
+      conn
+      |> put_status(403)
+      |> json(%{error: "guest_limit_reached", limit: @guest_file_limit})
+    else
+      create_job_after_checks(conn, user, s3_key, filename, params, strength)
+    end
+  end
+
+  defp create_job_after_checks(conn, user, s3_key, filename, params, strength) do
     estimated_seconds = params["duration_seconds"] || 60
 
-    # Validate user has enough seconds (but don't deduct - Rust will check again before processing)
-    if not Billing.has_seconds?(user, estimated_seconds) do
+    # Skip billing checks for guest users
+    billing_ok =
+      if user.is_guest do
+        true
+      else
+        {:ok, user} = Billing.check_subscription_expiry(user)
+        Billing.has_seconds?(user, estimated_seconds)
+      end
+
+    if not billing_ok do
       conn
       |> put_status(:payment_required)
       |> json(%{
@@ -104,7 +121,6 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
         seconds_needed: estimated_seconds
       })
     else
-      # Build job options with validated parameters
       opts = [
         strength: strength,
         ai_clean: params["ai_clean"],
@@ -378,6 +394,8 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
     json(conn, %{
       id: user.id,
       email: user.email,
+      is_guest: user.is_guest,
+      completed_jobs_count: user.completed_jobs_count,
       plan: plan_info,
       seconds_available: user.seconds_available,
       subscription_status: user.subscription_status,

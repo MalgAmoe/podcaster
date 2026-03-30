@@ -5,31 +5,19 @@ defmodule PoddyclipBackendWeb.PageController do
   alias PoddyclipBackend.Storage
   alias PoddyclipBackendWeb.LocaleHelpers
 
-  # Public pages
-  def landing(conn, _params) do
-    # Redirect logged-in users to the app
-    if conn.assigns[:current_scope] do
-      locale = conn.assigns[:locale] || "en"
-      redirect(conn, to: LocaleHelpers.locale_path(locale, "/app"))
-    else
-      conn
-      |> put_layout(false)
-      |> assign(:conn, conn)
-      |> render(:landing)
-    end
+  # Main app - ensure guest user exists, serve SolidJS app
+  def app(conn, _params) do
+    conn = PoddyclipBackendWeb.Plugs.EnsureGuestUser.call(conn, [])
+
+    conn
+    |> put_layout(false)
+    |> assign(:conn, conn)
+    |> render(:process)
   end
 
-  def pricing(conn, _params) do
-    # Redirect logged-in users to account page (where they can upgrade)
-    if conn.assigns[:current_scope] do
-      locale = conn.assigns[:locale] || "en"
-      redirect(conn, to: LocaleHelpers.locale_path(locale, "/account"))
-    else
-      conn
-      |> put_layout(false)
-      |> assign(:conn, conn)
-      |> render(:pricing)
-    end
+  def redirect_to_app(conn, _params) do
+    locale = conn.assigns[:locale] || "en"
+    redirect(conn, to: LocaleHelpers.locale_path(locale, "/app"))
   end
 
   def terms(conn, _params) do

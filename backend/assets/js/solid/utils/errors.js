@@ -4,6 +4,9 @@
 export function getErrorKey(error) {
   if (!error) return "unknownError";
 
+  if (error.includes("guest_limit_reached")) {
+    return "guestLimitReached";
+  }
   if (error.includes("insufficient_seconds")) {
     return "notEnoughTime";
   }
@@ -13,7 +16,7 @@ export function getErrorKey(error) {
   if (error.includes("No audio track")) {
     return "noAudioFound";
   }
-  if (error.includes("decode") || error.includes("Decoding")) {
+  if (error.includes("decode") || error.includes("Decoding") || error.includes("malformed") || error.includes("corrupt")) {
     return "couldNotReadFile";
   }
   if (error.includes("timeout") || error.includes("timed out")) {
