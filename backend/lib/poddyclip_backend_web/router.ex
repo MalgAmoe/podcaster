@@ -74,6 +74,8 @@ defmodule PoddyclipBackendWeb.Router do
     get "/privacy", PageController, :privacy
     get "/legal", PageController, :legal
     get "/help", PageController, :help
+    get "/blog", BlogController, :index
+    get "/blog/:slug", BlogController, :show
   end
 
   scope "/app", PoddyclipBackendWeb do

@@ -62,6 +62,7 @@
       </div>
       <div class="navbar-end gap-2 pr-4">
 
+        <a href="/blog" rel="external" class="text-sm hover:text-primary transition-colors mr-2">Blog</a>
         <%= if @current_scope && @current_scope.user && @current_scope.user.is_guest do %>
           <a href={locale_path(@locale, "/users/log-in")} class="btn btn-primary btn-sm" rel="external"><%= gettext("Sign in") %></a>
         <% end %>
