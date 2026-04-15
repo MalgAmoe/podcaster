@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-!!!! IMPORTANT
+<!-- !!!! IMPORTANT
 
 YOU MUST USE memo TO SAVE INFO BECAUSE COMPACTING MAKE YOU LOOSE IMPORTANT CONTEXT.
 
@@ -17,7 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `memo remember preference "..."` - user choices, workflow preferences
   - `memo remember fact "..."` - config locations, API details, decisions made
 
-  Remember to use it before compacting if you want to save important info.
+  Remember to use it before compacting if you want to save important info. -->
 
 
 ## Build Commands

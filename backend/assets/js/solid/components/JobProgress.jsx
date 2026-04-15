@@ -10,16 +10,19 @@ export function JobProgress() {
   return (
     <Show when={store.job}>
       <div class="flex flex-col items-center py-8">
-        <div
-          class="radial-progress text-primary"
-          style={{
-            "--value": store.job?.progress?.percent_complete || 0,
-            "--size": "10rem",
-            "--thickness": "0.5rem",
-          }}
-          role="progressbar"
-        >
-          <img src="/images/munchy_cow_head.svg" alt={t("munching")} class="w-16 h-16 animate-munch" />
+        <div class="relative">
+          <div
+            class="radial-progress text-primary"
+            style={{
+              "--value": store.job?.progress?.percent_complete || 0,
+              "--size": "10rem",
+              "--thickness": "0.5rem",
+            }}
+            role="progressbar"
+          >
+            <img src="/images/munchy_cow_head.svg" alt={t("munching")} class="w-16 h-16 animate-munch" />
+          </div>
+          <div class="absolute inset-0 rounded-full bg-primary/5 animate-pulse-slow pointer-events-none" />
         </div>
 
         <p class="mt-6 text-xl font-bold">

@@ -77,8 +77,8 @@ export function UploadZone() {
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             class={`border-2 border-dashed rounded-3xl p-12 text-center
-                   hover:border-primary hover:bg-primary/5 transition-all duration-200
-                   cursor-pointer group ${isDragging() ? "border-primary bg-primary/5" : "border-base-300"}`}
+                   hover:border-primary/60 hover:bg-primary/5 hover:shadow-[inset_0_0_30px_rgba(147,51,234,0.06)] transition-all duration-300
+                   cursor-pointer group ${isDragging() ? "border-primary bg-primary/5 shadow-[inset_0_0_30px_rgba(147,51,234,0.06)]" : "border-base-content/15"}`}
           >
             <div class="flex flex-col items-center gap-4">
               <div class="w-20 h-20 flex items-center justify-center group-hover:scale-110 transition-transform">

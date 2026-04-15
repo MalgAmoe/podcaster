@@ -82,25 +82,27 @@ export function JobComplete() {
         <p class="text-base-content/40 text-xs mt-1 truncate max-w-full">{store.job?.filename}</p>
 
         <Show when={store.job?.download_url}>
-          <div class="w-full mt-6 p-4 bg-base-300 rounded-2xl space-y-4">
+          <div class="w-full mt-6 p-4 bg-base-300/70 rounded-2xl space-y-4">
             {/* A/B Toggle */}
-            <div class="flex justify-center gap-2" role="group" aria-label={t("audioComparison")}>
-              <button
-                type="button"
-                class={`btn btn-sm ${activeTrack() === "original" ? "btn-primary" : "btn-outline"}`}
-                onClick={() => setActiveTrack("original")}
-                aria-pressed={activeTrack() === "original"}
-              >
-                {t("original")}
-              </button>
-              <button
-                type="button"
-                class={`btn btn-sm ${activeTrack() === "processed" ? "btn-primary" : "btn-outline"}`}
-                onClick={() => setActiveTrack("processed")}
-                aria-pressed={activeTrack() === "processed"}
-              >
-                {t("processed")}
-              </button>
+            <div class="flex justify-center" role="group" aria-label={t("audioComparison")}>
+              <div class="inline-flex gap-1 bg-base-100 rounded-full p-1">
+                <button
+                  type="button"
+                  class={`btn btn-toggle btn-sm px-5 rounded-full border-0 ${activeTrack() === "original" ? "bg-base-300 text-base-content shadow-sm" : "btn-ghost text-base-content/50"}`}
+                  onClick={() => setActiveTrack("original")}
+                  aria-pressed={activeTrack() === "original"}
+                >
+                  {t("original")}
+                </button>
+                <button
+                  type="button"
+                  class={`btn btn-toggle btn-sm px-5 rounded-full border-0 ${activeTrack() === "processed" ? "bg-primary text-primary-content shadow-sm" : "btn-ghost text-base-content/50"}`}
+                  onClick={() => setActiveTrack("processed")}
+                  aria-pressed={activeTrack() === "processed"}
+                >
+                  {t("processed")}
+                </button>
+              </div>
             </div>
 
             {/* Waveform Player with synced state */}

@@ -107,10 +107,50 @@
   outline-color: #9333ea;
 }
 
+/* No focus ring on segmented toggle buttons */
+[data-theme="poddyclip"] .btn-toggle:focus,
+[data-theme="poddyclip"] .btn-toggle:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
 /* Override any orange/yellow accent colors */
 [data-theme="poddyclip"] {
   --tw-ring-color: #9333ea;
   accent-color: #9333ea;
+}
+
+/* Progress bar glow */
+[data-theme="poddyclip"] .progress-primary::-webkit-progress-value {
+  background: linear-gradient(90deg, #7c3aed, #9333ea, #a855f7);
+  border-radius: 9999px;
+}
+[data-theme="poddyclip"] .progress-primary::-moz-progress-bar {
+  background: linear-gradient(90deg, #7c3aed, #9333ea, #a855f7);
+  border-radius: 9999px;
+}
+
+/* Card hover lift for interactive cards */
+[data-theme="poddyclip"] .card-hoverable {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+[data-theme="poddyclip"] .card-hoverable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px -10px rgba(147, 51, 234, 0.2);
+}
+
+/* Collapse/accordion refinement */
+[data-theme="poddyclip"] .collapse-arrow .collapse-title {
+  transition: color 0.2s ease;
+}
+[data-theme="poddyclip"] .collapse-arrow:has(> input:checked) .collapse-title {
+  color: #9333ea;
+}
+
+/* Smooth default transitions on interactive elements */
+[data-theme="poddyclip"] a,
+[data-theme="poddyclip"] button {
+  transition: color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 /* Add variants based on LiveView classes */

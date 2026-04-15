@@ -6,7 +6,7 @@
     <div class="space-y-6">
       <%= for post <- @posts do %>
         <.link href={locale_path(@locale, "/blog/#{post.slug}")} class="block group">
-          <article class="bg-base-200 rounded-2xl p-6 hover:ring-2 hover:ring-primary/30 transition-all">
+          <article class="bg-base-200 rounded-2xl p-6 border border-base-300/50 hover:border-primary/30 hover:shadow-[0_4px_20px_-5px_rgba(147,51,234,0.15)] transition-all duration-200">
             <div class="flex flex-col gap-3">
               <%= if post.image do %>
                 <img src={post.image} alt={post.title} class="w-full h-48 object-cover rounded-xl" />

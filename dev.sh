@@ -19,6 +19,11 @@ elif [ -f .env ]; then
     export $(grep -v '^#' .env | xargs)
 fi
 
+# macOS: use system cert bundle to avoid rustls-native-certs parsing issues
+if [ "$(uname)" = "Darwin" ]; then
+    export SSL_CERT_FILE=/etc/ssl/cert.pem
+fi
+
 case "${1:-}" in
     infra)
         echo -e "${GREEN}Starting infrastructure (Postgres + MinIO + OpenObserve)...${NC}"
@@ -30,7 +35,7 @@ case "${1:-}" in
         ;;
     web)
         echo -e "${GREEN}Starting Phoenix (with admin dashboard)...${NC}"
-        cd backend && ADMIN_ENABLED=true mix compile --force && ADMIN_ENABLED=true ADMIN_PASSWORD=dev mix phx.server
+        cd backend && ADMIN_ENABLED=false mix compile --force && ADMIN_ENABLED=false ADMIN_PASSWORD=dev mix phx.server
         ;;
     stop)
         echo -e "${YELLOW}Stopping all services...${NC}"

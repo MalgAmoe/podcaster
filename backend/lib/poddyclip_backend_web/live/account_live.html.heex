@@ -57,9 +57,9 @@
           <span class="text-base-content/70"><%= gettext("Time Used") %></span>
           <span class="font-medium"><%= @used_min %>m <%= @used_sec %>s / <%= @max_minutes %>m 0s</span>
         </div>
-        <div class="w-full bg-base-300 rounded-full h-3">
+        <div class="w-full bg-base-300 rounded-full h-3 overflow-hidden">
           <div
-            class={"h-3 rounded-full " <> if(@usage_percent > 80, do: "bg-warning", else: "bg-primary")}
+            class={"h-3 rounded-full transition-all duration-500 " <> if(@usage_percent > 80, do: "bg-gradient-to-r from-warning to-error", else: "bg-gradient-to-r from-violet-600 via-primary to-purple-400")}
             style={"width: #{min(@usage_percent, 100)}%"}
           ></div>
         </div>

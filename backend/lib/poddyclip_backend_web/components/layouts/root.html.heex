@@ -55,7 +55,7 @@
     </script>
   </head>
   <body class="bg-base-100 min-h-screen">
-    <div class="navbar bg-base-200 border-b border-base-300" style="position: fixed; top: 0; left: 0; right: 0; z-index: 40;">
+    <div class="navbar bg-base-200/80 backdrop-blur-lg border-b border-base-300/50 fixed top-0 left-0 right-0 z-40">
       <div class="navbar-start">
         <.link href={locale_path(@locale, "/app")} class="text-xl font-bold px-4 hover:text-primary transition-colors">Munchy Cow</.link>
         <.link href={locale_path(@locale, "/app/past-munchings")} class="text-sm px-3 hover:text-primary transition-colors"><%= gettext("Past Munchings") %></.link>
