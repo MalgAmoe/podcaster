@@ -59,7 +59,6 @@ defmodule PoddyclipBackend.MixProject do
        depth: 1},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
-      {:gettext, "~> 1.0"},
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
@@ -84,10 +83,7 @@ defmodule PoddyclipBackend.MixProject do
       {:sweet_xml, "~> 0.7"},
       {:hackney, "~> 1.20"},
       # Error tracking
-      {:sentry, "~> 11.0"},
-      # Blog (compile-time markdown posts)
-      {:nimble_publisher, "~> 1.1"},
-      {:earmark, "~> 1.4"}
+      {:sentry, "~> 11.0"}
     ]
   end
 

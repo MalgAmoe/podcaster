@@ -1,34 +1,23 @@
 <!DOCTYPE html>
-<html lang={@locale || "en"} data-theme="poddyclip">
+<html lang="en" data-theme="poddyclip">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content={assigns[:meta_description] || gettext("Free audio cleanup. Upload your recording, get back broadcast-ready audio.")} />
+    <meta name="description" content={assigns[:meta_description] || "Free audio cleanup. Upload your recording, get back broadcast-ready audio."} />
     <meta name="theme-color" content="#9333ea" />
-
-    <!-- Canonical & Hreflang -->
-    <%= unless @current_scope do %>
-      <link rel="canonical" href={canonical_url(assigns)} />
-      <link rel="alternate" hreflang="en" href={hreflang_url(assigns, "en")} />
-      <link rel="alternate" hreflang="es" href={hreflang_url(assigns, "es")} />
-      <link rel="alternate" hreflang="fr" href={hreflang_url(assigns, "fr")} />
-      <link rel="alternate" hreflang="it" href={hreflang_url(assigns, "it")} />
-      <link rel="alternate" hreflang="x-default" href={hreflang_url(assigns, "en")} />
-    <% end %>
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content={canonical_url(assigns)} />
-    <meta property="og:title" content={assigns[:page_title] || gettext("Munchy Cow - Free Audio Cleanup")} />
-    <meta property="og:description" content={assigns[:meta_description] || gettext("Free audio cleanup. Upload your recording, get back broadcast-ready audio.")} />
+    <meta property="og:title" content={assigns[:page_title] || "Munchy Cow - Free Audio Cleanup"} />
+    <meta property="og:description" content={assigns[:meta_description] || "Free audio cleanup. Upload your recording, get back broadcast-ready audio."} />
     <meta property="og:image" content={assigns[:meta_image] || "https://munchycow.com/images/munchycow-social.png"} />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content={assigns[:page_title] || gettext("Munchy Cow - Free Audio Cleanup")} />
-    <meta property="twitter:description" content={assigns[:meta_description] || gettext("Free audio cleanup. Upload your recording, get back broadcast-ready audio.")} />
+    <meta name="twitter:title" content={assigns[:page_title] || "Munchy Cow - Free Audio Cleanup"} />
+    <meta property="twitter:description" content={assigns[:meta_description] || "Free audio cleanup. Upload your recording, get back broadcast-ready audio."} />
     <meta name="twitter:image" content={assigns[:meta_image] || "https://munchycow.com/images/munchycow-social.png"} />
 
     <link rel="icon" type="image/svg+xml" href="/images/munchy_cow_head.svg" />
@@ -57,14 +46,13 @@
   <body class="bg-base-100 min-h-screen">
     <div class="navbar bg-base-200/80 backdrop-blur-lg border-b border-base-300/50 fixed top-0 left-0 right-0 z-40">
       <div class="navbar-start">
-        <.link href={locale_path(@locale, "/app")} class="text-xl font-bold px-4 hover:text-primary transition-colors">Munchy Cow</.link>
-        <.link href={locale_path(@locale, "/app/past-munchings")} class="text-sm px-3 hover:text-primary transition-colors"><%= gettext("Past Munchings") %></.link>
+        <.link href="/app" class="text-xl font-bold px-4 hover:text-primary transition-colors">Munchy Cow</.link>
+        <.link href="/app/past-munchings" class="text-sm px-3 hover:text-primary transition-colors">Past Munchings</.link>
       </div>
       <div class="navbar-end gap-2 pr-4">
 
-        <a href="/blog" rel="external" class="text-sm hover:text-primary transition-colors mr-2">Blog</a>
         <%= if @current_scope && @current_scope.user && @current_scope.user.is_guest do %>
-          <a href={locale_path(@locale, "/users/log-in")} class="btn btn-primary btn-sm" rel="external"><%= gettext("Sign in") %></a>
+          <a href="/users/log-in" class="btn btn-primary btn-sm" rel="external">Sign in</a>
         <% end %>
         <%= if @current_scope && @current_scope.user && !@current_scope.user.is_guest do %>
           <div class="dropdown dropdown-end">
@@ -75,12 +63,12 @@
               <li class="menu-title px-2 py-1">
                 <span class="text-xs text-base-content/50 truncate">{@current_scope.user.email}</span>
               </li>
-              <li><a href={locale_path(@locale, "/help")} rel="external"><%= gettext("Help & FAQ") %></a></li>
+              <li><a href="/help" rel="external">Help & FAQ</a></li>
               <li>
-                <form action={locale_path(@locale, "/users/log-out")} method="post">
+                <form action="/users/log-out" method="post">
                   <input type="hidden" name="_method" value="delete" />
                   <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
-                  <button type="submit" class="w-full text-left"><%= gettext("Log out") %></button>
+                  <button type="submit" class="w-full text-left">Log out</button>
                 </form>
               </li>
             </ul>

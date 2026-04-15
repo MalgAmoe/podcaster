@@ -6,7 +6,7 @@
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        <span><%= gettext("Welcome to Munch Plan! Your account has been upgraded.") %></span>
+        <span>Welcome to Munch Plan! Your account has been upgraded.</span>
       </div>
     <% end %>
 
@@ -15,14 +15,14 @@
       <%= if @snack_pending do %>
         <div role="alert" class="alert alert-info mb-6">
           <span class="loading loading-spinner loading-sm"></span>
-          <span><%= gettext("Processing your snack purchase...") %></span>
+          <span>Processing your snack purchase...</span>
         </div>
       <% else %>
         <div role="alert" class="alert alert-success mb-6">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span><%= gettext("Snack purchased! Your extra minutes have been added.") %></span>
+          <span>Snack purchased! Your extra minutes have been added.</span>
         </div>
       <% end %>
     <% end %>
@@ -31,30 +31,30 @@
     <%= if PoddyclipBackendWeb.AccountLive.upgrade_pending?(assigns) do %>
       <div role="alert" class="alert alert-info mb-6">
         <span class="loading loading-spinner loading-sm"></span>
-        <span><%= gettext("Processing your upgrade...") %></span>
+        <span>Processing your upgrade...</span>
       </div>
     <% end %>
 
     <.header>
-      <%= gettext("Your Account") %>
+      Your Account
       <:subtitle><%= @user.email %></:subtitle>
     </.header>
 
     <!-- Plan Card -->
     <div class="mt-8 p-6 rounded-2xl bg-base-200 border border-base-300">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-xl font-semibold"><%= gettext("Current Plan") %></h2>
+        <h2 class="text-xl font-semibold">Current Plan</h2>
         <%= if @is_pro do %>
-          <span class="px-3 py-1 text-xs font-semibold rounded-full bg-primary text-primary-content"><%= gettext("Munch Plan") %></span>
+          <span class="px-3 py-1 text-xs font-semibold rounded-full bg-primary text-primary-content">Munch Plan</span>
         <% else %>
-          <span class="px-3 py-1 text-xs font-semibold rounded-full bg-base-300 text-base-content"><%= gettext("Free") %></span>
+          <span class="px-3 py-1 text-xs font-semibold rounded-full bg-base-300 text-base-content">Free</span>
         <% end %>
       </div>
 
       <!-- Time Usage -->
       <div class="mb-6">
         <div class="flex justify-between text-sm mb-2">
-          <span class="text-base-content/70"><%= gettext("Time Used") %></span>
+          <span class="text-base-content/70">Time Used</span>
           <span class="font-medium"><%= @used_min %>m <%= @used_sec %>s / <%= @max_minutes %>m 0s</span>
         </div>
         <div class="w-full bg-base-300 rounded-full h-3 overflow-hidden">
@@ -64,7 +64,7 @@
           ></div>
         </div>
         <p class="text-xs text-base-content/50 mt-2">
-          <%= @remaining_min %>m <%= @remaining_sec %>s <%= gettext("remaining") %>
+          <%= @remaining_min %>m <%= @remaining_sec %>s remaining
         </p>
       </div>
 
@@ -72,16 +72,16 @@
       <%= if @is_pro do %>
         <div class="mb-6 p-4 rounded-lg bg-base-100">
           <div class="flex justify-between items-center">
-            <span class="text-sm text-base-content/70"><%= gettext("Status") %></span>
+            <span class="text-sm text-base-content/70">Status</span>
             <%= case @user.subscription_status do %>
               <% "active" -> %>
-                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-success/20 text-success"><%= gettext("Active") %></span>
+                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-success/20 text-success">Active</span>
               <% "cancelled" -> %>
-                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-warning/20 text-warning"><%= gettext("Cancelled") %></span>
+                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-warning/20 text-warning">Cancelled</span>
               <% "past_due" -> %>
-                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-error/20 text-error"><%= gettext("Past Due") %></span>
+                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-error/20 text-error">Past Due</span>
               <% _ -> %>
-                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-base-300 text-base-content/70"><%= @user.subscription_status || gettext("Unknown") %></span>
+                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-base-300 text-base-content/70"><%= @user.subscription_status || "Unknown" %></span>
             <% end %>
           </div>
 
@@ -89,9 +89,9 @@
             <div class="flex justify-between items-center mt-2">
               <span class="text-sm text-base-content/70">
                 <%= if @user.subscription_status == "cancelled" do %>
-                  <%= gettext("Access until") %>
+                  Access until
                 <% else %>
-                  <%= gettext("Next renewal") %>
+                  Next renewal
                 <% end %>
               </span>
               <span class="text-sm font-medium">
@@ -107,35 +107,32 @@
         <%= if @is_pro do %>
           <%= if @portal_url do %>
             <a href={@portal_url} class="btn btn-outline flex-1" target="_blank" rel="noopener">
-              <%= gettext("Manage Subscription") %>
+              Manage Subscription
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
               </svg>
             </a>
           <% else %>
-            <span class="text-sm text-base-content/50"><%= gettext("Contact support to manage your subscription") %></span>
+            <span class="text-sm text-base-content/50">Contact support to manage your subscription</span>
           <% end %>
         <% else %>
           <%= if @checkout_url do %>
             <div class="flex-1">
               <p class="text-xs text-base-content/50 mb-2 text-center">
-                <%= gettext("By proceeding, you agree to our %{link_start}Terms%{link_end} and waive your 14-day right of withdrawal once the service begins.",
-                  link_start: "<a href=\"#{locale_path(@locale, "/terms")}\" class=\"underline hover:text-base-content\" target=\"_blank\">",
-                  link_end: "</a>"
-                ) |> raw() %>
+                By proceeding, you agree to our <a href="/terms" class="underline hover:text-base-content" target="_blank">Terms</a> and waive your 14-day right of withdrawal once the service begins.
               </p>
               <a href={@checkout_url} class="btn btn-primary w-full">
-                <%= gettext("Upgrade to Munch Plan - $15/mo") %>
+                Upgrade to Munch Plan - $15/mo
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
               </a>
-              <p class="text-xs text-base-content/50 mt-1 text-center"><%= gettext("+ applicable tax") %></p>
+              <p class="text-xs text-base-content/50 mt-1 text-center">+ applicable tax</p>
             </div>
           <% else %>
             <div class="flex-1 text-center p-4 rounded-lg bg-base-100 border border-base-300">
               <p class="text-sm text-base-content/70">
-                <%= gettext("Billing is not yet configured. Contact support to upgrade.") %>
+                Billing is not yet configured. Contact support to upgrade.
               </p>
             </div>
           <% end %>
@@ -145,25 +142,25 @@
       <!-- Upgrade benefits for free users -->
       <%= if not @is_pro do %>
         <div class="mt-6 pt-6 border-t border-base-300">
-          <p class="text-sm font-medium mb-3"><%= gettext("Munch Plan includes:") %></p>
+          <p class="text-sm font-medium mb-3">Munch Plan includes:</p>
           <ul class="space-y-2 text-sm text-base-content/70">
             <li class="flex items-center gap-2">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
               </svg>
-              <%= gettext("900 minutes per month (15 hours)") %>
+              900 minutes per month (15 hours)
             </li>
             <li class="flex items-center gap-2">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
               </svg>
-              <%= gettext("2 hours per file") %>
+              2 hours per file
             </li>
             <li class="flex items-center gap-2">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
               </svg>
-              <%= gettext("Priority processing queue") %>
+              Priority processing queue
             </li>
           </ul>
         </div>
@@ -173,10 +170,10 @@
     <!-- Snacks Card -->
     <div class="mt-6 p-6 rounded-2xl bg-base-200 border border-base-300">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-xl font-semibold"><%= gettext("Snacks") %></h2>
+        <h2 class="text-xl font-semibold">Snacks</h2>
         <%= if @pack_count > 0 do %>
           <span class="px-3 py-1 text-xs font-semibold rounded-full bg-success/20 text-success">
-            <%= ngettext("%{count} snack", "%{count} snacks", @pack_count, count: @pack_count) %>
+            <%= @pack_count %> snack<%= if @pack_count != 1, do: "s" %>
           </span>
         <% end %>
       </div>
@@ -185,61 +182,58 @@
       <%= if @pack_count > 0 do %>
         <div class="mb-4 p-4 rounded-lg bg-base-100">
           <div class="flex justify-between items-center">
-            <span class="text-sm text-base-content/70"><%= gettext("Purchased Minutes") %></span>
+            <span class="text-sm text-base-content/70">Purchased Minutes</span>
             <span class="text-lg font-semibold"><%= @pack_minutes %>m <%= @pack_seconds %>s</span>
           </div>
         </div>
       <% else %>
         <p class="text-sm text-base-content/70 mb-4">
-          <%= gettext("No snacks yet. Buy a snack to add more processing time.") %>
+          No snacks yet. Buy a snack to add more processing time.
         </p>
       <% end %>
 
       <!-- Buy Snack Button -->
       <%= if @minute_pack_checkout_url do %>
         <p class="text-xs text-base-content/50 mb-2 text-center">
-          <%= gettext("By proceeding, you agree to our %{link_start}Terms%{link_end} and waive your 14-day right of withdrawal once the service begins.",
-            link_start: "<a href=\"#{locale_path(@locale, "/terms")}\" class=\"underline hover:text-base-content\" target=\"_blank\">",
-            link_end: "</a>"
-          ) |> raw() %>
+          By proceeding, you agree to our <a href="/terms" class="underline hover:text-base-content" target="_blank">Terms</a> and waive your 14-day right of withdrawal once the service begins.
         </p>
         <a href={@minute_pack_checkout_url} class="btn btn-primary w-full">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
           </svg>
-          <%= gettext("Buy Snack (%{minutes} min) - %{price}", minutes: @minute_pack_minutes, price: @minute_pack_price) %>
+          Buy Snack (<%= @minute_pack_minutes %> min) - <%= @minute_pack_price %>
         </a>
       <% else %>
         <div class="text-center p-4 rounded-lg bg-base-100 border border-base-300">
           <p class="text-sm text-base-content/70">
-            <%= gettext("Snacks are not yet available for purchase.") %>
+            Snacks are not yet available for purchase.
           </p>
         </div>
       <% end %>
 
       <!-- Info note -->
-      <p class="text-xs text-base-content/50 mt-1 text-center"><%= gettext("+ applicable tax") %></p>
+      <p class="text-xs text-base-content/50 mt-1 text-center">+ applicable tax</p>
 
       <div class="mt-4 pt-4 border-t border-base-300">
-        <p class="text-sm font-medium mb-3"><%= gettext("Good to know:") %></p>
+        <p class="text-sm font-medium mb-3">Good to know:</p>
         <ul class="space-y-2 text-sm text-base-content/70">
           <li class="flex items-center gap-2">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
             </svg>
-            <%= gettext("Subscription time is used first") %>
+            Subscription time is used first
           </li>
           <li class="flex items-center gap-2">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
             </svg>
-            <%= gettext("Snacks expire 1 year after purchase") %>
+            Snacks expire 1 year after purchase
           </li>
           <li class="flex items-center gap-2">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
             </svg>
-            <%= gettext("Stack as many as you need") %>
+            Stack as many as you need
           </li>
         </ul>
       </div>

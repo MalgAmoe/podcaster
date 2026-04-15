@@ -1,6 +1,5 @@
 import { render } from "solid-js/web";
 import { Router, Route } from "@solidjs/router";
-import { I18nProvider } from "./context/I18nContext";
 import { ProcessProvider } from "./context/ProcessContext";
 import { NotificationProvider } from "./context/NotificationContext";
 import { NotificationContainer } from "./components/NotificationContainer";
@@ -9,14 +8,12 @@ import { PastMunchingsPage } from "./components/PastMunchingsPage";
 
 function App(props) {
   return (
-    <I18nProvider>
-      <NotificationProvider>
-        <ProcessProvider>
-          {props.children}
-        </ProcessProvider>
-        <NotificationContainer />
-      </NotificationProvider>
-    </I18nProvider>
+    <NotificationProvider>
+      <ProcessProvider>
+        {props.children}
+      </ProcessProvider>
+      <NotificationContainer />
+    </NotificationProvider>
   );
 }
 

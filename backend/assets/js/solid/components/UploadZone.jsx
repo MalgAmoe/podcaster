@@ -1,12 +1,10 @@
 import { createSignal, Show } from "solid-js";
 import { useProcess } from "../context/ProcessContext";
 import { useNotifications } from "../context/NotificationContext";
-import { useI18n } from "../context/I18nContext";
 
 export function UploadZone() {
   const { store, uploadFile, reset } = useProcess();
   const { notify } = useNotifications();
-  const { t, tt } = useI18n();
   let fileInput;
   const [isDragging, setIsDragging] = createSignal(false);
 
@@ -20,18 +18,12 @@ export function UploadZone() {
     const isAudio = file.type.startsWith("audio/") || validExtensions.includes(ext);
 
     if (!isAudio) {
-      notify({
-        type: "error",
-        message: t("selectAudioFile")
-      });
+      notify({ type: "error", message: "Please select an audio file (WAV, MP3, FLAC, etc.)" });
       return;
     }
 
     if (file.size > MAX_FILE_SIZE) {
-      notify({
-        type: "error",
-        message: t("fileTooLarge")
-      });
+      notify({ type: "error", message: "File too large. Maximum size is 2GB." });
       return;
     }
 
@@ -69,7 +61,7 @@ export function UploadZone() {
           />
           <div
             role="button"
-            aria-label={t("uploadAudioFile")}
+            aria-label="Upload audio file. Click or drop a file here."
             tabIndex="0"
             onClick={() => fileInput.click()}
             onKeyDown={(e) => e.key === "Enter" && fileInput.click()}
@@ -85,10 +77,10 @@ export function UploadZone() {
                 <img src="/images/munchy_cow.svg" alt="Munchy Cow" class="w-full h-full" />
               </div>
               <div>
-                <p class="font-medium text-base-content text-lg">{t("feedTheCow")}</p>
-                <p class="text-sm text-base-content/60 mt-1">{t("veryHungry")}</p>
+                <p class="font-medium text-base-content text-lg">Feed the cow!</p>
+                <p class="text-sm text-base-content/60 mt-1">She's VERY hungry for your audio</p>
               </div>
-              <p class="text-xs text-base-content/40">{t("nomNomNom")}</p>
+              <p class="text-xs text-base-content/40">nom nom nom - WAV, MP3, FLAC</p>
             </div>
           </div>
         </>
@@ -106,19 +98,16 @@ export function UploadZone() {
         <div class="flex-1 min-w-0">
           <p class="font-medium truncate">{store.filename}</p>
           <Show when={store.uploadState === "ready"}>
-            <p class="text-sm text-primary">{t("readyToMunch")}</p>
+            <p class="text-sm text-primary">Ready to munch!</p>
             <Show when={store.estimatedSeconds}>
-              <p class="text-xs text-base-content/50">{tt("estimatedTime", { time: `${Math.floor(store.estimatedSeconds / 60)}m ${store.estimatedSeconds % 60}s` })}</p>
+              <p class="text-xs text-base-content/50">~{Math.floor(store.estimatedSeconds / 60)}m {store.estimatedSeconds % 60}s</p>
               <Show when={!window.isGuest && window.userTotalSeconds !== undefined && store.estimatedSeconds > window.userTotalSeconds}>
-                <p class="text-xs text-warning mt-0.5">{tt("durationWarning", {
-                  needed: `${Math.floor(store.estimatedSeconds / 60)}m ${store.estimatedSeconds % 60}s`,
-                  available: `${Math.floor(window.userTotalSeconds / 60)}m ${window.userTotalSeconds % 60}s`
-                })}</p>
+                <p class="text-xs text-warning mt-0.5">This file is {Math.floor(store.estimatedSeconds / 60)}m {store.estimatedSeconds % 60}s but you only have {Math.floor(window.userTotalSeconds / 60)}m {window.userTotalSeconds % 60}s available.</p>
               </Show>
             </Show>
           </Show>
           <Show when={store.uploadState === "uploading" && store.uploadProgress >= 100}>
-            <p class="text-sm text-base-content/60">{t("finalizing")}</p>
+            <p class="text-sm text-base-content/60">Finalizing...</p>
           </Show>
           <Show when={store.uploadState === "uploading" && store.uploadProgress < 100}>
             <div class="flex items-center gap-2 mt-1">
@@ -127,7 +116,7 @@ export function UploadZone() {
             </div>
           </Show>
         </div>
-        <button type="button" onClick={reset} class="btn btn-ghost btn-sm btn-circle" aria-label={t("removeFile")}>
+        <button type="button" onClick={reset} class="btn btn-ghost btn-sm btn-circle" aria-label="Remove file">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>

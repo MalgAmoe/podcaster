@@ -1,40 +1,30 @@
-// Stage name mappings - now using translation keys
-// The actual strings come from locales/en.js and locales/es.js
-
-const STAGE_KEYS = {
-  null: "stages.waiting",
-  undefined: "stages.waiting",
-  "waiting": "stages.waiting",
-  "decoding": "stages.decoding",
-  "filters": "stages.filters",
-  "input_gain": "stages.input_gain",
-  "analyzing_reverb": "stages.analyzing_reverb",
-  "dereverb": "stages.dereverb",
-  "analyzing_noise": "stages.analyzing_noise",
-  "denoise": "stages.denoise",
-  "ai_denoise": "stages.ai_denoise",
-  "spectral_gate": "stages.spectral_gate",
-  "peakcomp": "stages.peakcomp",
-  "analyzing_eq": "stages.analyzing_eq",
-  "fixeq": "stages.fixeq",
-  "deesser": "stages.deesser",
-  "saturation": "stages.saturation",
-  "buttercomp": "stages.buttercomp",
-  "analyzing_enhance": "stages.analyzing_enhance",
-  "enhanceeq": "stages.enhanceeq",
-  "radio": "stages.radio",
-  "fetcomp": "stages.fetcomp",
-  "tape": "stages.tape",
-  "analyzing_levels": "stages.analyzing_levels",
-  "output": "stages.output",
-  "completed": "stages.completed"
+const STAGE_LABELS = {
+  "waiting": "Waiting for available slot...",
+  "decoding": "Reading audio...",
+  "filters": "Cutting rumble & hiss...",
+  "input_gain": "Balancing levels...",
+  "analyzing_reverb": "Detecting room sound...",
+  "dereverb": "Removing room echo...",
+  "analyzing_noise": "Finding background noise...",
+  "denoise": "Cleaning up noise...",
+  "ai_denoise": "AI cleaning voice...",
+  "spectral_gate": "Gating quiet parts...",
+  "peakcomp": "Leveling out...",
+  "analyzing_eq": "Checking the tone...",
+  "fixeq": "Fixing muddy spots...",
+  "deesser": "Taming the S's...",
+  "saturation": "Adding warmth...",
+  "buttercomp": "Gluing it together...",
+  "analyzing_enhance": "Optimizing presence...",
+  "enhanceeq": "Brightening up...",
+  "radio": "Broadcast polish...",
+  "fetcomp": "Final compression...",
+  "tape": "Adding analog feel...",
+  "analyzing_levels": "Measuring loudness...",
+  "output": "Final limiting...",
+  "completed": "Done!"
 };
 
-export function getStageKey(stage) {
-  return STAGE_KEYS[stage] || "processing";
-}
-
-// For backwards compatibility - returns translation key
-export function getFriendlyStage(stage) {
-  return STAGE_KEYS[stage] || stage || "processing";
+export function getStageLabel(stage) {
+  return STAGE_LABELS[stage] || "Processing...";
 }

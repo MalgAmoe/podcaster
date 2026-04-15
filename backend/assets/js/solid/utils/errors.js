@@ -1,39 +1,30 @@
-// Error message helpers - returns translation keys
-// The actual strings come from locales/en.js and locales/es.js
-
-export function getErrorKey(error) {
-  if (!error) return "unknownError";
+export function getErrorMessage(error) {
+  if (!error) return "Unknown error";
 
   if (error.includes("guest_limit_reached")) {
-    return "guestLimitReached";
+    return "You've used your 3 free files. Add your email to keep processing.";
   }
   if (error.includes("insufficient_seconds")) {
-    return "notEnoughTime";
+    return "Not enough time available. Upgrade to Munch Plan or buy a Snack for more processing time.";
   }
   if (error.includes("probe") || error.includes("Unsupported")) {
-    return "formatNotSupported";
+    return "Audio format not supported. Try converting to WAV or MP3.";
   }
   if (error.includes("No audio track")) {
-    return "noAudioFound";
+    return "No audio found in file.";
   }
   if (error.includes("decode") || error.includes("Decoding") || error.includes("malformed") || error.includes("corrupt")) {
-    return "couldNotReadFile";
+    return "Could not read the audio file. It may be corrupted.";
   }
   if (error.includes("timeout") || error.includes("timed out")) {
-    return "processingTooLong";
+    return "Processing took too long. Try a shorter file.";
   }
   if (error.includes("S3") || error.includes("download")) {
-    return "couldNotAccessFile";
+    return "Could not access the file. Please re-upload.";
   }
   if (error.includes("encode") || error.includes("MP3")) {
-    return "failedToCreateOutput";
+    return "Failed to create output file.";
   }
 
-  // Return unknown error key for unrecognized errors
-  return "unknownError";
-}
-
-// For backwards compatibility - still used in some places
-export function getFriendlyJobError(error) {
-  return getErrorKey(error);
+  return "Unknown error";
 }

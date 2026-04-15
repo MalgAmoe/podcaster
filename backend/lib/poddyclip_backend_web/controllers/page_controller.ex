@@ -3,7 +3,6 @@ defmodule PoddyclipBackendWeb.PageController do
 
   alias PoddyclipBackend.Processing
   alias PoddyclipBackend.Storage
-  alias PoddyclipBackendWeb.LocaleHelpers
 
   # Main app - ensure guest user exists, serve SolidJS app
   def app(conn, _params) do
@@ -16,26 +15,21 @@ defmodule PoddyclipBackendWeb.PageController do
   end
 
   def redirect_to_app(conn, _params) do
-    locale = conn.assigns[:locale] || "en"
-    redirect(conn, to: LocaleHelpers.locale_path(locale, "/app"))
+    redirect(conn, to: "/app")
   end
 
   def terms(conn, _params) do
-    locale = conn.assigns[:locale] || "en"
-
     conn
     |> put_layout(false)
     |> assign(:conn, conn)
-    |> render(locale_template(:terms, locale))
+    |> render(:terms)
   end
 
   def privacy(conn, _params) do
-    locale = conn.assigns[:locale] || "en"
-
     conn
     |> put_layout(false)
     |> assign(:conn, conn)
-    |> render(locale_template(:privacy, locale))
+    |> render(:privacy)
   end
 
   def help(conn, _params) do
@@ -95,11 +89,6 @@ defmodule PoddyclipBackendWeb.PageController do
     |> put_layout(false)
     |> render(:past_munchings, jobs: jobs)
   end
-
-  defp locale_template(page, "es"), do: :"#{page}_es"
-  defp locale_template(page, "fr"), do: :"#{page}_fr"
-  defp locale_template(page, "it"), do: :"#{page}_it"
-  defp locale_template(page, _), do: page
 
   defp load_job_history(user_id) do
     jobs = Processing.list_completed_jobs_for_user(user_id)

@@ -40,8 +40,6 @@ defmodule PoddyclipBackendWeb do
     quote do
       use Phoenix.Controller, formats: [:html, :json]
 
-      use Gettext, backend: PoddyclipBackendWeb.Gettext
-
       import Plug.Conn
 
       unquote(verified_routes())
@@ -79,9 +77,6 @@ defmodule PoddyclipBackendWeb do
 
   defp html_helpers do
     quote do
-      # Translation
-      use Gettext, backend: PoddyclipBackendWeb.Gettext
-
       # HTML escaping functionality
       import Phoenix.HTML
       # Core UI components
@@ -90,7 +85,6 @@ defmodule PoddyclipBackendWeb do
       # Common modules used in templates
       alias Phoenix.LiveView.JS
       alias PoddyclipBackendWeb.Layouts
-      import PoddyclipBackendWeb.LocaleHelpers, only: [locale_path: 2, switch_locale_path: 2, canonical_url: 1, base_path: 1, hreflang_url: 2]
 
       # Routes generation with the ~p sigil
       unquote(verified_routes())

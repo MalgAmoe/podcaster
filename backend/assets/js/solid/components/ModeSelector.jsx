@@ -1,5 +1,4 @@
 import { useProcess } from "../context/ProcessContext";
-import { useI18n } from "../context/I18nContext";
 
 function InfoTip(props) {
   return (
@@ -13,7 +12,6 @@ function InfoTip(props) {
 
 export function OptionsRow() {
   const { currentAiClean, setAiClean, currentMono, setMono } = useProcess();
-  const { t } = useI18n();
 
   return (
     <div class="flex justify-center mt-6">
@@ -25,8 +23,8 @@ export function OptionsRow() {
             checked={currentAiClean()}
             onChange={(e) => setAiClean(e.target.checked)}
           />
-          <span class="text-xs opacity-70">{t("aiClean")}</span>
-          <InfoTip tip={t("takesLonger")} />
+          <span class="text-xs opacity-70">AI Clean</span>
+          <InfoTip tip="Cleans noise with AI. Takes longer to process" />
         </label>
         <label class="flex items-center gap-1.5 cursor-pointer">
           <input
@@ -35,8 +33,8 @@ export function OptionsRow() {
             checked={currentMono()}
             onChange={(e) => setMono(e.target.checked)}
           />
-          <span class="text-xs opacity-70">{t("centerAudio")}</span>
-          <InfoTip tip={t("centerAudioTooltip")} />
+          <span class="text-xs opacity-70">Center Audio</span>
+          <InfoTip tip="Mixing the audio to mono" />
         </label>
       </div>
     </div>

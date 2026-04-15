@@ -2,12 +2,11 @@ defmodule PoddyclipBackendWeb.SettingsLive do
   use PoddyclipBackendWeb, :live_view
 
   alias PoddyclipBackend.{Accounts, Billing}
-  alias PoddyclipBackendWeb.LocaleHelpers
 
   require Logger
 
   @impl true
-  def mount(_params, session, socket) do
+  def mount(_params, _session, socket) do
     user = socket.assigns.current_scope.user
 
     # Check sudo mode - user must have authenticated recently
@@ -25,13 +24,10 @@ defmodule PoddyclipBackendWeb.SettingsLive do
       {:ok, socket}
     else
       # Redirect to login if not in sudo mode
-      locale = session["locale"] || "en"
-      login_path = LocaleHelpers.locale_path(locale, "/users/log-in")
-
       socket =
         socket
         |> put_flash(:info, "You must re-authenticate to access this page.")
-        |> redirect(to: login_path)
+        |> redirect(to: "/users/log-in")
 
       {:ok, socket}
     end
@@ -44,16 +40,12 @@ defmodule PoddyclipBackendWeb.SettingsLive do
   @impl true
   def handle_event("update_email", %{"user" => user_params}, socket) do
     user = socket.assigns.user
-    locale = socket.assigns[:locale] || "en"
-
     case Accounts.change_user_email(user, user_params) do
       %{valid?: true} = changeset ->
-        # Build locale-aware confirmation URL
         base_url = PoddyclipBackendWeb.Endpoint.url()
 
         confirm_url_fn = fn token ->
-          path = LocaleHelpers.locale_path(locale, "/users/settings/confirm-email/#{token}")
-          "#{base_url}#{path}"
+          "#{base_url}/users/settings/confirm-email/#{token}"
         end
 
         Accounts.deliver_user_update_email_instructions(
@@ -132,13 +124,10 @@ defmodule PoddyclipBackendWeb.SettingsLive do
         {:ok, _deleted_user} ->
           Logger.info("User account deleted via settings", user_id: user.id, email: user.email)
 
-          locale = socket.assigns[:locale] || "en"
-          redirect_path = LocaleHelpers.locale_path(locale, "/")
-
           {:noreply,
            socket
            |> put_flash(:info, "Your account has been permanently deleted.")
-           |> redirect(to: redirect_path)}
+           |> redirect(to: "/")}
 
         {:error, _reason} ->
           {:noreply,

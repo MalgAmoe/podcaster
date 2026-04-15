@@ -1,16 +1,14 @@
 import { For } from "solid-js";
 import { useProcess } from "../context/ProcessContext";
-import { useI18n } from "../context/I18nContext";
+
+const STRENGTH_LABELS = ["Subtle", "Balanced", "Intense"];
 
 export function StrengthKnob() {
   const { currentStrength, setStrength } = useProcess();
-  const { t } = useI18n();
-
-  const STRENGTH_KEYS = ["subtle", "balanced", "intense"];
 
   return (
     <div class="form-control text-center">
-      <p class="font-medium mb-3">{t("strength")}: <span class="text-primary">{t(STRENGTH_KEYS[currentStrength() - 1])}</span></p>
+      <p class="font-medium mb-3">Strength: <span class="text-primary">{STRENGTH_LABELS[currentStrength() - 1]}</span></p>
       <div class="flex justify-center gap-3">
         <For each={[1, 2, 3]}>
           {(level) => (

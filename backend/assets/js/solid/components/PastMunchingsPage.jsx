@@ -1,16 +1,11 @@
 import { createSignal, createResource, Show, For } from "solid-js";
 import dayjs from "dayjs";
 import { api } from "../utils/api";
-import { useI18n } from "../context/I18nContext";
 
 export function PastMunchingsPage() {
-  const { t, tt } = useI18n();
-
   // Redirect guests to login
   if (window.isGuest) {
-    const locale = document.documentElement.lang || "en";
-    const loginPath = locale === "en" ? "/users/log-in" : `/${locale}/users/log-in`;
-    window.location.href = loginPath;
+    window.location.href = "/users/log-in";
     return null;
   }
 
@@ -28,28 +23,19 @@ export function PastMunchingsPage() {
     const date = dayjs(dateString);
     const now = dayjs();
     const time = date.format("HH:mm");
-
-    // Compare calendar days (start of day comparison)
     const diffDays = now.startOf("day").diff(date.startOf("day"), "day");
 
-    if (diffDays === 0) {
-      return tt("today", { time });
-    } else if (diffDays === 1) {
-      return tt("yesterday", { time });
-    } else if (diffDays < 7) {
-      return tt("daysAgo", { count: diffDays, time });
-    } else {
-      return `${date.format("MMM D, YYYY")} at ${time}`;
-    }
+    if (diffDays === 0) return `Today at ${time}`;
+    if (diffDays === 1) return `Yesterday at ${time}`;
+    if (diffDays < 7) return `${diffDays} days ago at ${time}`;
+    return `${date.format("MMM D, YYYY")} at ${time}`;
   }
 
   const [downloading, setDownloading] = createSignal(null);
 
-  // Validate download URL to prevent open redirects
   function isValidDownloadUrl(url) {
     try {
       const parsed = new URL(url, window.location.origin);
-      // Allow same-origin, localhost (dev), or trusted S3 domains
       return (
         parsed.origin === window.location.origin ||
         parsed.hostname === "localhost" ||
@@ -85,9 +71,9 @@ export function PastMunchingsPage() {
   return (
     <div class="flex flex-col items-center justify-start p-4 pt-8">
       <div class="w-full max-w-lg">
-        <h1 class="text-2xl font-bold text-base-content mb-6">{t("pastMunchings")}</h1>
+        <h1 class="text-2xl font-bold text-base-content mb-6">Past Munchings</h1>
         <p class="text-base-content/60 text-sm mb-6">
-          {t("pastDescription")}
+          Your processed files from the last 7 days.
         </p>
 
         <Show when={jobs.loading}>
@@ -100,7 +86,7 @@ export function PastMunchingsPage() {
           <div class="card bg-base-200 border border-base-300 rounded-2xl">
             <div class="card-body text-center py-12">
               <p class="text-base-content/60">
-                {t("noMunchingsYet")}
+                No munchings yet. Your processed files will appear here for 7 days.
               </p>
             </div>
           </div>
@@ -136,7 +122,7 @@ export function PastMunchingsPage() {
                             d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
                           />
                         </svg>
-                        {t("download")}
+                        Download
                       </Show>
                     </button>
                   </li>

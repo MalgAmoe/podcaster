@@ -38,17 +38,6 @@ defmodule PoddyclipBackendWeb.Router do
     plug :require_authenticated_api_user
   end
 
-  # Locale pipelines - set locale assign before SetLocale plug
-  pipeline :locale_en do
-    plug :put_locale, "en"
-  end
-
-  defp put_locale(conn, locale) do
-    conn
-    |> assign(:locale, locale)
-    |> PoddyclipBackendWeb.Plugs.SetLocale.call([])
-  end
-
   defp require_authenticated_api_user(conn, _opts) do
     if conn.assigns[:current_scope] && conn.assigns.current_scope.user do
       assign(conn, :current_user, conn.assigns.current_scope.user)
@@ -60,12 +49,8 @@ defmodule PoddyclipBackendWeb.Router do
     end
   end
 
-  # ============================================================
-  # English routes
-  # ============================================================
-
   scope "/", PoddyclipBackendWeb do
-    pipe_through [:browser, :locale_en]
+    pipe_through :browser
 
     get "/", PageController, :redirect_to_app
     get "/feedback", PageController, :feedback
@@ -74,12 +59,10 @@ defmodule PoddyclipBackendWeb.Router do
     get "/privacy", PageController, :privacy
     get "/legal", PageController, :legal
     get "/help", PageController, :help
-    get "/blog", BlogController, :index
-    get "/blog/:slug", BlogController, :show
   end
 
   scope "/app", PoddyclipBackendWeb do
-    pipe_through [:browser, :locale_en]
+    pipe_through :browser
     get "/", PageController, :app
     get "/*path", PageController, :app
   end
@@ -135,19 +118,18 @@ defmodule PoddyclipBackendWeb.Router do
   ## Authentication routes
 
   scope "/", PoddyclipBackendWeb do
-    pipe_through [:browser, :locale_en, :redirect_if_user_is_authenticated]
+    pipe_through [:browser, :redirect_if_user_is_authenticated]
 
     # Redirect old register URLs to sign-in (consolidated flow)
     get "/users/register", UserSessionController, :redirect_to_login
   end
 
   scope "/", PoddyclipBackendWeb do
-    pipe_through [:browser, :locale_en, :require_authenticated_user]
+    pipe_through [:browser, :require_authenticated_user]
 
     live_session :authenticated,
       on_mount: [
-        {PoddyclipBackendWeb.UserAuthLive, :require_authenticated_user},
-        {PoddyclipBackendWeb.LocaleHook, :set_locale}
+        {PoddyclipBackendWeb.UserAuthLive, :require_authenticated_user}
       ] do
       live "/account", AccountLive
       live "/users/settings", SettingsLive
@@ -158,7 +140,7 @@ defmodule PoddyclipBackendWeb.Router do
   end
 
   scope "/", PoddyclipBackendWeb do
-    pipe_through [:browser, :locale_en]
+    pipe_through :browser
 
     get "/users/log-in", UserSessionController, :new
     get "/users/log-in/:token", UserSessionController, :confirm

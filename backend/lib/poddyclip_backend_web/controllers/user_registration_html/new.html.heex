@@ -5,7 +5,7 @@
         Register for an account
         <:subtitle>
           Already registered?
-          <.link navigate={locale_path(@locale, "/users/log-in")} class="font-semibold text-brand hover:underline">
+          <.link navigate={"/users/log-in"} class="font-semibold text-brand hover:underline">
             Log in
           </.link>
           to your account now.
@@ -13,7 +13,7 @@
       </.header>
     </div>
 
-    <.form :let={f} for={to_form(@changeset)} action={locale_path(@locale, "/users/register")}>
+    <.form :let={f} for={to_form(@changeset)} action={"/users/register"}>
       <.input
         field={f[:email]}
         type="email"

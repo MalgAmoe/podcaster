@@ -1,6 +1,5 @@
 import { Show, Switch, Match } from "solid-js";
 import { useProcess } from "../context/ProcessContext";
-import { useI18n } from "../context/I18nContext";
 import { UploadZone } from "./UploadZone";
 import { ProcessingConfig } from "./ProcessingConfig";
 import { JobProgress } from "./JobProgress";
@@ -9,9 +8,6 @@ import { JobFailed } from "./JobFailed";
 import { StepsIndicator, getCurrentStep } from "./StepsIndicator";
 
 function SignInCard() {
-  const locale = document.documentElement.lang || "en";
-  const loginPath = locale === "en" ? "/users/log-in" : `/${locale}/users/log-in`;
-
   return (
     <div class="flex flex-col items-center py-8">
       <div class="w-16 h-16 flex items-center justify-center mb-4">
@@ -21,7 +17,7 @@ function SignInCard() {
       <p class="text-base-content/60 text-center mb-6">
         Sign in to keep processing files and access your past munchings.
       </p>
-      <a href={loginPath} rel="external" class="btn btn-primary btn-lg">
+      <a href="/users/log-in" rel="external" class="btn btn-primary btn-lg">
         Sign in
       </a>
       <p class="text-xs text-base-content/40 mt-3">Free. No credit card. Just your email.</p>
@@ -31,7 +27,6 @@ function SignInCard() {
 
 export function ProcessPage() {
   const { store, submitJob } = useProcess();
-  const { t } = useI18n();
 
   // Check if guest limit reached (from server or client state)
   const guestBlocked = () =>
@@ -50,7 +45,7 @@ export function ProcessPage() {
           <Show when={!store.initializing} fallback={
             <div class="flex flex-col items-center justify-center py-12">
               <span class="loading loading-spinner loading-lg text-primary" />
-              <p class="text-base-content/60 mt-4">{t("processing")}</p>
+              <p class="text-base-content/60 mt-4">Processing...</p>
             </div>
           }>
             <Show when={guestBlocked() && !store.job}>
@@ -67,9 +62,9 @@ export function ProcessPage() {
                     disabled={store.uploadState !== "ready" || store.submitting}
                     class="btn btn-primary w-full btn-lg"
                   >
-                    <Show when={store.submitting} fallback={t("munchIt")}>
+                    <Show when={store.submitting} fallback={"MUNCH IT!"}>
                       <span class="loading loading-spinner loading-sm"></span>
-                      {t("processing")}
+                      Processing...
                     </Show>
                   </button>
                 </div>

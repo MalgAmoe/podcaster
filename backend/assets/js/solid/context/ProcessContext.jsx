@@ -3,8 +3,7 @@ import { createStore } from "solid-js/store";
 import { Socket } from "phoenix";
 import { api, ApiError } from "../utils/api";
 import { clearAudioCache } from "../components/WaveformPlayer";
-import { getErrorKey } from "../utils/errors";
-import { t, tt } from "../utils/translate";
+import { getErrorMessage } from "../utils/errors";
 import { useNotifications } from "./NotificationContext";
 
 const ProcessContext = createContext();
@@ -294,24 +293,20 @@ export function ProcessProvider(props) {
       // Billing errors get persistent notification with upgrade action
       if (err instanceof ApiError && err.code === "insufficient_seconds") {
         const details = err.details;
-        let message = t(getErrorKey(err.code));
+        let message = getErrorMessage(err.code);
         if (details?.seconds_available !== undefined && details?.seconds_needed !== undefined) {
-          // Format as Xm Ys
           const formatTime = (secs) => {
             const m = Math.floor(secs / 60);
             const s = secs % 60;
             return `${m}m ${s}s`;
           };
-          message += tt("needTime", { needed: formatTime(details.seconds_needed), available: formatTime(details.seconds_available) });
+          message += ` You need ${formatTime(details.seconds_needed)} but only have ${formatTime(details.seconds_available)} available.`;
         }
-        // Get locale for locale-aware redirect
-        const locale = document.documentElement.lang || "en";
-        const accountPath = locale === "en" ? "/account" : `/${locale}/account`;
         notify({
           type: "error",
           message,
           persistent: true,
-          action: { label: t("upgrade"), onClick: () => window.location.href = accountPath }
+          action: { label: "See options", onClick: () => window.location.href = "/account" }
         });
       } else {
         notify({ type: "error", message: err.message, persistent: true });
