@@ -1,8 +1,6 @@
 import { Show, createSignal, createMemo, onCleanup } from "solid-js";
 import { useProcess } from "../context/ProcessContext";
 import { WaveformPlayer } from "./WaveformPlayer";
-import { QualityRating } from "./QualityRating";
-import { PmfSurvey } from "./PmfSurvey";
 
 export function JobComplete() {
   const { store, reset } = useProcess();
@@ -118,11 +116,6 @@ export function JobComplete() {
           <button onClick={reset} class="btn btn-ghost" aria-label="Upload another file">
             Feed me more!
           </button>
-        </div>
-
-        <div class="w-full max-w-sm">
-          <QualityRating jobId={store.job?.id} />
-          <PmfSurvey jobId={store.job?.id} />
         </div>
       </div>
     </Show>

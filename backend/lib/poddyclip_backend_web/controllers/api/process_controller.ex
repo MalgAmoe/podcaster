@@ -11,9 +11,6 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   alias PoddyclipBackend.Processing.Job
   alias PoddyclipBackend.Storage
 
-  # Valid parameter values for security validation
-  @valid_strengths 1..3
-
   @doc """
   POST /api/presign-upload - Generate S3 presigned PUT URL.
 
@@ -56,7 +53,7 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   @doc """
   POST /api/jobs - Create a processing job.
 
-  Request: {"s3_key": "...", "filename": "...", "strength": 2, "ai_clean": false, "duration_seconds": 300}
+  Request: {"s3_key": "...", "filename": "...", "ai_clean": false, "duration_seconds": 300}
   Response: {"id": 123, "status": "queued", "filename": "..."}
 
   The duration_seconds parameter is used to estimate seconds needed. If not provided,
@@ -64,18 +61,7 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   """
   def create_job(conn, %{"s3_key" => s3_key, "filename" => filename} = params) do
     user = conn.assigns.current_user
-
-    # Validate processing parameters against whitelist
-    strength = params["strength"] || 2
-
-    with :ok <- validate_strength(strength) do
-      create_job_validated(conn, user, s3_key, filename, params, strength)
-    else
-      {:error, msg} ->
-        conn
-        |> put_status(400)
-        |> json(%{error: msg})
-    end
+    create_job_validated(conn, user, s3_key, filename, params)
   end
 
   def create_job(conn, _params) do
@@ -84,23 +70,20 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
     |> json(%{error: "Missing required parameters: s3_key, filename"})
   end
 
-  defp validate_strength(strength) when strength in @valid_strengths, do: :ok
-  defp validate_strength(strength), do: {:error, "Invalid strength: #{inspect(strength)}"}
-
   @guest_file_limit 3
 
-  defp create_job_validated(conn, user, s3_key, filename, params, strength) do
+  defp create_job_validated(conn, user, s3_key, filename, params) do
     # Guest users limited to 3 files
     if user.is_guest and user.completed_jobs_count >= @guest_file_limit do
       conn
       |> put_status(403)
       |> json(%{error: "guest_limit_reached", limit: @guest_file_limit})
     else
-      create_job_after_checks(conn, user, s3_key, filename, params, strength)
+      create_job_after_checks(conn, user, s3_key, filename, params)
     end
   end
 
-  defp create_job_after_checks(conn, user, s3_key, filename, params, strength) do
+  defp create_job_after_checks(conn, user, s3_key, filename, params) do
     estimated_seconds = params["duration_seconds"] || 60
 
     # Skip billing checks for guest users
@@ -122,9 +105,7 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
       })
     else
       opts = [
-        strength: strength,
         ai_clean: params["ai_clean"],
-        mono: params["mono"],
         estimated_seconds: estimated_seconds
       ]
 

@@ -75,8 +75,6 @@ pub struct CreateS3JobRequest {
     pub user_id: Option<i64>,
     /// Original filename (for output naming)
     pub filename: Option<String>,
-    /// Processing strength: 1-3
-    pub strength: Option<u8>,
     #[serde(default)]
     pub output_format: Option<String>,
     #[serde(default = "default_mp3_bitrate")]
@@ -88,9 +86,6 @@ pub struct CreateS3JobRequest {
     /// Enable AI (DeepFilterNet) denoiser for voice cleaning
     #[serde(default)]
     pub ai_clean: Option<bool>,
-    /// Enable mono summing (center audio)
-    #[serde(default)]
-    pub mono: Option<bool>,
 }
 
 fn default_mp3_bitrate() -> u32 {
@@ -186,7 +181,7 @@ pub async fn create_s3_job(
     });
 
     // Build ProcessConfig from strength
-    let mut config = ProcessConfig::from_strength(req.strength);
+    let mut config = ProcessConfig::new();
 
     // Apply output format settings
     config.output_format = match req.output_format.as_deref() {
@@ -199,11 +194,6 @@ pub async fn create_s3_job(
     // Allow explicit override of ai_denoise
     if let Some(ai_clean) = req.ai_clean {
         config.ai_denoise = ai_clean;
-    }
-
-    // Allow explicit override of mono summing
-    if let Some(mono) = req.mono {
-        config.mono = mono;
     }
 
     // Validate webhook URL if provided (SSRF prevention)

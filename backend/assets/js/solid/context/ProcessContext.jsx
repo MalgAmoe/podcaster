@@ -22,9 +22,7 @@ export function ProcessProvider(props) {
     submitting: false, // Prevents double-submit
     // Processing configuration
     processingConfig: {
-      strength: 2,
       aiClean: false,
-      mono: false,
     },
     job: null,
   });
@@ -112,7 +110,7 @@ export function ProcessProvider(props) {
           if (connectionLostNotificationId) {
             // We'll let the auto-dismiss handle it, but show success
           }
-          notify({ type: "success", message: t("connectionRestored") });
+          notify({ type: "success", message: "Connection restored" });
         }
         wasConnected = true;
         reconnectAttempts = 0;
@@ -127,7 +125,7 @@ export function ProcessProvider(props) {
             // First disconnect - show warning
             connectionLostNotificationId = notify({
               type: "warning",
-              message: t("connectionLost")
+              message: "Connection lost. Reconnecting..."
             });
           }
 
@@ -135,7 +133,7 @@ export function ProcessProvider(props) {
             // Max retries exceeded - show persistent error
             notify({
               type: "error",
-              message: t("unableToConnect"),
+              message: "Unable to connect. Please refresh the page.",
               persistent: true
             });
           }
@@ -245,27 +243,15 @@ export function ProcessProvider(props) {
     }
   }
 
-  // Processing config actions
-  function setStrength(strength) {
-    setStore("processingConfig", "strength", Math.max(1, Math.min(3, strength)));
-  }
-
   function setAiClean(enabled) {
     setStore("processingConfig", "aiClean", enabled);
   }
 
-  function setMono(enabled) {
-    setStore("processingConfig", "mono", enabled);
-  }
-
-  // Computed helpers for current config
-  const currentStrength = () => store.processingConfig.strength;
   const currentAiClean = () => store.processingConfig.aiClean;
-  const currentMono = () => store.processingConfig.mono;
 
   async function submitJob() {
     if (!store.s3Key || !store.filename) {
-      notify({ type: "error", message: t("uploadFirst") });
+      notify({ type: "error", message: "Please upload a file first" });
       return;
     }
 
@@ -275,10 +261,7 @@ export function ProcessProvider(props) {
 
     try {
       const config = {
-        strength: store.processingConfig.strength,
         ai_clean: store.processingConfig.aiClean,
-        mono: store.processingConfig.mono,
-        // Send duration for billing (default to 60s if not detected)
         duration_seconds: store.estimatedSeconds || 60,
       };
       const job = await api.createJob(store.s3Key, store.filename, config);
@@ -364,12 +347,8 @@ export function ProcessProvider(props) {
   const value = {
     store,
     uploadFile,
-    setStrength,
     setAiClean,
-    setMono,
-    currentStrength,
     currentAiClean,
-    currentMono,
     submitJob,
     cancelJob,
     reset,

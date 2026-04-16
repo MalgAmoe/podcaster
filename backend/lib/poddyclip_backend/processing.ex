@@ -24,7 +24,6 @@ defmodule PoddyclipBackend.Processing do
   concurrency limit (4 jobs), so excess jobs wait in line instead of failing.
 
   ## Options
-    * `:strength` - Processing strength: 1-3 (default: 2)
     * `:ai_clean` - Enable AI denoiser
     * `:output_format` - "wav" or "mp3" (default: "mp3")
     * `:mp3_bitrate` - Bitrate for MP3 output (default: 192)
@@ -54,9 +53,7 @@ defmodule PoddyclipBackend.Processing do
       job_id: job.id,
       user_id: user_id,
       filename: filename,
-      strength: opts[:strength],
       ai_clean: opts[:ai_clean],
-      mono: opts[:mono],
       output_format: opts[:output_format],
       mp3_bitrate: opts[:mp3_bitrate]
     }

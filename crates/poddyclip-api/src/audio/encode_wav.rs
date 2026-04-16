@@ -116,7 +116,7 @@ mod tests {
         let decoded_len = samples[0].len();
 
         // Process through engine
-        let config = crate::models::ProcessConfig::from_strength(Some(2));
+        let config = crate::models::ProcessConfig::new();
         crate::processing::process_audio(&mut samples, metadata.sample_rate, &config, None).unwrap();
 
         assert_eq!(samples.len(), 1, "Processing should not add channels");

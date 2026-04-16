@@ -11,32 +11,20 @@ function InfoTip(props) {
 }
 
 export function OptionsRow() {
-  const { currentAiClean, setAiClean, currentMono, setMono } = useProcess();
+  const { currentAiClean, setAiClean } = useProcess();
 
   return (
     <div class="flex justify-center mt-6">
-      <div class="flex flex-col gap-2 px-6">
-        <label class="flex items-center gap-1.5 cursor-pointer">
-          <input
-            type="checkbox"
-            class="checkbox checkbox-xs checkbox-primary"
-            checked={currentAiClean()}
-            onChange={(e) => setAiClean(e.target.checked)}
-          />
-          <span class="text-xs opacity-70">AI Clean</span>
-          <InfoTip tip="Cleans noise with AI. Takes longer to process" />
-        </label>
-        <label class="flex items-center gap-1.5 cursor-pointer">
-          <input
-            type="checkbox"
-            class="checkbox checkbox-xs checkbox-primary"
-            checked={currentMono()}
-            onChange={(e) => setMono(e.target.checked)}
-          />
-          <span class="text-xs opacity-70">Center Audio</span>
-          <InfoTip tip="Mixing the audio to mono" />
-        </label>
-      </div>
+      <label class="flex items-center gap-1.5 cursor-pointer">
+        <input
+          type="checkbox"
+          class="checkbox checkbox-xs checkbox-primary"
+          checked={currentAiClean()}
+          onChange={(e) => setAiClean(e.target.checked)}
+        />
+        <span class="text-xs opacity-70">AI Clean</span>
+        <InfoTip tip="Cleans noise with AI. Takes longer to process" />
+      </label>
     </div>
   );
 }

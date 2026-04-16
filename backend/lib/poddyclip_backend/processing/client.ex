@@ -53,7 +53,6 @@ defmodule PoddyclipBackend.Processing.Client do
 
   ## Options
     * `:filename` - Original filename (for output naming)
-    * `:strength` - Processing strength: 1-3 (default: 2)
     * `:ai_clean` - Enable AI (DeepFilterNet) denoiser (nil = use default)
     * `:output_format` - "wav" or "mp3" (default: "mp3")
     * `:mp3_bitrate` - Bitrate for MP3 output (default: 192)
@@ -64,9 +63,7 @@ defmodule PoddyclipBackend.Processing.Client do
       input_s3_key: input_s3_key,
       user_id: Keyword.get(opts, :user_id),
       filename: Keyword.get(opts, :filename),
-      strength: Keyword.get(opts, :strength, 2),
       ai_clean: Keyword.get(opts, :ai_clean),
-      mono: Keyword.get(opts, :mono),
       output_format: Keyword.get(opts, :output_format, "mp3"),
       mp3_bitrate: Keyword.get(opts, :mp3_bitrate, 192),
       webhook_url: webhook_url(),
