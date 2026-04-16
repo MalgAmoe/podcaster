@@ -13,10 +13,9 @@ defmodule PoddyclipBackend.Application do
       [
         PoddyclipBackendWeb.Telemetry,
         PoddyclipBackend.Repo,
-        {DNSCluster, query: Application.get_env(:poddyclip_backend, :dns_cluster_query) || :ignore},
+        {DNSCluster,
+         query: Application.get_env(:poddyclip_backend, :dns_cluster_query) || :ignore},
         {Phoenix.PubSub, name: PoddyclipBackend.PubSub},
-        # Log shipper for OpenObserve (must start before logger backend uses it)
-        PoddyclipBackend.LogShipper,
         # Rate limiter for data exports
         PoddyclipBackend.RateLimiter,
         # Oban job queue

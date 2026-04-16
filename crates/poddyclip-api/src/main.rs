@@ -18,7 +18,6 @@ use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use poddyclip_api::handlers::{create_s3_job, delete_job, health};
-use poddyclip_api::openobserve::{OpenObserveConfig, OpenObserveLayer};
 use poddyclip_api::require_api_key;
 use poddyclip_api::state::{AppConfig, AppState};
 use poddyclip_api::storage::{Storage, StorageConfig};
@@ -28,25 +27,14 @@ async fn main() {
     // Load .env if present check
     dotenvy::dotenv().ok();
 
-    // Initialize tracing with optional OpenObserve layer
-    let openobserve_config = OpenObserveConfig::from_env();
-    let openobserve_layer = openobserve_config.as_ref().map(|config| {
-        OpenObserveLayer::new(config.clone())
-    });
-
+    // Initialize tracing
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "poddyclip_api=info,tower_http=info".into()),
         )
         .with(tracing_subscriber::fmt::layer())
-        .with(openobserve_layer)
         .init();
-
-    // Log OpenObserve status after tracing is initialized
-    if let Some(config) = openobserve_config {
-        info!("OpenObserve logging enabled: {}", config.url);
-    }
 
     // Load config from environment
     let config = AppConfig::from_env();

@@ -58,10 +58,14 @@ s3_endpoint = System.get_env("S3_ENDPOINT") || System.get_env("S3_HOST")
 
 if s3_endpoint do
   # Parse endpoint URL to extract scheme, host, port
-  uri = URI.parse(if String.starts_with?(s3_endpoint, "http"), do: s3_endpoint, else: "http://#{s3_endpoint}")
+  uri =
+    URI.parse(
+      if String.starts_with?(s3_endpoint, "http"), do: s3_endpoint, else: "http://#{s3_endpoint}"
+    )
+
   s3_scheme = "#{uri.scheme}://"
   s3_host = uri.host || s3_endpoint
-  s3_port = uri.port || (if uri.scheme == "https", do: 443, else: 80)
+  s3_port = uri.port || if uri.scheme == "https", do: 443, else: 80
 
   config :ex_aws,
     access_key_id: System.get_env("S3_ACCESS_KEY"),
@@ -132,22 +136,9 @@ end
 
 # Polar minute pack checkout link ID (for purchase URLs)
 if polar_minute_pack_checkout_link_id = System.get_env("POLAR_MINUTE_PACK_CHECKOUT_LINK_ID") do
-  config :poddyclip_backend, :polar_minute_pack_checkout_link_id, polar_minute_pack_checkout_link_id
-end
-
-
-# OpenObserve log shipping (if configured)
-if openobserve_url = System.get_env("OPENOBSERVE_URL") do
-  config :poddyclip_backend, :openobserve,
-    url: openobserve_url,
-    user: System.get_env("OPENOBSERVE_USER", "admin@poddyclip.local"),
-    password: System.get_env("OPENOBSERVE_PASSWORD", "dev"),
-    org: System.get_env("OPENOBSERVE_ORG", "default"),
-    stream: System.get_env("OPENOBSERVE_STREAM", "phoenix")
-
-  # Add OpenObserve logger backend
-  config :logger,
-    backends: [:console, PoddyclipBackend.LogShipper.Backend]
+  config :poddyclip_backend,
+         :polar_minute_pack_checkout_link_id,
+         polar_minute_pack_checkout_link_id
 end
 
 # Admin auth credentials and endpoint (only used if admin routes were compiled in)
@@ -177,7 +168,9 @@ if Application.compile_env(:poddyclip_backend, :admin_enabled) do
       port: admin_port
     ],
     server: config_env() == :dev or System.get_env("PHX_SERVER") != nil,
-    secret_key_base: System.get_env("SECRET_KEY_BASE") || "dev-secret-key-base-for-admin-at-least-64-bytes-long-for-security"
+    secret_key_base:
+      System.get_env("SECRET_KEY_BASE") ||
+        "dev-secret-key-base-for-admin-at-least-64-bytes-long-for-security"
 end
 
 if config_env() == :prod do

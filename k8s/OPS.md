@@ -138,66 +138,10 @@ curl http://phoenix:4000/health
 
 **Check resource usage:**
 ```bash
-kubectl top pods  # requires metrics-server
+kubectl top pods   # requires metrics-server
 ```
 
-## OpenObserve (Observability)
-
-OpenObserve is deployed for internal logs/metrics. No external access - use SSH port-forward.
-
-### Deploy (first time)
-
-```bash
-# 1. Create bucket 'openobserve-data' in Cloudflare R2
-
-# 2. Create .env.openobserve with:
-#    ZO_ROOT_USER_EMAIL=admin@yourdomain.com
-#    ZO_ROOT_USER_PASSWORD=YourSecurePassword
-#    ZO_S3_SERVER_URL=https://your-account.r2.cloudflarestorage.com
-#    ZO_S3_ACCESS_KEY=your-r2-access-key
-#    ZO_S3_SECRET_KEY=your-r2-secret-key
-
-# 3. Create secret and deploy
-kubectl create secret generic openobserve-secrets --from-env-file=.env.openobserve
-kubectl apply -f k8s/openobserve.yaml
-
-# 4. Verify
-kubectl get pods -l app=openobserve
-kubectl logs -l app=openobserve
-```
-
-### Access UI
-
-```bash
-# Option 1: From server
-kubectl port-forward svc/openobserve 5080:5080
-# Then open http://localhost:5080
-
-# Option 2: SSH tunnel from local machine
-ssh -L 5080:localhost:5080 user@server -t 'kubectl port-forward svc/openobserve 5080:5080'
-# Then open http://localhost:5080 on your local machine
-```
-
-### Update Secrets
-
-```bash
-kubectl delete secret openobserve-secrets
-kubectl create secret generic openobserve-secrets --from-env-file=.env.openobserve
-kubectl rollout restart deploy/openobserve
-```
-
-### Ship App Logs to OpenObserve
-
-Add to `app-secrets` (after OpenObserve is running):
-```
-OPENOBSERVE_URL=http://openobserve:5080
-OPENOBSERVE_USER=admin@yourdomain.com
-OPENOBSERVE_PASSWORD=YourSecurePassword
-OPENOBSERVE_ORG=default
-OPENOBSERVE_STREAM=poddyclip
-```
-
-Then restart phoenix:
+## Server Shutdown & Restart
 ```bash
 kubectl rollout restart deploy/phoenix
 ```
@@ -211,19 +155,15 @@ This section covers safely shutting down and restarting the entire k3s server.
 **Stateless design**: All persistent state is external:
 - **Database**: PostgreSQL (external)
 - **Storage**: Cloudflare R2
-- **Logs**: OpenObserve → R2
 
 **Service Dependencies**:
 ```
 Phoenix (port 4000) → API (port 3000) → R2 Storage
-    ↓                      ↓
-    └──────────────────────┴─────→ OpenObserve (port 5080)
 ```
 
 **Graceful Shutdown Periods**:
 - Phoenix: 30s
 - API: 600s (10 min) - has preStop hook that waits for active jobs
-- OpenObserve: 30s
 
 ### Graceful Shutdown Procedure
 
@@ -250,9 +190,6 @@ kubectl delete deploy/phoenix
 # Wait for API to drain (has 10-min grace period for active jobs)
 kubectl delete deploy/api
 
-# Stop observability last
-kubectl delete deploy/openobserve
-
 # Verify all pods terminated
 kubectl get pods
 ```
@@ -262,7 +199,6 @@ kubectl get pods
 Only if server going offline long-term or decommissioning:
 ```bash
 kubectl delete secret app-secrets
-kubectl delete secret openobserve-secrets
 ```
 
 ### Startup Procedure
@@ -280,17 +216,12 @@ psql $DATABASE_URL -c "SELECT 1"
 
 ```bash
 # From directory with .env files
-kubectl create secret generic openobserve-secrets --from-env-file=.env.openobserve
 kubectl create secret generic app-secrets --from-env-file=.env.prod
 ```
 
 #### 3. Apply Manifests (in order)
 
 ```bash
-# Start observability first (so apps can log)
-kubectl apply -f k8s/openobserve.yaml
-kubectl rollout status deploy/openobserve
-
 # Start API (backend)
 kubectl apply -f k8s/api.yaml
 kubectl rollout status deploy/api
@@ -313,7 +244,6 @@ kubectl exec deploy/phoenix -- curl -s localhost:4000/health
 # Check logs for errors
 kubectl logs deploy/phoenix --tail=20
 kubectl logs deploy/api --tail=20
-kubectl logs deploy/openobserve --tail=20
 ```
 
 ### Quick Commands Reference
@@ -322,14 +252,11 @@ kubectl logs deploy/openobserve --tail=20
 ```bash
 kubectl delete deploy/phoenix && \
 kubectl delete deploy/api && \
-kubectl delete deploy/openobserve && \
 kubectl get pods
 ```
 
 **Full Startup (one-liner)**:
 ```bash
-kubectl apply -f k8s/openobserve.yaml && \
-kubectl rollout status deploy/openobserve && \
 kubectl apply -f k8s/api.yaml && \
 kubectl rollout status deploy/api && \
 kubectl apply -f k8s/phoenix.yaml && \
@@ -356,12 +283,10 @@ kubectl delete pod <pod-name> --grace-period=0 --force
 kubectl delete deploy --all
 kubectl delete svc --all
 kubectl delete ingress --all
-kubectl delete secret app-secrets openobserve-secrets
+kubectl delete secret app-secrets
 
 # Recreate from scratch
 ./k8s/setup.sh .env.prod
-kubectl create secret generic openobserve-secrets --from-env-file=.env.openobserve
-kubectl apply -f k8s/openobserve.yaml
 ```
 
 **Check k3s service**:

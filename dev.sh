@@ -26,7 +26,7 @@ fi
 
 case "${1:-}" in
     infra)
-        echo -e "${GREEN}Starting infrastructure (Postgres + MinIO + OpenObserve)...${NC}"
+        echo -e "${GREEN}Starting infrastructure (Postgres + MinIO)...${NC}"
         cd docker && docker compose up
         ;;
     api)
@@ -110,7 +110,7 @@ case "${1:-}" in
     *)
         echo "Usage: $0 {infra|api|web|stop|reset-db|seed|build|push|deploy}"
         echo ""
-        echo "  infra          - Start Postgres + MinIO + OpenObserve (docker)"
+        echo "  infra          - Start Postgres + MinIO (docker)"
         echo "  api            - Start Rust API (port 3000)"
         echo "  web            - Start Phoenix (port 4000)"
         echo "  stop           - Stop all services"
@@ -135,6 +135,5 @@ case "${1:-}" in
         echo "Services:"
         echo "  Postgres:    localhost:5432"
         echo "  MinIO:       localhost:9000 (S3), localhost:9001 (console)"
-        echo "  OpenObserve: localhost:5080 (login: admin@poddyclip.local / dev)"
         ;;
 esac
