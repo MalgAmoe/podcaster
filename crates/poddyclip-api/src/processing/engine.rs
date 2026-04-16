@@ -9,8 +9,6 @@ use poddyclip::deepfilter::{analyze_for_deepfilter, DeepFilterDenoiser};
 
 use poddyclip::analysis;
 use poddyclip::analysis::lufs::measure_integrated_lufs;
-use poddyclip::denoiser::analyze_audio;
-use poddyclip::denoiser::RealtimeDenoiser;
 use poddyclip::dynamics::autogain::{analyze_gain, apply_gain, DEFAULT_TARGET_PEAK_DB, DEFAULT_TARGET_RMS_DB};
 use poddyclip::dynamics::limiter::Limiter;
 use poddyclip::dynamics::{StereoFetCompressor, StereoVcaPeakComp};
@@ -36,18 +34,16 @@ const STAGES: &[&str] = &[
     "decoding",           // 0
     "filters",            // 1
     "input_gain",         // 2
-    "analyzing_noise",    // 3
-    "denoise",            // 4
-    "ai_denoise",         // 5
-    "peakcomp",           // 6
-    "analyzing_eq",       // 7
-    "fixeq",              // 8
-    "deesser",            // 9
-    "analyzing_enhance",  // 10
-    "enhanceeq",          // 11
-    "fetcomp",            // 12
-    "analyzing_levels",   // 13
-    "output",             // 14
+    "denoise",            // 3
+    "peakcomp",           // 4
+    "analyzing_eq",       // 5
+    "fixeq",              // 6
+    "deesser",            // 7
+    "analyzing_enhance",  // 8
+    "enhanceeq",          // 9
+    "fetcomp",            // 10
+    "analyzing_levels",   // 11
+    "output",             // 12
 ];
 
 /// Run the full processing chain on audio samples
@@ -68,14 +64,12 @@ pub fn process_audio(
 
     let duration_secs = samples[0].len() as f32 / sample_rate as f32;
     info!(
-        "Processing {:.1}s {} audio @ {}Hz | denoise={} declick={} ai={} \
+        "Processing {:.1}s {} audio @ {}Hz | declick={} \
          peakcomp={} fetcomp={} fixeq={} deesser={} enhance={} output={}/{:.0}",
         duration_secs,
         if is_stereo { "stereo" } else { "mono" },
         sample_rate,
-        config.denoiser_preset,
         config.declick,
-        config.ai_denoise,
         config.peakcomp_preset,
         config.fetcomp_preset,
         config.fixeq_preset,
@@ -122,40 +116,15 @@ pub fn process_audio(
     apply_gain(samples, gain_db);
 
     // =========================================================================
-    // DENOISE
+    // DENOISE (DeepFilterNet)
     // =========================================================================
-    report("analyzing_noise", 3)?;
-    let preset: usize = config.denoiser_preset.into();
-    let result = analyze_audio(&samples[0], sample_rate);
+    report("denoise", 3)?;
 
-    report("denoise", 4)?;
-    debug!("Denoise: preset={}", preset);
-    if is_stereo {
-        let mut left_denoiser =
-            RealtimeDenoiser::new_with_preset(sample_rate, preset).ok_or_else(|| anyhow::anyhow!("Invalid preset"))?;
-        let mut right_denoiser =
-            RealtimeDenoiser::new_with_preset(sample_rate, preset).ok_or_else(|| anyhow::anyhow!("Invalid preset"))?;
-        left_denoiser.init_with_noise_floor(&result.noise_floor);
-        right_denoiser.init_with_noise_floor(&result.noise_floor);
-        samples[0] = left_denoiser.process(&samples[0]);
-        samples[1] = right_denoiser.process(&samples[1]);
-    } else {
-        let mut denoiser =
-            RealtimeDenoiser::new_with_preset(sample_rate, preset).ok_or_else(|| anyhow::anyhow!("Invalid preset"))?;
-        denoiser.init_with_noise_floor(&result.noise_floor);
-        samples[0] = denoiser.process(&samples[0]);
-    }
-
-    // =========================================================================
-    // AI DENOISE (DeepFilterNet)
-    // =========================================================================
     #[cfg(feature = "deepfilter")]
-    if config.ai_denoise {
-        report("ai_denoise", 5)?;
-
+    {
         let analysis = analyze_for_deepfilter(&samples[0], sample_rate);
         info!(
-            "AI Denoise: SNR {:.1}dB ({})",
+            "Denoise: SNR {:.1}dB ({})",
             analysis.estimated_snr,
             analysis.noise_severity()
         );
@@ -172,20 +141,20 @@ pub fn process_audio(
                 }
             }
             Err(e) => {
-                warn!("AI Denoise unavailable: {}", e);
+                warn!("Denoise unavailable: {}", e);
             }
         }
     }
 
     #[cfg(not(feature = "deepfilter"))]
-    if config.ai_denoise {
-        warn!("AI Denoise requested but deepfilter feature not enabled");
+    {
+        warn!("Denoise skipped: deepfilter feature not enabled");
     }
 
     // =========================================================================
     // PEAK COMPRESSOR
     // =========================================================================
-    report("peakcomp", 6)?;
+    report("peakcomp", 4)?;
 
     if config.peakcomp_enabled {
         let mut peakcomp = StereoVcaPeakComp::new_with_preset(sample_rate as f32, config.peakcomp_preset)
@@ -206,7 +175,7 @@ pub fn process_audio(
     // FIXEQ
     // =========================================================================
     if config.fixeq_enabled {
-        report("analyzing_eq", 7)?;
+        report("analyzing_eq", 5)?;
         let mono = if is_stereo {
             analysis::utils::mix_to_mono(&samples[0], &samples[1])
         } else {
@@ -214,7 +183,7 @@ pub fn process_audio(
         };
         let spectrum = analysis::SpectralAnalysis::new(&mono, sample_rate);
 
-        report("fixeq", 8)?;
+        report("fixeq", 6)?;
         let mut fixeq = FixEq::new(sample_rate as f32);
         fixeq.configure_from_spectrum(&spectrum, config.fixeq_preset as usize, is_stereo);
         if is_stereo {
@@ -236,7 +205,7 @@ pub fn process_audio(
     // =========================================================================
     // DE-ESSER
     // =========================================================================
-    report("deesser", 9)?;
+    report("deesser", 7)?;
 
     if config.deesser_enabled {
         let mut deesser = StereoDeEsser::new(sample_rate as f32);
@@ -256,7 +225,7 @@ pub fn process_audio(
     // ENHANCE EQ
     // =========================================================================
     if config.enhanceeq_enabled {
-        report("analyzing_enhance", 10)?;
+        report("analyzing_enhance", 8)?;
         let eq_preset_data = get_eq_preset(config.enhanceeq_preset)
             .ok_or_else(|| anyhow::anyhow!("Invalid EQ preset"))?;
         let mono_for_enhance = if is_stereo {
@@ -266,7 +235,7 @@ pub fn process_audio(
         };
         let enhance_spectrum = analysis::SpectralAnalysis::new(&mono_for_enhance, sample_rate);
 
-        report("enhanceeq", 11)?;
+        report("enhanceeq", 9)?;
         let mut enhanceeq_proc = StereoEnhanceEq::new(sample_rate as f32);
         enhanceeq_proc.configure_from_spectrum(&enhance_spectrum);
 
@@ -295,7 +264,7 @@ pub fn process_audio(
     // =========================================================================
     // FET COMPRESSOR
     // =========================================================================
-    report("fetcomp", 12)?;
+    report("fetcomp", 10)?;
 
     if config.fetcomp_enabled {
         let mut fetcomp = StereoFetCompressor::new_with_preset(sample_rate as f32, config.fetcomp_preset)
@@ -315,13 +284,13 @@ pub fn process_audio(
     // OUTPUT STAGE
     // =========================================================================
     if config.output_enabled {
-        report("analyzing_levels", 13)?;
+        report("analyzing_levels", 11)?;
         let lufs = measure_integrated_lufs(samples, sample_rate);
         let lufs_gain_db = config.lufs_target - lufs;
         debug!("LUFS: measured={:.1} target={:.1} gain={:.1} dB", lufs, config.lufs_target, lufs_gain_db);
         apply_gain(samples, lufs_gain_db);
 
-        report("output", 14)?;
+        report("output", 12)?;
         let mut limiter = Limiter::new(-1.0, 5.0, 100.0, sample_rate as f32);
         if is_stereo {
             let (left, right) = samples.split_at_mut(1);

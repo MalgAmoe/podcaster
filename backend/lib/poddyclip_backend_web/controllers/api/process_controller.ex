@@ -53,7 +53,7 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   @doc """
   POST /api/jobs - Create a processing job.
 
-  Request: {"s3_key": "...", "filename": "...", "ai_clean": false, "duration_seconds": 300}
+  Request: {"s3_key": "...", "filename": "...", "duration_seconds": 300}
   Response: {"id": 123, "status": "queued", "filename": "..."}
 
   The duration_seconds parameter is used to estimate seconds needed. If not provided,
@@ -105,7 +105,6 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
       })
     else
       opts = [
-        ai_clean: params["ai_clean"],
         estimated_seconds: estimated_seconds
       ]
 

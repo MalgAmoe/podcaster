@@ -129,9 +129,6 @@ export const api = {
     return request("POST", "/api/jobs", {
       s3_key: s3Key,
       filename,
-      strength: config.strength,
-      ai_clean: config.ai_clean,
-      mono: config.mono,
       duration_seconds: config.duration_seconds,
     });
   },

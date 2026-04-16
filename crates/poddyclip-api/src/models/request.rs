@@ -22,10 +22,8 @@ pub struct ProcessConfig {
     pub hp_slope: u8,
     pub hp_cutoff: f32,
 
-    // Noise reduction
-    pub denoiser_preset: u8,
+    // Repair
     pub declick: bool,
-    pub ai_denoise: bool,
 
     // Dynamics
     pub peakcomp_enabled: bool,
@@ -59,18 +57,16 @@ impl ProcessConfig {
 
             filters_enabled: true,
             hp_slope: 24,
-            hp_cutoff: 75.0,
+            hp_cutoff: 85.0,
 
-            denoiser_preset: 1,
             declick: true,
-            ai_denoise: false,
 
             peakcomp_enabled: true,
             peakcomp_preset: 1,
-            fetcomp_enabled: true,
+            fetcomp_enabled: false,
             fetcomp_preset: 1,
 
-            fixeq_enabled: true,
+            fixeq_enabled: false,
             fixeq_preset: 1,
             deesser_enabled: true,
             enhanceeq_enabled: true,

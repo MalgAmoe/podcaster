@@ -68,7 +68,6 @@ defmodule PoddyclipBackend.Workers.ProcessingWorker do
     [
       user_id: args["user_id"],
       filename: args["filename"],
-      ai_clean: args["ai_clean"],
       output_format: args["output_format"] || "mp3",
       mp3_bitrate: args["mp3_bitrate"] || 192
     ]

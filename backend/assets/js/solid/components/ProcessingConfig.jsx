@@ -1,9 +1,4 @@
-import { OptionsRow } from "./ModeSelector";
-
+// No user-configurable options remain — processing is fully automatic
 export function ProcessingConfig() {
-  return (
-    <div>
-      <OptionsRow />
-    </div>
-  );
+  return null;
 }

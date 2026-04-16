@@ -20,10 +20,6 @@ export function ProcessProvider(props) {
     uploadState: "idle", // idle, uploading, ready, error
     estimatedSeconds: null, // Detected audio duration in seconds
     submitting: false, // Prevents double-submit
-    // Processing configuration
-    processingConfig: {
-      aiClean: false,
-    },
     job: null,
   });
 
@@ -243,11 +239,6 @@ export function ProcessProvider(props) {
     }
   }
 
-  function setAiClean(enabled) {
-    setStore("processingConfig", "aiClean", enabled);
-  }
-
-  const currentAiClean = () => store.processingConfig.aiClean;
 
   async function submitJob() {
     if (!store.s3Key || !store.filename) {
@@ -261,7 +252,6 @@ export function ProcessProvider(props) {
 
     try {
       const config = {
-        ai_clean: store.processingConfig.aiClean,
         duration_seconds: store.estimatedSeconds || 60,
       };
       const job = await api.createJob(store.s3Key, store.filename, config);
@@ -347,8 +337,6 @@ export function ProcessProvider(props) {
   const value = {
     store,
     uploadFile,
-    setAiClean,
-    currentAiClean,
     submitJob,
     cancelJob,
     reset,

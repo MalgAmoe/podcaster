@@ -83,9 +83,6 @@ pub struct CreateS3JobRequest {
     pub webhook_url: Option<String>,
     /// Secret for webhook authentication
     pub webhook_secret: Option<String>,
-    /// Enable AI (DeepFilterNet) denoiser for voice cleaning
-    #[serde(default)]
-    pub ai_clean: Option<bool>,
 }
 
 fn default_mp3_bitrate() -> u32 {
@@ -190,11 +187,6 @@ pub async fn create_s3_job(
     };
     // Clamp MP3 bitrate to valid range (128-320 kbps)
     config.mp3_bitrate = req.mp3_bitrate.clamp(128, 320);
-
-    // Allow explicit override of ai_denoise
-    if let Some(ai_clean) = req.ai_clean {
-        config.ai_denoise = ai_clean;
-    }
 
     // Validate webhook URL if provided (SSRF prevention)
     if let Some(ref webhook_url) = req.webhook_url {
