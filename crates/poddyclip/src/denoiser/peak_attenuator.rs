@@ -136,8 +136,8 @@ impl PeakAttenuator {
             let width = profile.widths[i];
 
             // Calculate attenuation based on prominence
-            let attenuation_db =
-                (prominence_db * self.params.attenuation_factor).min(-self.params.max_attenuation_db);
+            let attenuation_db = (prominence_db * self.params.attenuation_factor)
+                .min(-self.params.max_attenuation_db);
             let center_gain = 10.0f32.powf(-attenuation_db / 20.0);
 
             // Apply smooth transition around peak

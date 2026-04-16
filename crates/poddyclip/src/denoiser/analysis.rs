@@ -1,12 +1,12 @@
 //! Audio Analysis Functions for CLI
 //!
 //! Provides noise floor estimation and audio metrics for batch processing.
-//! These functions are CLI-only (plugin uses real-time adaptation).
+//! These functions are for batch/offline processing.
 
 #![allow(dead_code)]
 
 use super::common::*;
-use crate::stft::{StftProcessor, RT_HOP_SIZE, RT_WINDOW_SIZE, EPSILON};
+use crate::stft::{StftProcessor, EPSILON, RT_HOP_SIZE, RT_WINDOW_SIZE};
 use std::collections::VecDeque;
 
 // =============================================================================

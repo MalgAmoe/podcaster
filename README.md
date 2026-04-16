@@ -6,21 +6,16 @@ Only pay for what you eat.
 
 ## Overview
 
-Poddyclip is a Rust workspace with three components:
+Poddyclip is a Rust workspace with two components:
 
 - **poddyclip** - Core audio processing library (~13,000 lines)
 - **poddyclip-cli** - Command-line tool for batch processing
-- **poddyclip-plugin** - VST3/CLAP plugin with egui GUI
 
 ## Installation
 
 ```bash
 # Build CLI
 cargo build --release -p poddyclip-cli
-
-# Build VST3/CLAP plugin
-cargo xtask bundle poddyclip-plugin --release
-# Output: target/bundled/Poddyclip.vst3 and Poddyclip.clap
 ```
 
 ## CLI Usage
@@ -172,7 +167,6 @@ crates/poddyclip/src/
 └── traits.rs      # AudioProcessor, StereoProcessor traits
 
 crates/poddyclip-cli/    # Command-line interface
-crates/poddyclip-plugin/ # VST3/CLAP plugin (nih-plug + egui)
 chains/                  # TOML chain presets
 ```
 

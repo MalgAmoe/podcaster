@@ -5,8 +5,8 @@
 
 #![allow(dead_code)]
 
-use crate::analysis::utils::{linear_to_db, db_to_linear, mix_to_mono};
 use super::peakcomp_analysis::{analyze_peak_profile, PeakProfile};
+use crate::analysis::utils::{db_to_linear, linear_to_db, mix_to_mono};
 use std::collections::VecDeque;
 
 // =============================================================================
@@ -181,7 +181,7 @@ impl VcaPeakComp {
     pub fn new_default(sample_rate: f32) -> Self {
         Self::new(
             -12.0, // threshold (will be overridden by analysis)
-            8.0,  // ratio 12:1
+            8.0,   // ratio 12:1
             0.5,   // attack 0.5ms
             100.0, // release 100ms
             4.0,   // knee 4dB

@@ -136,7 +136,8 @@ impl EnhanceEq {
     pub fn set_presence_freq(&mut self, freq: f32) {
         if (self.presence_freq - freq).abs() > 0.1 {
             self.presence_freq = freq;
-            self.presence.update(freq, self.sample_rate, DEFAULT_PRESENCE_Q);
+            self.presence
+                .update(freq, self.sample_rate, DEFAULT_PRESENCE_Q);
         }
     }
 
@@ -400,12 +401,20 @@ impl StereoEnhanceEq {
 
         // Apply settings
         self.set_lowmid_gain(lowmid_gain);
-        self.left.lowmid.update(250.0, self.left.sample_rate, lowmid_q);
-        self.right.lowmid.update(250.0, self.right.sample_rate, lowmid_q);
+        self.left
+            .lowmid
+            .update(250.0, self.left.sample_rate, lowmid_q);
+        self.right
+            .lowmid
+            .update(250.0, self.right.sample_rate, lowmid_q);
 
         self.set_presence_gain(presence_gain);
-        self.left.presence.update(3000.0, self.left.sample_rate, presence_q);
-        self.right.presence.update(3000.0, self.right.sample_rate, presence_q);
+        self.left
+            .presence
+            .update(3000.0, self.left.sample_rate, presence_q);
+        self.right
+            .presence
+            .update(3000.0, self.right.sample_rate, presence_q);
 
         self.set_shelf_gain(air_gain);
     }

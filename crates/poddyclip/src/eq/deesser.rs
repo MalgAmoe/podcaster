@@ -11,13 +11,13 @@ use crate::analysis::utils::mix_to_mono;
 
 const D_ATTACK: f32 = 0.2;
 const D_RELEASE: f32 = 130.0;
-const D_THRESHOLD: f32 = -24.0;  // Low threshold - band-extracted signal has lower amplitude
-const D_RATIO: f32 = 4.0;        // Gentler ratio for natural sound
-const D_MAX_CUT: f32 = -18.0;    // Max 18dB reduction
+const D_THRESHOLD: f32 = -24.0; // Low threshold - band-extracted signal has lower amplitude
+const D_RATIO: f32 = 4.0; // Gentler ratio for natural sound
+const D_MAX_CUT: f32 = -18.0; // Max 18dB reduction
 
 /// Default sibilance band (Hz)
 const DEFAULT_START_FREQ: f32 = DEFAULT_SIBILANCE_FREQ - 1500.0; // 5000 Hz
-const DEFAULT_STOP_FREQ: f32 = DEFAULT_SIBILANCE_FREQ + 1500.0;  // 8000 Hz
+const DEFAULT_STOP_FREQ: f32 = DEFAULT_SIBILANCE_FREQ + 1500.0; // 8000 Hz
 
 /// De-Esser processor for a single channel
 /// Uses flat band-cut filter (not resonant) for broadband sibilance reduction
@@ -54,8 +54,8 @@ impl DeEsser {
 
     /// Set band frequencies
     pub fn set_band(&mut self, start_freq: f32, stop_freq: f32) {
-        let changed = (self.start_freq - start_freq).abs() > 0.1
-            || (self.stop_freq - stop_freq).abs() > 0.1;
+        let changed =
+            (self.start_freq - start_freq).abs() > 0.1 || (self.stop_freq - stop_freq).abs() > 0.1;
 
         if changed {
             self.start_freq = start_freq;

@@ -10,8 +10,7 @@ pub struct SaturationPreset {
 }
 
 /// Preset names (1-3)
-pub const SATURATION_PRESET_NAMES: [&str; 3] =
-    ["Subtle", "Balanced", "Intense"];
+pub const SATURATION_PRESET_NAMES: [&str; 3] = ["Subtle", "Balanced", "Intense"];
 
 /// Saturation presets (1-3 scale)
 pub const SATURATION_PRESETS: [SaturationPreset; 3] = [

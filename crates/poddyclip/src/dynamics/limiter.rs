@@ -84,9 +84,9 @@ pub struct Limiter {
     release_coeff: f32,
 
     // State for buffer boundary handling
-    lookahead_buffer: Vec<f32>,       // Mono or left channel samples for next call's lookahead
+    lookahead_buffer: Vec<f32>, // Mono or left channel samples for next call's lookahead
     lookahead_buffer_right: Vec<f32>, // Right channel samples (stereo only)
-    current_gain: f32,                // Carry over gain state for release smoothing
+    current_gain: f32,          // Carry over gain state for release smoothing
 
     // Pre-allocated work buffers (reused across calls to avoid allocations)
     work_combined: Vec<f32>,
@@ -158,10 +158,12 @@ impl Limiter {
             // Push the sample at lookahead distance (if it exists)
             let lookahead_idx = combined_idx + self.lookahead_samples.saturating_sub(1);
             if lookahead_idx < total_len {
-                self.work_peak_envelope[i] = sliding_max.push(self.work_combined[lookahead_idx].abs());
+                self.work_peak_envelope[i] =
+                    sliding_max.push(self.work_combined[lookahead_idx].abs());
             } else {
                 // At the end, just use current max
-                self.work_peak_envelope[i] = sliding_max.push(self.work_combined[combined_idx].abs());
+                self.work_peak_envelope[i] =
+                    sliding_max.push(self.work_combined[combined_idx].abs());
             }
         }
 
@@ -226,8 +228,16 @@ impl Limiter {
 
         // Add previous buffer peaks
         for i in 0..offset {
-            let l = if i < self.lookahead_buffer.len() { self.lookahead_buffer[i].abs() } else { 0.0 };
-            let r = if i < self.lookahead_buffer_right.len() { self.lookahead_buffer_right[i].abs() } else { 0.0 };
+            let l = if i < self.lookahead_buffer.len() {
+                self.lookahead_buffer[i].abs()
+            } else {
+                0.0
+            };
+            let r = if i < self.lookahead_buffer_right.len() {
+                self.lookahead_buffer_right[i].abs()
+            } else {
+                0.0
+            };
             self.work_combined.push(l.max(r));
         }
         // Add current buffer peaks
@@ -296,7 +306,8 @@ impl Limiter {
         self.lookahead_buffer.clear();
         self.lookahead_buffer.extend_from_slice(&left[start..len]);
         self.lookahead_buffer_right.clear();
-        self.lookahead_buffer_right.extend_from_slice(&right[start..len]);
+        self.lookahead_buffer_right
+            .extend_from_slice(&right[start..len]);
         self.current_gain = *self.work_gain.last().unwrap_or(&1.0);
 
         LimiterStats {
@@ -333,7 +344,9 @@ impl crate::traits::AudioProcessor for Limiter {
 }
 
 // =============================================================================
-// Stereo Realtime Limiter (sample-by-sample processing for plugins)
+// =============================================================================
+// Stereo Realtime Limiter (sample-by-sample processing)
+// =============================================================================
 // =============================================================================
 
 /// Stereo realtime limiter with linked gain reduction
@@ -395,8 +408,8 @@ impl StereoRealtimeLimiter {
             self.current_gain = target_gain;
         } else {
             // Release: smooth
-            self.current_gain = self.current_gain * self.release_coeff
-                + target_gain * (1.0 - self.release_coeff);
+            self.current_gain =
+                self.current_gain * self.release_coeff + target_gain * (1.0 - self.release_coeff);
         }
 
         // Get delayed samples

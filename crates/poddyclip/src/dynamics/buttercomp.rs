@@ -16,8 +16,7 @@
 // =============================================================================
 
 /// Preset names (1-3)
-pub const BUTTERCOMP_PRESET_NAMES: [&str; 3] =
-    ["Subtle", "Balanced", "Intense"];
+pub const BUTTERCOMP_PRESET_NAMES: [&str; 3] = ["Subtle", "Balanced", "Intense"];
 
 /// ButterComp presets - compression amount (0-1 scale)
 pub const BUTTERCOMP_PRESETS: [f32; 3] = [
@@ -43,7 +42,11 @@ pub fn get_buttercomp_preset(level: u8) -> Option<f32> {
 /// Flush denormals to zero to prevent CPU spikes
 #[inline]
 fn flush_denormal(x: f64) -> f64 {
-    if x.abs() < 1.18e-37 { 0.0 } else { x }
+    if x.abs() < 1.18e-37 {
+        0.0
+    } else {
+        x
+    }
 }
 
 /// Single channel ButterComp2 processor
@@ -276,4 +279,3 @@ impl crate::traits::Processor for ButterComp2 {
         Self::new(sample_rate)
     }
 }
-

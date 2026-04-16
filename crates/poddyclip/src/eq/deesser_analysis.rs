@@ -47,7 +47,6 @@ impl Default for SibilanceAnalysis {
     }
 }
 
-
 /// Analyze audio for sibilance characteristics
 /// Computes f0 via cepstral analysis to distinguish sibilance from harmonic overtones
 pub fn analyze_sibilance(audio: &[f32], sample_rate: u32) -> SibilanceAnalysis {
@@ -89,10 +88,8 @@ pub fn analyze_sibilance(audio: &[f32], sample_rate: u32) -> SibilanceAnalysis {
             .map(|(&s, &w)| s * w)
             .collect();
 
-        let mut spectrum: Vec<Complex<f32>> = windowed
-            .iter()
-            .map(|&s| Complex::new(s, 0.0))
-            .collect();
+        let mut spectrum: Vec<Complex<f32>> =
+            windowed.iter().map(|&s| Complex::new(s, 0.0)).collect();
         fft.process_with_scratch(&mut spectrum, &mut fft_scratch);
 
         for (j, c) in spectrum[..n_bins].iter().enumerate() {
@@ -240,13 +237,8 @@ pub fn analyze_sibilance(audio: &[f32], sample_rate: u32) -> SibilanceAnalysis {
     let residue_confidence = residue_magnitude * spread_confidence;
 
     // Also use band energy ratio as secondary check
-    let band_confidence = compute_sibilance_confidence(
-        &avg_power,
-        sib_min_bin,
-        sib_max_bin,
-        center_freq,
-        f0,
-    );
+    let band_confidence =
+        compute_sibilance_confidence(&avg_power, sib_min_bin, sib_max_bin, center_freq, f0);
 
     // Combine: use max of residue and band confidence
     let confidence = residue_confidence.max(band_confidence);
@@ -288,11 +280,7 @@ fn compute_sibilance_confidence(
 
     // Ratio: what fraction of total spectrum is in sibilance band?
     let total = sib_energy + outside_energy;
-    let sib_ratio = if total > 0.0 {
-        sib_energy / total
-    } else {
-        0.0
-    };
+    let sib_ratio = if total > 0.0 { sib_energy / total } else { 0.0 };
 
     // Map: 20% of spectrum in sibilance band = confidence 1.0
     // This handles broadband sibilance better than peak-only
@@ -335,5 +323,4 @@ mod tests {
         let mono = mix_to_mono(&left, &right);
         assert_eq!(mono, vec![0.5, 0.5, 0.5]);
     }
-
 }

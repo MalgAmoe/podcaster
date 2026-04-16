@@ -44,16 +44,16 @@ pub struct RadioFilterParams {
 impl Default for RadioFilterParams {
     fn default() -> Self {
         Self {
-            hpf_freq: 60.0,           // Lower HPF for hyped sound
-            low_shelf_freq: 120.0,    // Bass boost center
-            low_shelf_gain: 0.0,      // Set by fitter
-            mud_freq: 400.0,          // Mud scoop center
+            hpf_freq: 60.0,        // Lower HPF for hyped sound
+            low_shelf_freq: 120.0, // Bass boost center
+            low_shelf_gain: 0.0,   // Set by fitter
+            mud_freq: 400.0,       // Mud scoop center
             mud_gain: 0.0,
             mud_q: 1.0,
-            mid_freq: 1200.0,         // Nasal/honky center
-            mid_gain: 0.0,            // 0 = off (only applied if problem detected)
+            mid_freq: 1200.0, // Nasal/honky center
+            mid_gain: 0.0,    // 0 = off (only applied if problem detected)
             mid_q: 1.0,
-            presence_freq: 4000.0,    // Presence boost center
+            presence_freq: 4000.0, // Presence boost center
             presence_gain: 0.0,
             presence_q: 1.0,
             air_gain: 0.0,
@@ -135,7 +135,8 @@ impl RadioFilterParams {
 
         params.mud_freq = (mud_peak_bin as f32 * bin_freq).clamp(mud_low_hz, mud_high_hz);
         params.mud_gain = mud_peak_error.clamp(-8.0, 0.0); // No bias, reasonable clamp
-        params.mud_q = Self::estimate_q_from_error(error_db, mud_peak_bin, bin_freq, mud_low_hz, mud_high_hz);
+        params.mud_q =
+            Self::estimate_q_from_error(error_db, mud_peak_bin, bin_freq, mud_low_hz, mud_high_hz);
 
         // 4. Mid band: Scale with f0, find problems in nasal/honky region
         // Only applies cut if there's actually a problem (error < -1 dB)
@@ -154,7 +155,13 @@ impl RadioFilterParams {
         if mid_peak_error < -1.0 {
             params.mid_freq = (mid_peak_bin as f32 * bin_freq).clamp(mid_low_hz, mid_high_hz);
             params.mid_gain = mid_peak_error.clamp(-6.0, 0.0); // No bias, reasonable clamp
-            params.mid_q = Self::estimate_q_from_error(error_db, mid_peak_bin, bin_freq, mid_low_hz, mid_high_hz);
+            params.mid_q = Self::estimate_q_from_error(
+                error_db,
+                mid_peak_bin,
+                bin_freq,
+                mid_low_hz,
+                mid_high_hz,
+            );
         }
         // else mid_gain stays 0.0 (off)
 
@@ -171,9 +178,16 @@ impl RadioFilterParams {
         let (presence_peak_bin, presence_peak_error) =
             Self::find_peak_in_range(error_db, presence_low_bin, presence_high_bin, true);
 
-        params.presence_freq = (presence_peak_bin as f32 * bin_freq).clamp(presence_low_hz, presence_high_hz);
+        params.presence_freq =
+            (presence_peak_bin as f32 * bin_freq).clamp(presence_low_hz, presence_high_hz);
         params.presence_gain = presence_peak_error.clamp(0.0, 6.0); // No bias, reasonable clamp
-        params.presence_q = Self::estimate_q_from_error(error_db, presence_peak_bin, bin_freq, presence_low_hz, presence_high_hz);
+        params.presence_q = Self::estimate_q_from_error(
+            error_db,
+            presence_peak_bin,
+            bin_freq,
+            presence_low_hz,
+            presence_high_hz,
+        );
 
         // 6. Air shelf: Average error above 8 kHz
         // Apply sibilance awareness - reduce boost if audio is already sibilant
@@ -318,10 +332,22 @@ mod tests {
         let params = RadioFilterParams::fit_from_error(&error_db, 120.0, 48000.0 / 4096.0, 2049);
 
         // With perfect match to target, corrections should be minimal
-        assert!(params.low_shelf_gain.abs() < 1.0, "Bass should need minimal correction");
-        assert!(params.mud_gain.abs() < 1.0, "Mud should need minimal correction");
-        assert!(params.presence_gain.abs() < 1.0, "Presence should need minimal correction");
-        assert!(params.air_gain.abs() < 1.0, "Air should need minimal correction");
+        assert!(
+            params.low_shelf_gain.abs() < 1.0,
+            "Bass should need minimal correction"
+        );
+        assert!(
+            params.mud_gain.abs() < 1.0,
+            "Mud should need minimal correction"
+        );
+        assert!(
+            params.presence_gain.abs() < 1.0,
+            "Presence should need minimal correction"
+        );
+        assert!(
+            params.air_gain.abs() < 1.0,
+            "Air should need minimal correction"
+        );
     }
 
     #[test]

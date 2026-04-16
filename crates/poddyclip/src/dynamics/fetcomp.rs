@@ -542,12 +542,12 @@ impl StereoFetCompressor {
     /// Create with default parameters optimized for voice
     pub fn new_default(sample_rate: f32) -> Self {
         Self::new(
-            -12.0,  // threshold
-            4.0,    // ratio
-            0.5,    // attack
-            126.0,  // release
-            0.14,   // input drive
-            0.26,   // output drive
+            -12.0, // threshold
+            4.0,   // ratio
+            0.5,   // attack
+            126.0, // release
+            0.14,  // input drive
+            0.26,  // output drive
             sample_rate,
         )
     }
@@ -812,7 +812,10 @@ mod tests {
     fn test_analytical_gain_below_threshold() {
         let comp = FetCompressor::new_default(48000.0);
         let (gain, dg) = comp.compute_gain_and_gradient(-30.0);
-        assert!((gain - 1.0).abs() < 0.01, "Expected unity gain below threshold");
+        assert!(
+            (gain - 1.0).abs() < 0.01,
+            "Expected unity gain below threshold"
+        );
         assert!(dg.abs() < 0.001, "Expected zero derivative below threshold");
     }
 
@@ -821,7 +824,10 @@ mod tests {
         let comp = FetCompressor::new_default(48000.0);
         let (gain, dg) = comp.compute_gain_and_gradient(-6.0); // 12dB above -18
         assert!(gain < 1.0, "Expected compression above threshold");
-        assert!(dg < 0.0, "Expected negative derivative (more input = less gain)");
+        assert!(
+            dg < 0.0,
+            "Expected negative derivative (more input = less gain)"
+        );
     }
 
     #[test]
@@ -943,9 +949,7 @@ mod tests {
 
     #[test]
     fn test_c1_saturation() {
-        let comp = FetCompressor::new(
-            -18.0, 4.0, 0.8, 50.0, 0.5, 0.5, 48000.0,
-        );
+        let comp = FetCompressor::new(-18.0, 4.0, 0.8, 50.0, 0.5, 0.5, 48000.0);
 
         // Test input saturation is smooth around boundaries
         let s1 = comp.saturate_transformer(0.99);

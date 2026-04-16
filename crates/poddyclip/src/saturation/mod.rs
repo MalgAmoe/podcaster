@@ -9,5 +9,4 @@ pub use presets::{
     get_saturation_preset, get_saturation_preset_name, SaturationPreset, SATURATION_PRESETS,
     SATURATION_PRESET_NAMES,
 };
-#[allow(unused_imports)] // Used by lib.rs (plugin)
 pub use tape::TapeGlue;

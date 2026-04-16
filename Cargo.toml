@@ -4,8 +4,6 @@ members = [
     "crates/poddyclip",
     "crates/poddyclip-cli",
     "crates/poddyclip-api",
-    "crates/poddyclip-plugin",
-    "xtask",
 ]
 
 [workspace.package]

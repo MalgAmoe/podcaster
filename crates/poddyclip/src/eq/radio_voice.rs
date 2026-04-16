@@ -413,7 +413,11 @@ mod tests {
         // Should detect f0 approximately correct
         let detected = radio.get_detected_f0();
         // Allow wide tolerance since cepstral f0 detection on synthetic audio may vary
-        assert!(detected > 50.0 && detected < 400.0, "f0 should be in voice range: {}", detected);
+        assert!(
+            detected > 50.0 && detected < 400.0,
+            "f0 should be in voice range: {}",
+            detected
+        );
 
         // Process
         let mut output = samples.clone();

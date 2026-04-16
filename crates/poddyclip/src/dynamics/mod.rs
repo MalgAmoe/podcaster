@@ -10,7 +10,6 @@ pub mod limiter;
 pub mod peakcomp;
 pub mod peakcomp_analysis;
 
-// Re-exports used by plugin (lib.rs)
 pub use buttercomp::{
     get_buttercomp_preset, get_buttercomp_preset_name, ButterComp2, BUTTERCOMP_PRESETS,
     BUTTERCOMP_PRESET_NAMES,

@@ -1,4 +1,4 @@
-//! Shared code between batch (CLI) and realtime (plugin) denoisers
+//! Shared code for denoiser implementations
 //! Not all items used by all features.
 
 #![allow(dead_code)]
@@ -78,7 +78,7 @@ pub const DEFAULT_GAMMA: [f32; NUM_BANDS] = [
 ];
 
 // =============================================================================
-// Preset Configuration (shared between CLI and plugin)
+// Preset Configuration
 // =============================================================================
 
 #[derive(Clone, Copy, Debug)]
@@ -166,11 +166,11 @@ pub fn get_preset(level: usize) -> Option<&'static Preset> {
 }
 
 // =============================================================================
-// DenoiserParams - Unified parameter struct for CLI and plugin
+// DenoiserParams - Unified parameter struct
 // =============================================================================
 
 /// Runtime parameters for the denoiser.
-/// Used by both CLI (via preset conversion) and plugin (via direct control).
+/// Used via preset conversion or direct control.
 #[derive(Clone, Debug)]
 pub struct DenoiserParams {
     // Subtraction
@@ -208,7 +208,7 @@ impl DenoiserParams {
     }
 
     /// Interpolate between two adjacent presets (0.0 = preset 1, 1.0 = preset 3)
-    /// Useful for plugin's continuous "strength" slider
+    /// Useful for continuous "strength" control
     pub fn from_strength(strength: f32) -> Self {
         let strength = strength.clamp(0.0, 1.0);
         let scaled = strength * 2.0; // 0.0-2.0

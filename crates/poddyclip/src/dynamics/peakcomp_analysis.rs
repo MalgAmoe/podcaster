@@ -83,7 +83,8 @@ fn find_histogram_threshold(samples: &[f32]) -> f32 {
     for &sample in samples {
         let abs_db = linear_to_db(sample.abs());
         if abs_db >= HISTOGRAM_MIN_DB && abs_db <= HISTOGRAM_MAX_DB {
-            let bin_idx = ((abs_db - HISTOGRAM_MIN_DB) / db_range * (HISTOGRAM_BINS - 1) as f32) as usize;
+            let bin_idx =
+                ((abs_db - HISTOGRAM_MIN_DB) / db_range * (HISTOGRAM_BINS - 1) as f32) as usize;
             let bin_idx = bin_idx.min(HISTOGRAM_BINS - 1);
             bins[bin_idx] += 1;
             total_count += 1;
@@ -153,7 +154,6 @@ pub fn analyze_peak_profile(samples: &[f32]) -> PeakProfile {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -182,5 +182,4 @@ mod tests {
         let reduction = calculate_safe_reduction(10.0);
         assert_eq!(reduction, 0.0);
     }
-
 }

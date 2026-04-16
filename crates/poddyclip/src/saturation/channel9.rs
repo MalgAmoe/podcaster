@@ -289,4 +289,3 @@ impl crate::traits::Processor for Channel9 {
         Self::new(sample_rate)
     }
 }
-

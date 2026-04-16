@@ -68,16 +68,23 @@ impl RadioEq {
         self.hpf_stage2.set_freq(params.hpf_freq);
 
         // Low shelf (bass boost)
-        self.low_shelf.set_params(params.low_shelf_freq, params.low_shelf_gain);
+        self.low_shelf
+            .set_params(params.low_shelf_freq, params.low_shelf_gain);
 
         // Mud EQ
-        self.mud_eq.set_params(params.mud_freq, params.mud_q, params.mud_gain);
+        self.mud_eq
+            .set_params(params.mud_freq, params.mud_q, params.mud_gain);
 
         // Mid EQ (nasal/honky cut - only active if gain != 0)
-        self.mid_eq.set_params(params.mid_freq, params.mid_q, params.mid_gain);
+        self.mid_eq
+            .set_params(params.mid_freq, params.mid_q, params.mid_gain);
 
         // Presence EQ
-        self.presence_eq.set_params(params.presence_freq, params.presence_q, params.presence_gain);
+        self.presence_eq.set_params(
+            params.presence_freq,
+            params.presence_q,
+            params.presence_gain,
+        );
 
         // Air shelf
         self.air_shelf.set_params(8000.0, params.air_gain);
@@ -170,8 +177,8 @@ impl RadioEq {
 
 #[cfg(test)]
 mod tests {
-    use std::f32::consts::PI;
     use super::*;
+    use std::f32::consts::PI;
 
     #[test]
     fn test_radio_eq_creation() {
@@ -224,7 +231,11 @@ mod tests {
             .map(|(a, b)| (a - b).abs())
             .fold(0.0, f32::max);
 
-        assert!(max_diff < 0.1, "Max difference should be small: {}", max_diff);
+        assert!(
+            max_diff < 0.1,
+            "Max difference should be small: {}",
+            max_diff
+        );
     }
 
     #[test]
@@ -257,9 +268,11 @@ mod tests {
             })
             .collect();
 
-        let original_rms: f32 = (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt();
+        let original_rms: f32 =
+            (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt();
         eq.process(&mut samples);
-        let processed_rms: f32 = (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt();
+        let processed_rms: f32 =
+            (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt();
 
         // 350 Hz should be reduced
         assert!(processed_rms < original_rms * 0.8, "350 Hz should be cut");

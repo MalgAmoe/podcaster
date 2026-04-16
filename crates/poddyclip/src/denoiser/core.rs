@@ -1,7 +1,4 @@
 //! Unified Spectral Subtraction Denoiser
-//!
-//! Core implementation used by both CLI (batch processing) and plugin (real-time).
-//! Supports preset-based configuration for CLI and dynamic parameter updates for plugin.
 
 #![allow(dead_code)]
 
@@ -261,8 +258,11 @@ impl RealtimeDenoiser {
 
     fn rebuild_gamma_curve(&mut self) {
         if self.gamma_dirty {
-            self.gamma_curve =
-                compute_gamma_curve(self.stft.window_size(), self.stft.sample_rate(), &self.params.gamma);
+            self.gamma_curve = compute_gamma_curve(
+                self.stft.window_size(),
+                self.stft.sample_rate(),
+                &self.params.gamma,
+            );
             self.gamma_dirty = false;
         }
     }
@@ -579,7 +579,7 @@ impl StreamingDenoiser {
         self.window_size - self.hop_size
     }
 
-    /// Process a single sample (for sample-by-sample plugin processing)
+    /// Process a single sample
     /// Returns the output sample (0.0 during initial latency period)
     #[inline]
     pub fn process_sample(&mut self, input: f32) -> f32 {

@@ -99,8 +99,7 @@ pub const SPECTRAL_GATE_PRESETS: [SpectralGateParams; 3] = [
 ];
 
 /// Preset names for display
-pub const SPECTRAL_GATE_PRESET_NAMES: [&str; 3] =
-    ["Subtle", "Balanced", "Intense"];
+pub const SPECTRAL_GATE_PRESET_NAMES: [&str; 3] = ["Subtle", "Balanced", "Intense"];
 
 /// Get preset name by level (1-3)
 pub fn get_gate_preset_name(level: u8) -> &'static str {
@@ -307,8 +306,7 @@ impl SpectralGate {
                 self.release_coeff // Gate closing
             };
 
-            self.smoothed_gain[k] =
-                coeff * self.smoothed_gain[k] + (1.0 - coeff) * target_gain;
+            self.smoothed_gain[k] = coeff * self.smoothed_gain[k] + (1.0 - coeff) * target_gain;
 
             gains[k] = self.smoothed_gain[k];
         }

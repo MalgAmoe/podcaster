@@ -1,7 +1,5 @@
 [alias]
-xtask = "run --package xtask --release --"
 build-cli = "build --release -p poddyclip-cli"
-build-plugin = "xtask bundle poddyclip-plugin --release"
 run-cli = "run --release -p poddyclip-cli --"
 
 # SIMD optimization: enable AVX2/FMA for modern CPUs (2015+)

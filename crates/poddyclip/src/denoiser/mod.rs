@@ -1,17 +1,17 @@
 //! Unified Spectral Subtraction Denoiser
 //!
-//! Core implementation in `core.rs` is used by both CLI and plugin.
+//! Core implementation in `core.rs`.
 //! Analysis functions in `analysis.rs` for offline noise floor estimation.
 //! Spectral gating in `spectral_gate.rs` for non-stationary noise.
 //! Peak attenuation in `peak_attenuator.rs` for tonal noise.
 
 #![allow(unused_imports)]
 
+pub mod analysis;
 pub(crate) mod common;
 pub mod core;
-pub mod analysis;
-pub mod spectral_gate;
 pub mod peak_attenuator;
+pub mod spectral_gate;
 
 // Re-export common constants
 pub use common::*;
@@ -29,6 +29,4 @@ pub use spectral_gate::{
 };
 
 // Peak attenuator exports
-pub use peak_attenuator::{
-    detect_tonal_peaks, PeakAttenuator, PeakAttenuatorParams, PeakProfile,
-};
+pub use peak_attenuator::{detect_tonal_peaks, PeakAttenuator, PeakAttenuatorParams, PeakProfile};

@@ -26,9 +26,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Build CLI (release)
 cargo build --release -p poddyclip-cli
 
-# Build plugin (VST3/CLAP)
-cargo xtask bundle poddyclip-plugin --release
-
 # Run tests
 cargo test
 
@@ -41,11 +38,10 @@ cargo test test_name
 
 ## Project Structure
 
-Rust workspace with three crates:
+Rust workspace with two crates:
 
 - **`crates/poddyclip`** - Core audio processing library (no audio I/O)
 - **`crates/poddyclip-cli`** - Command-line tool using symphonia for input, hound for WAV output
-- **`crates/poddyclip-plugin`** - VST3/CLAP plugin using nih-plug framework with egui GUI
 
 ## STFT Infrastructure
 
@@ -376,206 +372,6 @@ processor.process_stereo(&mut left[0], &mut right[0]);
 3. For linked stereo: create `StereoXxx` struct implementing `StereoProcessor`
 4. Export from `lib.rs`
 5. In CLI: use `split_at_mut(1)` pattern for stereo
-
-## Plugin Architecture
-
-Uses nih-plug with egui GUI. Plugin wraps processors from the core library.
-
-**Key Files:**
-- `params.rs` - Parameter definitions (nih-plug `#[derive(Params)]`)
-- `lib.rs` - Plugin struct, processing logic, parameter sync
-- `editor.rs` - egui GUI with controls and meters
-
-### Adding a Processor to the Plugin
-
-#### 1. Add Parameters (`params.rs`)
-
-```rust
-// Define parameter struct
-#[derive(Params)]
-pub struct MyProcessorParams {
-    #[id = "myproc_enable"]
-    pub enable: BoolParam,
-
-    #[id = "myproc_amount"]
-    pub amount: FloatParam,
-}
-
-// Add to main params struct
-#[derive(Params)]
-pub struct PoddyclipParams {
-    // ... existing params ...
-
-    #[nested(group = "My Processor")]
-    pub myproc: MyProcessorParams,
-}
-
-// Add defaults in impl Default for PoddyclipParams
-myproc: MyProcessorParams {
-    enable: BoolParam::new("Enable My Processor", false),
-    amount: FloatParam::new(
-        "Amount",
-        0.5,
-        FloatRange::Linear { min: 0.0, max: 1.0 },
-    )
-    .with_step_size(0.01)
-    .with_value_to_string(formatters::v2s_f32_percentage(0)),
-},
-```
-
-#### 2. Add Processor to Plugin (`lib.rs`)
-
-```rust
-// Add import
-use poddyclip::dynamics::MyProcessor;  // or StereoMyProcessor
-
-// Add to Poddyclip struct
-pub struct Poddyclip {
-    // ... existing fields ...
-    myproc: StereoMyProcessor,
-    myproc_gain_db: Arc<Mutex<f32>>,  // For GR meter
-}
-
-// Add to Default impl
-impl Default for Poddyclip {
-    fn default() -> Self {
-        Self {
-            // ... existing ...
-            myproc: StereoMyProcessor::new(48000.0),
-            myproc_gain_db: Arc::new(Mutex::new(0.0)),
-        }
-    }
-}
-
-// Add to initialize() if processor needs sample rate
-self.myproc = StereoMyProcessor::new(buffer_config.sample_rate);
-
-// Add to reset()
-self.myproc.reset();
-```
-
-#### 3. Add Processing Logic (`lib.rs`)
-
-In `process_mono()` and `process_stereo()`:
-
-```rust
-// Read enable flag at buffer start
-let myproc_enabled = self.params.myproc.enable.value();
-
-// In the sample loop, add processing:
-if myproc_enabled {
-    (left_out, right_out) = self.myproc.process_sample(left_out, right_out);
-}
-```
-
-In `sync_processor_params()`:
-
-```rust
-// Sync parameters from UI to processor
-if self.params.myproc.enable.value() {
-    self.myproc.set_amount(self.params.myproc.amount.value());
-}
-```
-
-In `update_visualization()`:
-
-```rust
-if let Ok(mut gain) = self.myproc_gain_db.try_lock() {
-    *gain = self.myproc.get_gain_reduction_db();
-}
-```
-
-#### 4. Pass GR Meter to Editor (`lib.rs`)
-
-Update `editor()` to pass the new meter:
-
-```rust
-fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
-    editor::create_plugin_editor(
-        // ... existing args ...
-        self.myproc_gain_db.clone(),
-    )
-}
-```
-
-#### 5. Add UI Controls (`editor.rs`)
-
-Update function signature:
-
-```rust
-pub fn create_plugin_editor(
-    // ... existing args ...
-    myproc_gain: Arc<Mutex<f32>>,
-) -> Option<Box<dyn Editor>> {
-```
-
-Add control section in `draw_params_column()`:
-
-```rust
-draw_section(ui, "My Processor", |ui| {
-    param_row(ui, "Enable:", &params.myproc.enable, setter);
-    labeled_slider(ui, "Amount:", &params.myproc.amount, setter);
-});
-```
-
-Add meter color (if showing GR meter):
-
-```rust
-enum MeterColor {
-    // ... existing ...
-    MyColor,  // Add new color
-}
-
-impl MeterColor {
-    fn color_for_ratio(self, ratio: f32) -> egui::Color32 {
-        // ... existing ...
-        MeterColor::MyColor => {
-            if ratio > 0.8 { egui::Color32::from_rgb(R, G, B) }
-            else if ratio > 0.5 { egui::Color32::from_rgb(R, G, B) }
-            else { egui::Color32::from_rgb(R, G, B) }
-        }
-    }
-}
-```
-
-Add meter in `draw_viz_column()`:
-
-```rust
-fn draw_viz_column(
-    // ... add myproc_gain parameter ...
-) {
-    // ... existing meters ...
-
-    ui.heading("My Processor Gain Reduction");
-    ui.add_space(5.0);
-    let gain = myproc_gain.lock().map(|g| *g).unwrap_or(0.0);
-    draw_gr_meter(ui, gain, 12.0, MeterColor::MyColor);
-}
-```
-
-#### 6. Build and Test
-
-```bash
-cargo xtask bundle poddyclip-plugin --release
-# Plugin at: target/bundled/Poddyclip.clap and .vst3
-```
-
-### Processing Chain Order (Plugin)
-
-```
-1. Filter (HP + LP)
-2. Denoiser
-3. Expander
-4. FET Compressor
-5. Peak Compressor
-6. FixEq
-7. De-Esser
-8. Channel9 (Neve)
-9. Enhance EQ
-10. ButterComp
-11. TapeGlue
-12. Limiter
-```
 
 ## API Processing
 

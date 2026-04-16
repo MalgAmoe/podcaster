@@ -77,7 +77,6 @@ impl FixEq {
 
     /// Apply analysis results and configure bands
     fn apply_analysis(&mut self, analysis: FixEqAnalysis, preset: usize) -> &FixEqAnalysis {
-
         // Calculate strengths from preset + analysis
         let preset_factor = preset as f32 / 5.0; // 1=0.2, 5=1.0
 
@@ -89,18 +88,16 @@ impl FixEq {
         // Correction A strength
         let corr_a_energy_factor =
             ((analysis.correction_a.energy_db + 40.0) / 30.0).clamp(0.0, 1.0);
-        self.correction_a_strength = (preset_factor
-            * analysis.correction_a.confidence
-            * corr_a_energy_factor)
-            .clamp(0.0, 1.0);
+        self.correction_a_strength =
+            (preset_factor * analysis.correction_a.confidence * corr_a_energy_factor)
+                .clamp(0.0, 1.0);
 
         // Correction B strength
         let corr_b_energy_factor =
             ((analysis.correction_b.energy_db + 40.0) / 30.0).clamp(0.0, 1.0);
-        self.correction_b_strength = (preset_factor
-            * analysis.correction_b.confidence
-            * corr_b_energy_factor)
-            .clamp(0.0, 1.0);
+        self.correction_b_strength =
+            (preset_factor * analysis.correction_b.confidence * corr_b_energy_factor)
+                .clamp(0.0, 1.0);
 
         // Configure left channel bands
         self.demud_left = Some(DynamicBand::new_demud_at(
@@ -232,17 +229,19 @@ impl FixEq {
     }
 
     // =========================================================================
-    // Manual control methods (for plugin realtime use)
+    // Manual control methods (for real-time use)
     // =========================================================================
 
     /// Enable/disable de-mud (uses current frequency setting)
     pub fn set_demud_enabled(&mut self, enabled: bool) {
         if enabled {
             if self.demud_left.is_none() {
-                self.demud_left = Some(DynamicBand::new_demud_at(self.demud_freq, self.sample_rate));
+                self.demud_left =
+                    Some(DynamicBand::new_demud_at(self.demud_freq, self.sample_rate));
             }
             if self.is_stereo && self.demud_right.is_none() {
-                self.demud_right = Some(DynamicBand::new_demud_at(self.demud_freq, self.sample_rate));
+                self.demud_right =
+                    Some(DynamicBand::new_demud_at(self.demud_freq, self.sample_rate));
             }
         } else {
             self.demud_left = None;
@@ -254,10 +253,16 @@ impl FixEq {
     pub fn set_correction_a_enabled(&mut self, enabled: bool) {
         if enabled {
             if self.correction_a_left.is_none() {
-                self.correction_a_left = Some(DynamicBand::new_correction_at(self.correction_a_freq, self.sample_rate));
+                self.correction_a_left = Some(DynamicBand::new_correction_at(
+                    self.correction_a_freq,
+                    self.sample_rate,
+                ));
             }
             if self.is_stereo && self.correction_a_right.is_none() {
-                self.correction_a_right = Some(DynamicBand::new_correction_at(self.correction_a_freq, self.sample_rate));
+                self.correction_a_right = Some(DynamicBand::new_correction_at(
+                    self.correction_a_freq,
+                    self.sample_rate,
+                ));
             }
         } else {
             self.correction_a_left = None;
@@ -269,10 +274,16 @@ impl FixEq {
     pub fn set_correction_b_enabled(&mut self, enabled: bool) {
         if enabled {
             if self.correction_b_left.is_none() {
-                self.correction_b_left = Some(DynamicBand::new_correction_at(self.correction_b_freq, self.sample_rate));
+                self.correction_b_left = Some(DynamicBand::new_correction_at(
+                    self.correction_b_freq,
+                    self.sample_rate,
+                ));
             }
             if self.is_stereo && self.correction_b_right.is_none() {
-                self.correction_b_right = Some(DynamicBand::new_correction_at(self.correction_b_freq, self.sample_rate));
+                self.correction_b_right = Some(DynamicBand::new_correction_at(
+                    self.correction_b_freq,
+                    self.sample_rate,
+                ));
             }
         } else {
             self.correction_b_left = None;
@@ -280,17 +291,17 @@ impl FixEq {
         }
     }
 
-    /// Set de-mud strength directly (for plugin)
+    /// Set de-mud strength directly
     pub fn set_demud_strength(&mut self, strength: f32) {
         self.demud_strength = strength.clamp(0.0, 1.0);
     }
 
-    /// Set correction A strength directly (for plugin)
+    /// Set correction A strength directly
     pub fn set_correction_a_strength(&mut self, strength: f32) {
         self.correction_a_strength = strength.clamp(0.0, 1.0);
     }
 
-    /// Set correction B strength directly (for plugin)
+    /// Set correction B strength directly
     pub fn set_correction_b_strength(&mut self, strength: f32) {
         self.correction_b_strength = strength.clamp(0.0, 1.0);
     }
@@ -337,7 +348,7 @@ impl FixEq {
         }
     }
 
-    /// Set stereo mode (for plugin)
+    /// Set stereo mode
     pub fn set_stereo(&mut self, is_stereo: bool) {
         if self.is_stereo != is_stereo {
             self.is_stereo = is_stereo;
@@ -350,7 +361,7 @@ impl FixEq {
         }
     }
 
-    /// Process a single sample (for plugin - uses left channel processing)
+    /// Process a single sample (uses left channel processing)
     pub fn process(&mut self, input: f32) -> f32 {
         self.process_sample_left(input)
     }
@@ -414,4 +425,3 @@ impl crate::traits::Processor for FixEq {
         Self::new(sample_rate)
     }
 }
-

@@ -34,7 +34,6 @@ pub struct FixEqAnalysis {
     pub correction_b: BandAnalysis,
 }
 
-
 /// Default correction frequencies (Hz)
 pub const DEFAULT_CORRECTION_A_FREQ: f32 = 1000.0;
 pub const DEFAULT_CORRECTION_B_FREQ: f32 = 3000.0;
@@ -52,13 +51,14 @@ pub fn analyze_from_spectrum(spectrum: &SpectralAnalysis) -> FixEqAnalysis {
     };
 
     // Find two correction peaks (500-5000Hz)
-    let ((freq_a, energy_a, conf_a), (freq_b, energy_b, conf_b)) = spectrum.find_two_peaks_deviation(
-        CORRECTION_FREQ_MIN,
-        CORRECTION_FREQ_MAX,
-        CORRECTION_MIN_SPACING_HZ,
-        DEFAULT_CORRECTION_A_FREQ,
-        DEFAULT_CORRECTION_B_FREQ,
-    );
+    let ((freq_a, energy_a, conf_a), (freq_b, energy_b, conf_b)) = spectrum
+        .find_two_peaks_deviation(
+            CORRECTION_FREQ_MIN,
+            CORRECTION_FREQ_MAX,
+            CORRECTION_MIN_SPACING_HZ,
+            DEFAULT_CORRECTION_A_FREQ,
+            DEFAULT_CORRECTION_B_FREQ,
+        );
 
     let correction_a = BandAnalysis {
         center_freq: freq_a,

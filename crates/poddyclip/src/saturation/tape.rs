@@ -88,10 +88,10 @@ impl HysteresisParams {
     fn for_subtle_tape() -> Self {
         Self {
             m_s: 1.0,
-            a: 0.25,      // Shape factor - CRITICAL: must be small (~0.1-0.5)
+            a: 0.25,       // Shape factor - CRITICAL: must be small (~0.1-0.5)
             alpha: 1.6e-3, // Coupling constant (reference value)
-            k: 0.47875,   // Reversibility coefficient (reference value)
-            c: 0.17,      // Irreversibility coefficient (reference value)
+            k: 0.47875,    // Reversibility coefficient (reference value)
+            c: 0.17,       // Irreversibility coefficient (reference value)
         }
     }
 
@@ -135,8 +135,7 @@ impl HysteresisParams {
         };
 
         // dM/dH
-        let dm_dh = (delta_m_safe / (k_delta - self.alpha * delta_m_safe)
-            + self.c * m_an_prime)
+        let dm_dh = (delta_m_safe / (k_delta - self.alpha * delta_m_safe) + self.c * m_an_prime)
             / denom_safe;
 
         // dM/dt = dM/dH * dH/dt
@@ -584,8 +583,14 @@ mod tests {
             let output = glue.process(input);
             // Allow for filter settling and inherent filter deviation
             if i > 20 {
-                assert!((output - input).abs() < 0.05,
-                    "i={}, input={}, output={}, diff={}", i, input, output, (output - input).abs());
+                assert!(
+                    (output - input).abs() < 0.05,
+                    "i={}, input={}, output={}, diff={}",
+                    i,
+                    input,
+                    output,
+                    (output - input).abs()
+                );
             }
         }
     }

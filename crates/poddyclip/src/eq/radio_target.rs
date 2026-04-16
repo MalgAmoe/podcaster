@@ -50,7 +50,7 @@ impl RadioTarget {
         const VOICE_SLOPE_DB_PER_OCTAVE: f32 = -6.0;
 
         // Hyped smiley curve zones
-        const RUMBLE_CUTOFF: f32 = 60.0;  // HPF below this
+        const RUMBLE_CUTOFF: f32 = 60.0; // HPF below this
 
         const BASS_LOW: f32 = 60.0;
         const BASS_HIGH: f32 = 200.0;
@@ -103,7 +103,8 @@ impl RadioTarget {
                 // Shelf-like boost centered around 120 Hz
                 let octaves_from_center = ((freq / BASS_CENTER).log2()).abs();
                 let shelf_width: f32 = 1.5; // octaves (wide shelf)
-                let boost_amount = BASS_BOOST * (-octaves_from_center.powi(2) / (2.0 * shelf_width.powi(2))).exp();
+                let boost_amount =
+                    BASS_BOOST * (-octaves_from_center.powi(2) / (2.0 * shelf_width.powi(2))).exp();
                 target += boost_amount;
             }
             // Zone 3: Mud scoop (300-600 Hz)
@@ -111,7 +112,8 @@ impl RadioTarget {
                 // Bell-shaped dip centered at 400 Hz
                 let octaves_from_center = ((freq / MUD_CENTER).log2()).abs();
                 let bell_width: f32 = 0.8; // octaves
-                let dip_amount = MUD_DIP * (-octaves_from_center.powi(2) / (2.0 * bell_width.powi(2))).exp();
+                let dip_amount =
+                    MUD_DIP * (-octaves_from_center.powi(2) / (2.0 * bell_width.powi(2))).exp();
                 target += dip_amount;
             }
             // Zone 4: Flat mid (600-3000 Hz) - just voice slope
@@ -122,7 +124,8 @@ impl RadioTarget {
             else if freq >= PRESENCE_LOW && freq <= PRESENCE_HIGH {
                 let octaves_from_center = ((freq / PRESENCE_CENTER).log2()).abs();
                 let bell_width: f32 = 0.6; // narrower bell for focused presence
-                let bump_amount = PRESENCE_BUMP * (-octaves_from_center.powi(2) / (2.0 * bell_width.powi(2))).exp();
+                let bump_amount = PRESENCE_BUMP
+                    * (-octaves_from_center.powi(2) / (2.0 * bell_width.powi(2))).exp();
                 target += bump_amount;
             }
             // Zone 6: Air shelf (above 8 kHz)
@@ -185,7 +188,8 @@ mod tests {
         assert!(
             target.curve_db[presence_bin] > voice_at_4k,
             "Presence should be boosted above voice slope: {} > {}",
-            target.curve_db[presence_bin], voice_at_4k
+            target.curve_db[presence_bin],
+            voice_at_4k
         );
     }
 
@@ -201,7 +205,8 @@ mod tests {
         assert!(
             target.curve_db[hz30_bin] < target.curve_db[hz120_bin] - 6.0,
             "30Hz ({:.1} dB) should be >6dB below 120Hz ({:.1} dB) due to rumble rolloff",
-            target.curve_db[hz30_bin], target.curve_db[hz120_bin]
+            target.curve_db[hz30_bin],
+            target.curve_db[hz120_bin]
         );
     }
 
@@ -217,7 +222,12 @@ mod tests {
 
         // Should be within 0.1 dB of pure voice slope (no boost applied)
         let diff = (target.curve_db[hz120_bin] - voice_slope).abs();
-        assert!(diff < 0.1, "120Hz ({:.2} dB) should match voice slope ({:.2} dB), diff={:.3}",
-            target.curve_db[hz120_bin], voice_slope, diff);
+        assert!(
+            diff < 0.1,
+            "120Hz ({:.2} dB) should match voice slope ({:.2} dB), diff={:.3}",
+            target.curve_db[hz120_bin],
+            voice_slope,
+            diff
+        );
     }
 }

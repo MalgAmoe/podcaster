@@ -1,10 +1,7 @@
-//! Common filter implementations shared between CLI and plugin
+//! Common filter implementations for CLI
 //! Uses State Variable Filters (SVF) for numerical stability
 
 use std::f32::consts::PI;
-
-#[cfg(feature = "plugin")]
-use nih_plug::prelude::Enum;
 
 // =============================================================================
 // Constants
@@ -112,13 +109,10 @@ impl SvfBiquad {
 // =============================================================================
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "plugin", derive(Enum))]
 pub enum HighPassSlope {
     /// 12 dB/octave (1 biquad)
-    #[cfg_attr(feature = "plugin", name = "12 dB/oct")]
     Slope12dB,
     /// 24 dB/octave (2 biquads in series)
-    #[cfg_attr(feature = "plugin", name = "24 dB/oct")]
     Slope24dB,
 }
 
@@ -139,12 +133,15 @@ impl HighPassFilter {
         let stage1 = SvfBiquad::new(cutoff, sample_rate, Q_BUTTERWORTH);
         let stage2 = match slope {
             HighPassSlope::Slope12dB => None,
-            HighPassSlope::Slope24dB => {
-                Some(SvfBiquad::new(cutoff, sample_rate, Q_BUTTERWORTH))
-            }
+            HighPassSlope::Slope24dB => Some(SvfBiquad::new(cutoff, sample_rate, Q_BUTTERWORTH)),
         };
 
-        Self { stage1, stage2, sample_rate, cutoff }
+        Self {
+            stage1,
+            stage2,
+            sample_rate,
+            cutoff,
+        }
     }
 
     /// Must be called if the host changes sample rate
@@ -480,7 +477,8 @@ impl SvfHighPass {
 
     pub fn set_freq(&mut self, freq: f32) {
         self.freq = freq.clamp(20.0, self.sample_rate * 0.45);
-        self.biquad.update(self.freq, self.sample_rate, Q_BUTTERWORTH);
+        self.biquad
+            .update(self.freq, self.sample_rate, Q_BUTTERWORTH);
     }
 
     pub fn get_freq(&self) -> f32 {
@@ -565,8 +563,8 @@ impl NotchFilter {
 /// - Butterworth roll-off at the edges (12 dB/oct)
 #[derive(Clone, Debug)]
 pub struct BandExtractFilter {
-    hp: SvfBiquad,      // High-pass at start_freq
-    lp: SvfBiquad,      // Low-pass at stop_freq
+    hp: SvfBiquad, // High-pass at start_freq
+    lp: SvfBiquad, // Low-pass at stop_freq
     start_freq: f32,
     stop_freq: f32,
     sample_rate: f32,
@@ -626,4 +624,3 @@ impl BandExtractFilter {
         self.lp.reset();
     }
 }
-
