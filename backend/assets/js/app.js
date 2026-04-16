@@ -46,9 +46,7 @@ if (window.userToken && !window.isGuest) {
 const solidRoot = document.getElementById("solid-process-app");
 if (solidRoot) {
   import("./solid/index.jsx").then(({ mountApp }) => {
-    const locale = document.documentElement.lang || "en";
-    const basePath = locale === "en" ? "/app" : `/${locale}/app`;
-    mountApp(solidRoot, basePath);
+    mountApp(solidRoot, "/app");
   });
 }
 

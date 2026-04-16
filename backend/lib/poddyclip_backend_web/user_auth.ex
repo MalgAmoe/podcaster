@@ -43,16 +43,19 @@ defmodule PoddyclipBackendWeb.UserAuth do
   # Validate redirect path to prevent open redirect attacks.
   # Only allows relative paths starting with / (not // or external URLs).
   defp safe_redirect_path(nil), do: nil
+
   defp safe_redirect_path(path) when is_binary(path) do
     cond do
       # Must start with single / (not // which is protocol-relative)
       String.starts_with?(path, "/") and not String.starts_with?(path, "//") ->
         # Ensure no scheme (e.g., /foo://bar)
         if String.contains?(path, "://"), do: nil, else: path
+
       true ->
         nil
     end
   end
+
   defp safe_redirect_path(_), do: nil
 
   @doc """
@@ -140,21 +143,7 @@ defmodule PoddyclipBackendWeb.UserAuth do
   end
 
   # This function renews the session ID and erases the whole
-  # session to avoid fixation attacks. If there is any data
-  # in the session you may want to preserve after log in/log out,
-  # you must explicitly fetch the session data before clearing
-  # and then immediately set it after clearing, for example:
-  #
-  #     defp renew_session(conn, _user) do
-  #       delete_csrf_token()
-  #       preferred_locale = get_session(conn, :preferred_locale)
-  #
-  #       conn
-  #       |> configure_session(renew: true)
-  #       |> clear_session()
-  #       |> put_session(:preferred_locale, preferred_locale)
-  #     end
-  #
+  # session to avoid fixation attacks.
   defp renew_session(conn, _user) do
     delete_csrf_token()
 
