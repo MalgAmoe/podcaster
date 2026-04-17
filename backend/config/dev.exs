@@ -49,8 +49,6 @@ config :poddyclip_backend, PoddyclipBackendWeb.Endpoint,
     patterns: [
       # Static assets, except user uploads
       ~r"priv/static/(?!uploads/).*\.(js|css|png|jpeg|jpg|gif|svg)$",
-      # Gettext translations
-      ~r"priv/gettext/.*\.po$",
       # Router, Controllers, LiveViews and LiveComponents
       ~r"lib/poddyclip_backend_web/router\.ex$",
       ~r"lib/poddyclip_backend_web/(controllers|live|components)/.*\.(ex|heex)$"

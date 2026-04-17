@@ -177,7 +177,6 @@ pub async fn create_s3_job(
             .to_string()
     });
 
-    // Build ProcessConfig from strength
     let mut config = ProcessConfig::new();
 
     // Apply output format settings

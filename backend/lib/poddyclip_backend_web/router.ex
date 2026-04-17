@@ -95,7 +95,6 @@ defmodule PoddyclipBackendWeb.Router do
     post("/jobs/:id/dismiss", ProcessController, :dismiss_job)
     get("/jobs/:id/download_url", ProcessController, :download_url)
     get("/user", ProcessController, :current_user)
-    post("/feedback", FeedbackController, :create)
   end
 
   # Admin routes are served on a separate endpoint (AdminEndpoint on port 4001)
