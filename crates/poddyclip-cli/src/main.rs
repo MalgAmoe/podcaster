@@ -1,10 +1,12 @@
-mod chain;
+//! Internal command-line tool for exercising the DSP library on real files.
+//!
+//! The CLI is used for experimentation, benchmarking, and checking settings. It
+//! is intentionally not treated as the production truth for web behavior.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use anyhow::{bail, Result};
-use chain::{ChainPreset, CompressorType, OutputSetting, ProcessorSetting};
+use anyhow::{anyhow, bail, Result};
 use clap::Parser;
 use hound::{SampleFormat, WavSpec, WavWriter};
 use symphonia::core::audio::SampleBuffer;
@@ -170,17 +172,6 @@ struct Args {
     #[arg(long, default_value_t = 2, value_parser = clap::value_parser!(u8).range(1..=3))]
     buttercomp_preset: u8,
 
-    // =========================================================================
-    // CHAIN PRESETS
-    // =========================================================================
-    /// Use a chain preset from chains/ directory
-    #[arg(long, value_name = "NAME")]
-    chain: Option<String>,
-
-    /// List available chain presets
-    #[arg(long)]
-    list_chains: bool,
-
     /// Show per-stage timing breakdown
     #[arg(long)]
     benchmark: bool,
@@ -304,26 +295,6 @@ fn main() -> Result<()> {
     let args = Args::parse();
 
     // =========================================================================
-    // LIST CHAINS (early exit)
-    // =========================================================================
-    if args.list_chains {
-        let chains = chain::list_chains();
-        if chains.is_empty() {
-            println!("No chain presets found in chains/ directory");
-        } else {
-            println!("Available chain presets:");
-            for (name, desc) in chains {
-                if desc.is_empty() {
-                    println!("  {}", name);
-                } else {
-                    println!("  {} - {}", name, desc);
-                }
-            }
-        }
-        return Ok(());
-    }
-
-    // =========================================================================
     // VALIDATE INPUT
     // =========================================================================
     let input = match args.input {
@@ -333,109 +304,28 @@ fn main() -> Result<()> {
         }
     };
 
-    // =========================================================================
-    // LOAD CHAIN PRESET (if specified)
-    // =========================================================================
-    let chain_preset: Option<ChainPreset> = if let Some(ref name) = args.chain {
-        match chain::load_chain(name) {
-            Ok(preset) => {
-                println!(
-                    "Using chain: {} ({})",
-                    preset.name,
-                    preset.description.as_deref().unwrap_or("")
-                );
-                Some(preset)
-            }
-            Err(e) => {
-                bail!("{}", e);
-            }
-        }
+    let denoiser_preset = args.preset;
+    let expander_enabled = !args.disable_expander;
+    let expander_preset = args.expander_preset;
+    let comp_enabled = !args.disable_comp;
+    let use_fet = args.fet;
+    let comp_preset = if use_fet {
+        args.fetcomp_preset
     } else {
-        None
+        args.peakcomp_preset
     };
-
-    // =========================================================================
-    // RESOLVE SETTINGS (CLI overrides chain, chain overrides defaults)
-    // =========================================================================
-    // Helper to check if CLI arg was explicitly set (not default)
-    // Since clap doesn't track this directly, we use a convention:
-    // - For presets: CLI wins if != 3 (default), otherwise use chain
-    // - For bools: CLI wins (disable flags)
-
-    // Denoiser preset
-    let denoiser_preset = chain_preset
-        .as_ref()
-        .map(|c| c.denoiser)
-        .unwrap_or(args.preset);
-    let denoiser_preset = if args.preset != DEFAULT_PRESET {
-        args.preset
-    } else {
-        denoiser_preset
-    };
-
-    // Expander
-    let (expander_enabled, expander_preset) = resolve_processor_setting(
-        !args.disable_expander,
-        args.expander_preset,
-        chain_preset.as_ref().map(|c| &c.expander),
-    );
-
-    // Compressor
-    let (comp_enabled, use_fet, comp_preset) = resolve_compressor_setting(
-        !args.disable_comp,
-        args.fet,
-        args.peakcomp_preset,
-        args.fetcomp_preset,
-        chain_preset.as_ref().map(|c| &c.compressor),
-    );
-
-    // FixEQ
-    let fixeq_enabled = if args.disable_fixeq {
-        false
-    } else {
-        chain_preset.as_ref().map(|c| c.fixeq).unwrap_or(true)
-    };
-
-    // DeEsser
-    let deesser_enabled = if args.disable_deesser {
-        false
-    } else {
-        chain_preset.as_ref().map(|c| c.deesser).unwrap_or(true)
-    };
-
-    // Saturation (Channel9)
-    let (saturation_enabled, saturation_preset) = resolve_processor_setting(
-        !args.disable_saturation,
-        args.saturation_preset,
-        chain_preset.as_ref().map(|c| &c.saturation),
-    );
-
-    // ButterComp
-    let (buttercomp_enabled, buttercomp_preset) = resolve_processor_setting(
-        !args.disable_buttercomp,
-        args.buttercomp_preset,
-        chain_preset.as_ref().map(|c| &c.buttercomp),
-    );
-
-    // EnhanceEQ
-    let (enhanceeq_enabled, eq_preset) = resolve_processor_setting(
-        !args.disable_enhanceeq,
-        args.eq_preset,
-        chain_preset.as_ref().map(|c| &c.enhanceeq),
-    );
-
-    // TapeGlue
-    let (tape_enabled, tape_preset) = resolve_processor_setting(
-        !args.disable_tape,
-        args.saturation_preset, // TapeGlue uses saturation preset
-        chain_preset.as_ref().map(|c| &c.tape),
-    );
-
-    // Output (LUFS + limiter paired)
-    let (output_enabled, lufs_target) = resolve_output_setting(
-        !args.disable_limiter,
-        chain_preset.as_ref().map(|c| &c.output),
-    );
+    let fixeq_enabled = !args.disable_fixeq;
+    let deesser_enabled = !args.disable_deesser;
+    let saturation_enabled = !args.disable_saturation;
+    let saturation_preset = args.saturation_preset;
+    let buttercomp_enabled = !args.disable_buttercomp;
+    let buttercomp_preset = args.buttercomp_preset;
+    let enhanceeq_enabled = !args.disable_enhanceeq;
+    let eq_preset = args.eq_preset;
+    let tape_enabled = !args.disable_tape;
+    let tape_preset = args.saturation_preset;
+    let output_enabled = !args.disable_limiter;
+    let lufs_target = -16.0;
 
     // =========================================================================
     // TIMING SETUP
@@ -560,7 +450,7 @@ fn main() -> Result<()> {
 
         let mut dereverb =
             poddyclip::dereverb::DeReverbProcessor::new_with_preset(sample_rate, dereverb_preset)
-                .expect("Invalid dereverb preset");
+                .ok_or_else(|| anyhow!("Invalid dereverb preset {}", dereverb_preset))?;
         dereverb.init_with_analysis(&reverb_analysis);
 
         if is_stereo {
@@ -593,20 +483,25 @@ fn main() -> Result<()> {
     println!(
         "  Preset: {} ({})",
         preset,
-        get_preset(preset).unwrap().name
+        get_preset(preset)
+            .ok_or_else(|| anyhow!("Invalid denoiser preset {}", preset))?
+            .name
     );
     if is_stereo {
         let mut left_denoiser =
-            RealtimeDenoiser::new_with_preset(sample_rate, preset).expect("Invalid preset");
+            RealtimeDenoiser::new_with_preset(sample_rate, preset)
+                .ok_or_else(|| anyhow!("Invalid denoiser preset {}", preset))?;
         let mut right_denoiser =
-            RealtimeDenoiser::new_with_preset(sample_rate, preset).expect("Invalid preset");
+            RealtimeDenoiser::new_with_preset(sample_rate, preset)
+                .ok_or_else(|| anyhow!("Invalid denoiser preset {}", preset))?;
         left_denoiser.init_with_noise_floor(&result.noise_floor);
         right_denoiser.init_with_noise_floor(&result.noise_floor);
         samples[0] = left_denoiser.process(&samples[0]);
         samples[1] = right_denoiser.process(&samples[1]);
     } else {
         let mut denoiser =
-            RealtimeDenoiser::new_with_preset(sample_rate, preset).expect("Invalid preset");
+            RealtimeDenoiser::new_with_preset(sample_rate, preset)
+                .ok_or_else(|| anyhow!("Invalid denoiser preset {}", preset))?;
         denoiser.init_with_noise_floor(&result.noise_floor);
         samples[0] = denoiser.process(&samples[0]);
     }
@@ -674,9 +569,9 @@ fn main() -> Result<()> {
 
         if is_stereo {
             let mut left_gate = SpectralGate::new_with_preset(sample_rate, args.spectral_gate)
-                .expect("Invalid preset");
+                .ok_or_else(|| anyhow!("Invalid spectral gate preset {}", args.spectral_gate))?;
             let mut right_gate = SpectralGate::new_with_preset(sample_rate, args.spectral_gate)
-                .expect("Invalid preset");
+                .ok_or_else(|| anyhow!("Invalid spectral gate preset {}", args.spectral_gate))?;
             left_gate.init_noise_floor(&result.noise_floor);
             right_gate.init_noise_floor(&result.noise_floor);
             samples[0] = left_gate.process(&samples[0]);
@@ -684,7 +579,7 @@ fn main() -> Result<()> {
             println!("    Max GR: {:.1}dB", left_gate.get_max_gain_reduction_db());
         } else {
             let mut gate = SpectralGate::new_with_preset(sample_rate, args.spectral_gate)
-                .expect("Invalid preset");
+                .ok_or_else(|| anyhow!("Invalid spectral gate preset {}", args.spectral_gate))?;
             gate.init_noise_floor(&result.noise_floor);
             samples[0] = gate.process(&samples[0]);
             println!("    Max GR: {:.1}dB", gate.get_max_gain_reduction_db());
@@ -758,7 +653,7 @@ fn main() -> Result<()> {
     if expander_enabled {
         let start = Instant::now();
         let mut expander = StereoExpander::new_with_preset(sample_rate as f32, expander_preset)
-            .expect("Invalid expander preset");
+            .ok_or_else(|| anyhow!("Invalid expander preset {}", expander_preset))?;
         println!(
             "  Expander: preset {} ({})",
             expander_preset,
@@ -779,7 +674,7 @@ fn main() -> Result<()> {
         let start = Instant::now();
         if use_fet {
             let mut fetcomp = StereoFetCompressor::new_with_preset(sample_rate as f32, comp_preset)
-                .expect("Invalid fetcomp preset");
+                .ok_or_else(|| anyhow!("Invalid FET compressor preset {}", comp_preset))?;
             println!(
                 "  FetComp: preset {} ({})",
                 comp_preset,
@@ -795,7 +690,7 @@ fn main() -> Result<()> {
         } else {
             // Peak compressor with preset
             let mut peakcomp = StereoVcaPeakComp::new_with_preset(sample_rate as f32, comp_preset)
-                .expect("Invalid peakcomp preset");
+                .ok_or_else(|| anyhow!("Invalid peak compressor preset {}", comp_preset))?;
             // Still run analysis to set auto threshold if needed
             let profile = peakcomp.configure(&samples).clone();
             println!(
@@ -874,7 +769,8 @@ fn main() -> Result<()> {
     if saturation_enabled {
         let start = Instant::now();
         let sat_preset =
-            get_saturation_preset(saturation_preset).expect("Invalid saturation preset");
+            get_saturation_preset(saturation_preset)
+                .ok_or_else(|| anyhow!("Invalid saturation preset {}", saturation_preset))?;
         let mut channel9: Stereo<Channel9> = Stereo::new(sample_rate as f32);
         channel9.set_both(|c| c.set_drive(sat_preset.channel9_drive));
         println!(
@@ -896,7 +792,8 @@ fn main() -> Result<()> {
     if buttercomp_enabled {
         let start = Instant::now();
         let buttercomp_amount =
-            get_buttercomp_preset(buttercomp_preset).expect("Invalid buttercomp preset");
+            get_buttercomp_preset(buttercomp_preset)
+                .ok_or_else(|| anyhow!("Invalid ButterComp preset {}", buttercomp_preset))?;
         let mut compressor: Stereo<ButterComp2> = Stereo::new(sample_rate as f32);
         compressor.set_both(|c| c.set_compress(buttercomp_amount));
         println!(
@@ -924,7 +821,8 @@ fn main() -> Result<()> {
     // EnhanceEQ (or RadioVoice)
     if !args.radio && enhanceeq_enabled {
         let start = Instant::now();
-        let eq_preset_data = get_eq_preset(eq_preset).expect("Invalid EQ preset");
+        let eq_preset_data =
+            get_eq_preset(eq_preset).ok_or_else(|| anyhow!("Invalid EQ preset {}", eq_preset))?;
         let enhance_spectrum = analysis::SpectralAnalysis::new(&mono_for_enhance, sample_rate);
         let mut enhanceeq_proc = StereoEnhanceEq::new(sample_rate as f32);
         enhanceeq_proc.configure_from_spectrum(&enhance_spectrum);
@@ -960,7 +858,8 @@ fn main() -> Result<()> {
     // TapeGlue
     if tape_enabled {
         let start = Instant::now();
-        let sat_preset = get_saturation_preset(tape_preset).expect("Invalid saturation preset");
+        let sat_preset = get_saturation_preset(tape_preset)
+            .ok_or_else(|| anyhow!("Invalid saturation preset {}", tape_preset))?;
         let mut tape_left = TapeGlue::new(sample_rate as f64);
         let mut tape_right = TapeGlue::new(sample_rate as f64);
         tape_left.set_warmth(sat_preset.tape_warmth);
@@ -1109,106 +1008,6 @@ fn main() -> Result<()> {
     }
 
     Ok(())
-}
-
-/// Resolve processor setting from CLI args and chain preset
-/// Returns (enabled, preset)
-fn resolve_processor_setting(
-    cli_enabled: bool,
-    cli_preset: u8,
-    chain_setting: Option<&ProcessorSetting>,
-) -> (bool, u8) {
-    // CLI disable flag always wins
-    if !cli_enabled {
-        return (false, cli_preset);
-    }
-
-    // Check chain preset
-    match chain_setting {
-        Some(ProcessorSetting::Disabled) => (false, 2),
-        Some(ProcessorSetting::Preset(p)) => {
-            // CLI preset wins if explicitly set (not default)
-            if cli_preset != 2 {
-                (true, cli_preset)
-            } else {
-                (true, *p)
-            }
-        }
-        Some(ProcessorSetting::Default) | None => {
-            // Use CLI preset (or default 2)
-            (true, cli_preset)
-        }
-    }
-}
-
-/// Resolve compressor setting from CLI args and chain preset
-/// Returns (enabled, use_fet, preset)
-fn resolve_compressor_setting(
-    cli_enabled: bool,
-    cli_use_fet: bool,
-    cli_peak_preset: u8,
-    cli_fet_preset: u8,
-    chain_setting: Option<&chain::CompressorSetting>,
-) -> (bool, bool, u8) {
-    // CLI disable flag always wins
-    if !cli_enabled {
-        return (false, false, 2);
-    }
-
-    match chain_setting {
-        Some(chain::CompressorSetting { enabled: false, .. }) => (false, false, 2),
-        Some(chain::CompressorSetting {
-            comp_type,
-            preset,
-            enabled: true,
-        }) => {
-            // CLI --fet flag overrides chain type
-            let use_fet = if cli_use_fet {
-                true
-            } else {
-                *comp_type == CompressorType::Fet
-            };
-
-            // CLI preset overrides chain if explicitly set
-            let final_preset = if use_fet {
-                if cli_fet_preset != 2 {
-                    cli_fet_preset
-                } else {
-                    *preset
-                }
-            } else if cli_peak_preset != 2 {
-                cli_peak_preset
-            } else {
-                *preset
-            };
-
-            (true, use_fet, final_preset)
-        }
-        None => {
-            // No chain, use CLI settings
-            let preset = if cli_use_fet {
-                cli_fet_preset
-            } else {
-                cli_peak_preset
-            };
-            (true, cli_use_fet, preset)
-        }
-    }
-}
-
-/// Resolve output setting from CLI args and chain preset
-/// Returns (enabled, lufs_target)
-fn resolve_output_setting(cli_enabled: bool, chain_setting: Option<&OutputSetting>) -> (bool, f32) {
-    // CLI disable flag always wins
-    if !cli_enabled {
-        return (false, -16.0);
-    }
-
-    match chain_setting {
-        Some(OutputSetting::Disabled) => (false, -16.0),
-        Some(OutputSetting::LufsTarget(t)) => (true, *t as f32),
-        Some(OutputSetting::Default) | None => (true, -16.0),
-    }
 }
 
 fn load_audio(input_path: &Path) -> Result<(Vec<Vec<f32>>, u32)> {

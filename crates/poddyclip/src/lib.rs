@@ -8,6 +8,9 @@
 //! - Saturation effects
 //! - Audio repair (declicking) - offline only
 //! - AI-based denoising (DeepFilterNet) - optional, voice-focused
+//!
+//! This crate stays intentionally broad so the API and internal CLI can
+//! experiment without trimming library surface area to current production use.
 
 pub mod analysis;
 pub mod denoiser;

@@ -14,7 +14,7 @@ use tower_http::{
     limit::RequestBodyLimitLayer,
     trace::TraceLayer,
 };
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use poddyclip_api::handlers::{create_s3_job, delete_job, health};
@@ -136,19 +136,27 @@ async fn main() {
 
     // Start server with graceful shutdown
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    let listener = TcpListener::bind(addr).await.unwrap_or_else(|e| {
-        panic!(
-            "Failed to bind to {}: {}. Check if the port is already in use or you have permission to bind.",
-            addr, e
-        )
-    });
+    let listener = match TcpListener::bind(addr).await {
+        Ok(listener) => listener,
+        Err(e) => {
+            error!(
+                "Failed to bind to {}: {}. Check if the port is already in use or you have permission to bind.",
+                addr, e
+            );
+            std::process::exit(1);
+        }
+    };
     info!("Listening on http://{}", addr);
 
     if let Err(e) = axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
     {
-        panic!("Server error: {}. The server encountered a fatal error and must exit.", e);
+        error!(
+            "Server error: {}. The server encountered a fatal error and must exit.",
+            e
+        );
+        std::process::exit(1);
     }
 
     info!("Server shut down gracefully");
@@ -156,17 +164,21 @@ async fn main() {
 
 async fn shutdown_signal() {
     let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .expect("Failed to install Ctrl+C handler");
+        if let Err(e) = signal::ctrl_c().await {
+            error!("Failed to install Ctrl+C handler: {}", e);
+        }
     };
 
     #[cfg(unix)]
     let terminate = async {
-        signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("Failed to install SIGTERM handler")
-            .recv()
-            .await;
+        match signal::unix::signal(signal::unix::SignalKind::terminate()) {
+            Ok(mut signal) => {
+                signal.recv().await;
+            }
+            Err(e) => {
+                error!("Failed to install SIGTERM handler: {}", e);
+            }
+        }
     };
 
     #[cfg(not(unix))]
@@ -187,7 +199,7 @@ async fn cleanup_task(state: AppState) {
 
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
 
         let mut to_remove = Vec::new();

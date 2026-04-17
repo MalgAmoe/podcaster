@@ -1,3 +1,9 @@
+//! Production HTTP service and orchestration layer for the Poddyclip DSP library.
+//!
+//! `poddyclip-api` is the production processing path used by the Phoenix app.
+//! It owns job orchestration, storage, webhooks, and the narrower web-facing
+//! processing pipeline built on top of the broader `poddyclip` library.
+
 pub mod audio;
 pub mod auth;
 pub mod error;

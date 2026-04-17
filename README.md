@@ -6,19 +6,22 @@ Only pay for what you eat.
 
 ## Overview
 
-Poddyclip is a Rust workspace with two components:
+Poddyclip is a Rust workspace with three components:
 
-- **poddyclip** - Core audio processing library (~13,000 lines)
-- **poddyclip-cli** - Command-line tool for batch processing
+- **poddyclip** - Core audio processing library
+- **poddyclip-cli** - Internal command-line tool for testing ideas, checking settings on real files, and benchmarking processors
+- **poddyclip-api** - HTTP service used by the Phoenix app for production processing
 
 ## Installation
 
 ```bash
-# Build CLI
+# Build the internal CLI tool
 cargo build --release -p poddyclip-cli
 ```
 
 ## CLI Usage
+
+The CLI is primarily for internal testing and benchmarking.
 
 **Supported input formats:** WAV, MP3, FLAC (via symphonia)
 **Output format:** WAV
@@ -26,9 +29,6 @@ cargo build --release -p poddyclip-cli
 ```bash
 # Basic processing
 poddyclip input.wav -o output.wav
-
-# Use a chain preset
-poddyclip input.wav --chain podcast -o output.wav
 
 # Stronger denoising with de-reverb
 poddyclip input.wav --preset 4 --dereverb 3 -o output.wav
@@ -38,9 +38,6 @@ poddyclip input.wav --fet -o output.wav
 
 # Remove tonal noise (hum, whine)
 poddyclip input.wav --depeak -o output.wav
-
-# List available chain presets
-poddyclip --list-chains
 ```
 
 ### Key Options
@@ -48,7 +45,6 @@ poddyclip --list-chains
 | Option | Description |
 |--------|-------------|
 | `--preset 1-5` | Denoising strength (default: 3) |
-| `--chain NAME` | Use chain preset (podcast, broadcast, gentle) |
 | `--dereverb 1-5` | De-reverb strength (0 = off) |
 | `--spectral-gate 1-5` | Non-stationary noise gate (0 = off) |
 | `--depeak` | Remove tonal peaks (hum, whine) |
@@ -63,35 +59,6 @@ Skip individual processors: `--disable-expander`, `--disable-comp`, `--disable-f
 ### Per-Processor Presets
 
 Fine-tune individual stages: `--expander-preset`, `--peakcomp-preset`, `--fetcomp-preset`, `--saturation-preset`, `--eq-preset`, `--buttercomp-preset`
-
-## Chain Presets
-
-Chain presets combine all processor settings into TOML files in the `chains/` directory.
-
-| Preset | Description | LUFS Target |
-|--------|-------------|-------------|
-| `podcast` | Balanced conversational processing | -16 |
-| `broadcast` | Radio-ready, polished sound | -14 |
-| `gentle` | Minimal processing, preserve dynamics | -18 |
-
-Example (`chains/podcast.toml`):
-```toml
-name = "Podcast"
-description = "Balanced processing for conversational podcasts"
-
-denoiser = 3
-expander = 2
-compressor = { type = "peak", preset = 3 }
-fixeq = true
-deesser = true
-saturation = 2
-buttercomp = 3
-enhanceeq = 3
-tape = 2
-output = -16
-```
-
-Set processors to `false` to disable, or `1-5` for preset level.
 
 ## Processing Chain
 
@@ -166,8 +133,8 @@ crates/poddyclip/src/
 ├── stft/          # FFT infrastructure
 └── traits.rs      # AudioProcessor, StereoProcessor traits
 
-crates/poddyclip-cli/    # Command-line interface
-chains/                  # TOML chain presets
+crates/poddyclip-cli/    # Internal command-line tool
+crates/poddyclip-api/    # HTTP processing service
 ```
 
 ## Preset Levels

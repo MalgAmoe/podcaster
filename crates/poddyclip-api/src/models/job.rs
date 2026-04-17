@@ -80,7 +80,7 @@ impl Job {
     pub fn new(id: Uuid, config: ProcessConfig, input_filename: String, input_size_bytes: usize) -> Self {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
 
         Self {

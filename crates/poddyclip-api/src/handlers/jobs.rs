@@ -236,10 +236,22 @@ pub async fn create_s3_job(
         }
 
         // Acquire permit to limit concurrent processing (prevents CPU thrashing)
-        let _permit = semaphore
-            .acquire_owned()
-            .await
-            .expect("semaphore closed");
+        let _permit = match semaphore.acquire_owned().await {
+            Ok(permit) => permit,
+            Err(e) => {
+                error!(job_id = %job_id, error = %e, "Processing semaphore closed");
+                state_clone.update_job(&job_id, |j| {
+                    j.status = JobStatus::Failed;
+                    j.error = Some("Processing unavailable".to_string());
+                    j.updated_at = now();
+                });
+
+                if let Some(job) = state_clone.get_job(&job_id) {
+                    webhook_client.notify(&job, None).await;
+                }
+                return;
+            }
+        };
 
         let start_time = Instant::now();
 
@@ -472,7 +484,7 @@ pub async fn create_s3_job(
 fn now() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or_default()
         .as_secs()
 }
 
