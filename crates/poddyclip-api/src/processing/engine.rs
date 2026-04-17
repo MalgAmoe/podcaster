@@ -4,8 +4,10 @@ use anyhow::Result;
 use thiserror::Error;
 use tracing::{debug, info, warn};
 
-#[cfg(feature = "deepfilter")]
-use poddyclip::deepfilter::{analyze_for_deepfilter, DeepFilterDenoiser};
+#[cfg(feature = "mossformer2")]
+use poddyclip::ai_clean::AiCleanProcessor;
+#[cfg(feature = "mossformer2")]
+use poddyclip::sample_rate::resample_mono;
 
 use poddyclip::analysis;
 use poddyclip::analysis::lufs::measure_integrated_lufs;
@@ -26,8 +28,25 @@ use crate::models::ProcessConfig;
 #[error("Job was cancelled")]
 pub struct CancelledError;
 
-/// Progress callback type - returns Ok(()) to continue, Err to cancel
-pub type ProgressCallback = Box<dyn Fn(&str, u8) -> Result<(), CancelledError> + Send>;
+#[derive(Debug, Clone, Copy)]
+pub struct ProgressUpdate {
+    pub stage: &'static str,
+    pub stage_index: u8,
+    pub stage_progress: f32,
+}
+
+impl ProgressUpdate {
+    pub fn new(stage: &'static str, stage_index: u8, stage_progress: f32) -> Self {
+        Self {
+            stage,
+            stage_index,
+            stage_progress,
+        }
+    }
+}
+
+/// Progress callback type - returns Ok(()) to continue, Err to cancel.
+pub type ProgressCallback = Box<dyn Fn(ProgressUpdate) -> Result<(), CancelledError> + Send>;
 
 /// Processing stages for progress tracking
 const STAGES: &[&str] = &[
@@ -55,9 +74,9 @@ pub fn process_audio(
 ) -> Result<()> {
     let is_stereo = samples.len() >= 2;
 
-    let report = |stage: &str, index: u8| -> Result<()> {
+    let report = |stage: &'static str, index: u8| -> Result<()> {
         if let Some(ref cb) = on_progress {
-            cb(stage, index).map_err(|e| anyhow::anyhow!(e))?;
+            cb(ProgressUpdate::new(stage, index, 0.0)).map_err(|e| anyhow::anyhow!(e))?;
         }
         Ok(())
     };
@@ -116,39 +135,61 @@ pub fn process_audio(
     apply_gain(samples, gain_db);
 
     // =========================================================================
-    // DENOISE (DeepFilterNet)
+    // DENOISE (AI Clean)
     // =========================================================================
     report("denoise", 3)?;
 
-    #[cfg(feature = "deepfilter")]
+    #[cfg(feature = "mossformer2")]
     {
-        let analysis = analyze_for_deepfilter(&samples[0], sample_rate);
-        info!(
-            "Denoise: SNR {:.1}dB ({})",
-            analysis.estimated_snr,
-            analysis.noise_severity()
-        );
-
-        match DeepFilterDenoiser::new_with_analysis(sample_rate, &analysis) {
+        match AiCleanProcessor::new(48_000) {
             Ok(mut denoiser) => {
+                let left_input = resample_mono(&samples[0], sample_rate, denoiser.model_sample_rate())?;
+                let plan = denoiser.analyze_run(left_input.len());
+                info!(
+                    "AI clean: MossFormer2 mode={:?} segments={} input_sr={} model_sr={}",
+                    plan.mode,
+                    plan.segment_count,
+                    sample_rate,
+                    denoiser.model_sample_rate(),
+                );
+
+                let progress = on_progress.as_ref();
                 if is_stereo {
-                    samples[0] = denoiser.process_with_analysis(&samples[0], &analysis);
-                    denoiser.reset();
-                    let analysis_r = analyze_for_deepfilter(&samples[1], sample_rate);
-                    samples[1] = denoiser.process_with_analysis(&samples[1], &analysis_r);
+                    let right_input =
+                        resample_mono(&samples[1], sample_rate, denoiser.model_sample_rate())?;
+                    let left_output = denoiser.process_with_progress(&left_input, |ai_progress| {
+                        if let Some(cb) = progress {
+                            Ok(cb(ProgressUpdate::new("denoise", 3, ai_progress.fraction_complete))?)
+                        } else {
+                            Ok(())
+                        }
+                    })?;
+                    let right_output = denoiser.process(&right_input)?;
+                    samples[0] =
+                        resample_mono(&left_output, denoiser.model_sample_rate(), sample_rate)?;
+                    samples[1] =
+                        resample_mono(&right_output, denoiser.model_sample_rate(), sample_rate)?;
                 } else {
-                    samples[0] = denoiser.process_with_analysis(&samples[0], &analysis);
+                    let output = denoiser.process_with_progress(&left_input, |ai_progress| {
+                        if let Some(cb) = progress {
+                            Ok(cb(ProgressUpdate::new("denoise", 3, ai_progress.fraction_complete))?)
+                        } else {
+                            Ok(())
+                        }
+                    })?;
+                    samples[0] =
+                        resample_mono(&output, denoiser.model_sample_rate(), sample_rate)?;
                 }
             }
             Err(e) => {
-                warn!("Denoise unavailable: {}", e);
+                warn!("AI clean unavailable: {}", e);
             }
         }
     }
 
-    #[cfg(not(feature = "deepfilter"))]
+    #[cfg(not(feature = "mossformer2"))]
     {
-        warn!("Denoise skipped: deepfilter feature not enabled");
+        warn!("Denoise skipped: mossformer2 feature not enabled");
     }
 
     // =========================================================================

@@ -15,7 +15,7 @@ use uuid::Uuid;
 use crate::audio::{decode_audio, encode_mp3, encode_wav};
 use crate::error::ApiError;
 use crate::models::{Job, JobStatus, OutputFormat, ProcessConfig, ProcessResponse};
-use crate::processing::{get_total_stages, process_audio, CancelledError};
+use crate::processing::{get_total_stages, process_audio, CancelledError, ProgressUpdate};
 use crate::state::AppState;
 use crate::storage::Storage;
 
@@ -308,17 +308,28 @@ pub async fn create_s3_job(
 
                 // Progress callback that updates job state, sends webhook, and checks for cancellation
                 // Note: index is offset by 1 to account for "waiting" stage (index 0)
-                let progress_callback = Box::new(move |stage: &str, index: u8| -> Result<(), CancelledError> {
+                let progress_callback = Box::new(move |update: ProgressUpdate| -> Result<(), CancelledError> {
                     // Check if job was cancelled
                     if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
-                        info!("Job {} cancelled at stage {}", job_id, stage);
+                        info!("Job {} cancelled at stage {}", job_id, update.stage);
                         return Err(CancelledError);
                     }
 
-                    let adjusted_index = index + 1; // +1 for "waiting" stage
-                    debug!("Job {} progress: {} ({}/{})", job_id, stage, adjusted_index, get_total_stages());
+                    let adjusted_index = update.stage_index + 1; // +1 for "waiting" stage
+                    debug!(
+                        "Job {} progress: {} ({}/{}) {:.0}%",
+                        job_id,
+                        update.stage,
+                        adjusted_index,
+                        get_total_stages(),
+                        update.stage_progress * 100.0
+                    );
                     progress_state.update_job(&job_id, |j| {
-                        j.progress.update(stage, adjusted_index);
+                        j.progress.update_with_stage_progress(
+                            update.stage,
+                            adjusted_index,
+                            update.stage_progress,
+                        );
                         j.updated_at = now();
                     });
 

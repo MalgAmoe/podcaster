@@ -18,6 +18,10 @@ use symphonia::core::probe::Hint;
 
 use poddyclip::analysis;
 use poddyclip::analysis::lufs::measure_integrated_lufs;
+#[cfg(feature = "mossformer2")]
+use poddyclip::ai_clean::{AiCleanMode, AiCleanProcessor};
+#[cfg(feature = "mossformer2")]
+use poddyclip::sample_rate::resample_mono;
 use poddyclip::denoiser::{
     analyze_audio, detect_tonal_peaks, get_gate_preset_name, get_preset, PeakAttenuator,
     PeakAttenuatorParams, RealtimeDenoiser, SpectralGate, DEFAULT_PRESET, PRESETS,
@@ -61,6 +65,10 @@ struct Args {
     #[arg(short, long, default_value_t = DEFAULT_PRESET, value_parser = clap::value_parser!(u8).range(1..=3))]
     preset: u8,
 
+    /// Enable the spectral denoiser
+    #[arg(long)]
+    denoise: bool,
+
     /// High-pass filter slope: 12 or 24 dB/octave (filters applied before denoising)
     #[arg(long, default_value_t = 24, value_parser = clap::value_parser!(u8).range(12..=24))]
     hp_slope: u8,
@@ -89,8 +97,8 @@ struct Args {
     #[arg(long, default_value_t = 0, value_parser = clap::value_parser!(u8).range(0..=3))]
     dereverb: u8,
 
-    /// Use AI (DeepFilterNet) denoiser for voice (auto-tuned based on SNR)
-    #[cfg(feature = "deepfilter")]
+    /// Use AI voice cleaning (MossFormer2)
+    #[cfg(feature = "mossformer2")]
     #[arg(long)]
     ai_denoise: bool,
 
@@ -305,6 +313,7 @@ fn main() -> Result<()> {
     };
 
     let denoiser_preset = args.preset;
+    let denoiser_preset_index: usize = denoiser_preset.into();
     let expander_enabled = !args.disable_expander;
     let expander_preset = args.expander_preset;
     let comp_enabled = !args.disable_comp;
@@ -467,88 +476,118 @@ fn main() -> Result<()> {
     // =========================================================================
     // DENOISE
     // =========================================================================
-    println!("\n[Denoise]");
-    let start = Instant::now();
-    let preset: usize = denoiser_preset.into();
-
-    // Analyze noise floor (on filtered + gain-normalized audio)
-    let result = analyze_audio(&samples[0], sample_rate);
-    println!(
-        "  SNR: {:.1}dB, Speech: {:.0}%",
-        result.analysis.overall_snr_db,
-        result.analysis.speech_density * 100.0
-    );
-
-    // Apply denoiser
-    println!(
-        "  Preset: {} ({})",
-        preset,
-        get_preset(preset)
-            .ok_or_else(|| anyhow!("Invalid denoiser preset {}", preset))?
-            .name
-    );
-    if is_stereo {
-        let mut left_denoiser =
-            RealtimeDenoiser::new_with_preset(sample_rate, preset)
-                .ok_or_else(|| anyhow!("Invalid denoiser preset {}", preset))?;
-        let mut right_denoiser =
-            RealtimeDenoiser::new_with_preset(sample_rate, preset)
-                .ok_or_else(|| anyhow!("Invalid denoiser preset {}", preset))?;
-        left_denoiser.init_with_noise_floor(&result.noise_floor);
-        right_denoiser.init_with_noise_floor(&result.noise_floor);
-        samples[0] = left_denoiser.process(&samples[0]);
-        samples[1] = right_denoiser.process(&samples[1]);
-    } else {
-        let mut denoiser =
-            RealtimeDenoiser::new_with_preset(sample_rate, preset)
-                .ok_or_else(|| anyhow!("Invalid denoiser preset {}", preset))?;
-        denoiser.init_with_noise_floor(&result.noise_floor);
-        samples[0] = denoiser.process(&samples[0]);
-    }
-    timings.denoise = start.elapsed();
-
-    // =========================================================================
-    // AI DENOISE (DeepFilterNet) - optional, runs before spectral denoiser
-    // =========================================================================
-    #[cfg(feature = "deepfilter")]
-    if args.ai_denoise {
-        println!("\n[AI Denoise (DeepFilterNet)]");
+    if args.denoise {
+        println!("\n[Denoise]");
         let start = Instant::now();
 
-        // Analyze for auto-tuning
-        let df_analysis = poddyclip::deepfilter::analyze_for_deepfilter(&samples[0], sample_rate);
+        // Analyze noise floor (on filtered + gain-normalized audio)
+        let result = analyze_audio(&samples[0], sample_rate);
         println!(
-            "  SNR: {:.1}dB ({})",
-            df_analysis.estimated_snr,
-            df_analysis.noise_severity()
+            "  SNR: {:.1}dB, Speech: {:.0}%",
+            result.analysis.overall_snr_db,
+            result.analysis.speech_density * 100.0
         );
-        if df_analysis.has_dc_offset {
-            println!("  DC offset detected, will be removed");
-        }
-        if df_analysis.low_freq_energy_ratio > 0.20 {
-            println!(
-                "  Low-freq energy: {:.0}%, applying high-pass",
-                df_analysis.low_freq_energy_ratio * 100.0
-            );
-        }
 
-        // Create denoiser with analysis (builds model with correct params from start)
-        match poddyclip::deepfilter::DeepFilterDenoiser::new_with_analysis(sample_rate, &df_analysis) {
+        println!(
+            "  Preset: {} ({})",
+            denoiser_preset_index,
+            get_preset(denoiser_preset_index)
+                .ok_or_else(|| anyhow!("Invalid denoiser preset {}", denoiser_preset_index))?
+                .name
+        );
+        if is_stereo {
+            let mut left_denoiser =
+                RealtimeDenoiser::new_with_preset(sample_rate, denoiser_preset_index)
+                    .ok_or_else(|| anyhow!("Invalid denoiser preset {}", denoiser_preset_index))?;
+            let mut right_denoiser =
+                RealtimeDenoiser::new_with_preset(sample_rate, denoiser_preset_index)
+                    .ok_or_else(|| anyhow!("Invalid denoiser preset {}", denoiser_preset_index))?;
+            left_denoiser.init_with_noise_floor(&result.noise_floor);
+            right_denoiser.init_with_noise_floor(&result.noise_floor);
+            samples[0] = left_denoiser.process(&samples[0]);
+            samples[1] = right_denoiser.process(&samples[1]);
+        } else {
+            let mut denoiser =
+                RealtimeDenoiser::new_with_preset(sample_rate, denoiser_preset_index)
+                    .ok_or_else(|| anyhow!("Invalid denoiser preset {}", denoiser_preset_index))?;
+            denoiser.init_with_noise_floor(&result.noise_floor);
+            samples[0] = denoiser.process(&samples[0]);
+        }
+        timings.denoise = start.elapsed();
+    }
+
+    // =========================================================================
+    // AI DENOISE (MossFormer2) - optional, runs before spectral denoiser
+    // =========================================================================
+    #[cfg(feature = "mossformer2")]
+    if args.ai_denoise {
+        println!("\n[AI Denoise (MossFormer2)]");
+        let start = Instant::now();
+
+        match AiCleanProcessor::new(48_000) {
             Ok(mut denoiser) => {
-                if is_stereo {
-                    samples[0] = denoiser.process_with_analysis(&samples[0], &df_analysis);
-                    denoiser.reset();
-                    // Re-analyze right channel (may have different noise characteristics)
-                    let df_analysis_r =
-                        poddyclip::deepfilter::analyze_for_deepfilter(&samples[1], sample_rate);
-                    samples[1] = denoiser.process_with_analysis(&samples[1], &df_analysis_r);
-                } else {
-                    samples[0] = denoiser.process_with_analysis(&samples[0], &df_analysis);
+                if sample_rate != denoiser.model_sample_rate() {
+                    println!(
+                        "  Resampling: {} Hz -> {} Hz -> {} Hz",
+                        sample_rate,
+                        denoiser.model_sample_rate(),
+                        sample_rate
+                    );
                 }
-                println!("  AI denoising complete");
+
+                let left_input = resample_mono(&samples[0], sample_rate, denoiser.model_sample_rate())?;
+                let plan = denoiser.analyze_run(left_input.len());
+                println!("  Model sample rate: {} Hz", denoiser.model_sample_rate());
+                match plan.mode {
+                    AiCleanMode::OneShot => println!("  Path: short file (single pass)"),
+                    AiCleanMode::Segmented => {
+                        println!("  Path: long file (segmented)");
+                        println!("  Segments: {}", plan.segment_count);
+                    }
+                }
+
+                if is_stereo {
+                    let right_input =
+                        resample_mono(&samples[1], sample_rate, denoiser.model_sample_rate())?;
+                    let left_output = denoiser.process_with_progress(&left_input, |progress| {
+                        if progress.mode == AiCleanMode::Segmented {
+                            println!(
+                                "  Left channel: segment {}/{}",
+                                progress.completed_segments, progress.total_segments
+                            );
+                        }
+                        Ok(())
+                    })?;
+                    let right_output = denoiser.process_with_progress(&right_input, |progress| {
+                        if progress.mode == AiCleanMode::Segmented {
+                            println!(
+                                "  Right channel: segment {}/{}",
+                                progress.completed_segments, progress.total_segments
+                            );
+                        }
+                        Ok(())
+                    })?;
+                    samples[0] =
+                        resample_mono(&left_output, denoiser.model_sample_rate(), sample_rate)?;
+                    samples[1] =
+                        resample_mono(&right_output, denoiser.model_sample_rate(), sample_rate)?;
+                } else {
+                    let output = denoiser.process_with_progress(&left_input, |progress| {
+                        if progress.mode == AiCleanMode::Segmented {
+                            println!(
+                                "  Segment {}/{}",
+                                progress.completed_segments, progress.total_segments
+                            );
+                        }
+                        Ok(())
+                    })?;
+                    samples[0] =
+                        resample_mono(&output, denoiser.model_sample_rate(), sample_rate)?;
+                }
+                println!("  AI cleaning complete");
             }
             Err(e) => {
-                eprintln!("  Warning: Failed to initialize DeepFilterNet: {}", e);
+                eprintln!("  Warning: Failed to initialize MossFormer2: {}", e);
                 eprintln!("  Skipping AI denoising, will use spectral denoiser only");
             }
         }
@@ -561,6 +600,7 @@ fn main() -> Result<()> {
     if args.spectral_gate > 0 {
         println!("\n[Spectral Gate]");
         let start = Instant::now();
+        let gate_analysis = analyze_audio(&samples[0], sample_rate);
         println!(
             "  Preset: {} ({})",
             args.spectral_gate,
@@ -572,15 +612,15 @@ fn main() -> Result<()> {
                 .ok_or_else(|| anyhow!("Invalid spectral gate preset {}", args.spectral_gate))?;
             let mut right_gate = SpectralGate::new_with_preset(sample_rate, args.spectral_gate)
                 .ok_or_else(|| anyhow!("Invalid spectral gate preset {}", args.spectral_gate))?;
-            left_gate.init_noise_floor(&result.noise_floor);
-            right_gate.init_noise_floor(&result.noise_floor);
+            left_gate.init_noise_floor(&gate_analysis.noise_floor);
+            right_gate.init_noise_floor(&gate_analysis.noise_floor);
             samples[0] = left_gate.process(&samples[0]);
             samples[1] = right_gate.process(&samples[1]);
             println!("    Max GR: {:.1}dB", left_gate.get_max_gain_reduction_db());
         } else {
             let mut gate = SpectralGate::new_with_preset(sample_rate, args.spectral_gate)
                 .ok_or_else(|| anyhow!("Invalid spectral gate preset {}", args.spectral_gate))?;
-            gate.init_noise_floor(&result.noise_floor);
+            gate.init_noise_floor(&gate_analysis.noise_floor);
             samples[0] = gate.process(&samples[0]);
             println!("    Max GR: {:.1}dB", gate.get_max_gain_reduction_db());
         }
@@ -721,7 +761,7 @@ fn main() -> Result<()> {
     if fixeq_enabled {
         let start = Instant::now();
         let mut fixeq = FixEq::new(sample_rate as f32);
-        fixeq.configure_from_spectrum(&spectrum, preset, is_stereo);
+        fixeq.configure_from_spectrum(&spectrum, denoiser_preset_index, is_stereo);
         println!(
             "  FixEq: demud {:.0}%, corrA {:.0}%, corrB {:.0}%",
             fixeq.get_demud_strength() * 100.0,
@@ -987,10 +1027,10 @@ fn main() -> Result<()> {
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("audio");
-        let name = PRESETS[preset - 1].name.to_lowercase();
+        let name = PRESETS[denoiser_preset_index - 1].name.to_lowercase();
         let output_dir = PathBuf::from("sounds_out");
         std::fs::create_dir_all(&output_dir).ok();
-        output_dir.join(format!("{stem}_denoised_{preset}_{name}.wav"))
+        output_dir.join(format!("{stem}_denoised_{denoiser_preset_index}_{name}.wav"))
     });
 
     println!("\nSaving: {}", output_path.display());

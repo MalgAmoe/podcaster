@@ -9,8 +9,8 @@ name = "poddyclip-api"
 path = "src/main.rs"
 
 [features]
-default = ["deepfilter"]
-deepfilter = ["poddyclip/deepfilter"]
+default = ["mossformer2"]
+mossformer2 = ["poddyclip/mossformer2"]
 
 [dependencies]
 # Core library

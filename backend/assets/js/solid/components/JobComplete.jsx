@@ -106,15 +106,15 @@ export function JobComplete() {
         </Show>
 
         <div class="flex gap-3 mt-6">
+          <button onClick={reset} class="btn btn-ghost" aria-label="Upload another file">
+            Feed me more!
+          </button>
           <button onClick={handleDownload} class="btn btn-primary gap-2" aria-label="Download processed audio">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
             Download
-          </button>
-          <button onClick={reset} class="btn btn-ghost" aria-label="Upload another file">
-            Feed me more!
           </button>
         </div>
       </div>

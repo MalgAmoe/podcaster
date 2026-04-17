@@ -70,9 +70,15 @@ impl JobProgress {
     }
 
     pub fn update(&mut self, stage: &str, index: u8) {
+        self.update_with_stage_progress(stage, index, 0.0);
+    }
+
+    pub fn update_with_stage_progress(&mut self, stage: &str, index: u8, stage_progress: f32) {
         self.stage = stage.to_string();
         self.stage_index = index;
-        self.percent_complete = ((index as f32 / self.total_stages as f32) * 100.0) as u8;
+        let clamped_progress = stage_progress.clamp(0.0, 1.0);
+        let blended = (index as f32 + clamped_progress) / self.total_stages as f32;
+        self.percent_complete = (blended * 100.0).min(100.0) as u8;
     }
 }
 

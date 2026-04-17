@@ -7,7 +7,7 @@ The processing pipeline is configured via **strength** (1-3) and an optional **A
 ## Web UI Configuration
 
 - **Strength**: 1-3 (Subtle, Balanced, Intense)
-- **AI Clean**: Optional toggle - isolates voice using deep learning
+- **AI Clean**: Optional toggle - isolates voice using MossFormer2 speech enhancement
 
 ### API
 
@@ -16,8 +16,7 @@ POST /api/jobs
 {
   "s3_key": "inputs/123/audio.mp3",
   "filename": "episode.mp3",
-  "strength": 2,
-  "ai_clean": false
+  "strength": 2
 }
 ```
 
@@ -36,7 +35,7 @@ The processing order is **fixed and immutable**. Strength controls which process
 2. SPECTRAL (STFT-based, mono processing)
    - DeReverb (optional)
    - Denoiser (always on)
-   - AI Denoise (optional, DeepFilterNet)
+   - AI Denoise (optional, MossFormer2)
    - Spectral Gate (optional)
 
 3. DYNAMICS
