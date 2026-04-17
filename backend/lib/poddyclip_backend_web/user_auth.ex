@@ -215,6 +215,23 @@ defmodule PoddyclipBackendWeb.UserAuth do
     end
   end
 
+  @doc """
+  Plug for routes that require a real (non-guest) authenticated user.
+  """
+  def require_non_guest_user(conn, _opts) do
+    user = conn.assigns[:current_scope] && conn.assigns.current_scope.user
+
+    if user && !user.is_guest do
+      conn
+    else
+      conn
+      |> put_flash(:error, "You must log in to access this page.")
+      |> maybe_store_return_to()
+      |> redirect(to: "/users/log-in")
+      |> halt()
+    end
+  end
+
   defp maybe_store_return_to(%{method: "GET"} = conn) do
     put_session(conn, :user_return_to, current_path(conn))
   end

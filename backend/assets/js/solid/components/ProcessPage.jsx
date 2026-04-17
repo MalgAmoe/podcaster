@@ -35,11 +35,13 @@ export function ProcessPage() {
 
   return (
     <div class="min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center p-4">
-      <div class="w-full max-w-lg text-center mb-4">
-        <a href="/feedback" rel="external" class="text-sm text-base-content/40 hover:text-primary transition-colors">
-          Give feedback
-        </a>
-      </div>
+      <Show when={!window.isGuest}>
+        <div class="w-full max-w-lg text-center mb-4">
+          <a href="/feedback" rel="external" class="text-sm text-base-content/40 hover:text-primary transition-colors">
+            Give feedback
+          </a>
+        </div>
+      </Show>
       <div class="card bg-base-200 w-full max-w-lg border border-base-300/60 rounded-3xl shadow-[0_0_60px_-15px_rgba(147,51,234,0.15)]">
         <div class="card-body">
           <Show when={!store.initializing} fallback={
