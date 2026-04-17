@@ -23,25 +23,42 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build Commands
 
 ```bash
-# Build CLI (release)
-cargo build --release -p poddyclip-cli
+# Rust
+cargo build --release -p poddyclip-cli      # CLI
+cargo build --release -p poddyclip-api      # API server
+cargo test                                  # all tests
+cargo test -p poddyclip-api                 # API tests only
 
-# Run tests
-cargo test
+# Phoenix (Elixir)
+cd backend && mix compile
+cd backend && mix test
 
-# Run single test
-cargo test test_name
+# SolidJS frontend
+cd backend/assets && node build.mjs         # one-shot build
+cd backend/assets && node build.mjs --watch # watch mode
 
-# Run CLI
-./target/release/poddyclip input.wav --preset 2
+# Full dev stack (Postgres + MinIO, then API, then Phoenix)
+./dev.sh infra    # terminal 1
+./dev.sh api      # terminal 2  (Rust API on :3000)
+./dev.sh web      # terminal 3  (Phoenix on :4000)
 ```
+
+**macOS gotcha:** `dev.sh` exports `SSL_CERT_FILE=/etc/ssl/cert.pem` on Darwin to work around `rustls-native-certs 0.6.3` choking on macOS keychain certs (produces `InvalidCertificate(BadEncoding)` when connecting to MinIO).
 
 ## Project Structure
 
-Rust workspace with two crates:
+Rust workspace + Elixir/Phoenix app.
 
-- **`crates/poddyclip`** - Core audio processing library (no audio I/O)
-- **`crates/poddyclip-cli`** - Command-line tool using symphonia for input, hound for WAV output
+**Rust crates (`crates/`):**
+- `poddyclip` — Core audio processing library (no audio I/O)
+- `poddyclip-cli` — CLI tool (symphonia in, hound out)
+- `poddyclip-api` — HTTP API (Axum) that Phoenix calls for processing
+
+**Elixir app:**
+- `backend/` — Phoenix 1.8 + LiveView; serves SolidJS frontend at `/app/*`, handles auth/billing/job orchestration. Talks to `poddyclip-api` via HTTP.
+
+**Frontend:**
+- `backend/assets/js/solid/` — SolidJS SPA, bundled into Phoenix static assets.
 
 ## STFT Infrastructure
 
@@ -263,15 +280,13 @@ Complete chain with all stages:
 16. Limiter (true peak -1dB)
 ```
 
-## AI Clean
+## Denoising
 
-Deep learning noise removal that isolates voice and removes everything else. More thorough than spectral denoising but requires additional processing time.
+DeepFilterNet (deep-learning) is the sole denoiser in the API pipeline. It runs unconditionally on every job — there's no toggle and no spectral-subtraction stage anymore.
 
-**API:**
-- `ProcessConfig.ai_denoise: bool` - enable AI cleaning
-- `CreateS3JobRequest.ai_clean: Option<bool>` - override default
-- Default: OFF (user must opt-in)
-- Runs after spectral denoising, before spectral gate
+- Feature-gated in the Rust API by the `deepfilter` feature (default on)
+- Per-channel analysis via `analyze_for_deepfilter` before processing (stereo: analyze + reset + analyze right)
+- The library still exposes `RealtimeDenoiser`, `SpectralGate`, `DeReverbProcessor`, etc. — the CLI may still use them, but the API does not
 
 ## Module Organization
 
@@ -373,28 +388,92 @@ processor.process_stereo(&mut left[0], &mut right[0]);
 4. Export from `lib.rs`
 5. In CLI: use `split_at_mut(1)` pattern for stereo
 
-## API Processing
+## API Processing (`poddyclip-api`)
 
-The `poddyclip-api` crate provides HTTP endpoints for audio processing.
+HTTP server (Axum) that processes audio with a single fixed pipeline. Not configurable per-request — there's no strength selector, no toggles, no presets exposed to the client.
 
 **Features:**
-- `deepfilter` (default) - Enables AI denoiser
+- `deepfilter` (default) — DeepFilterNet AI denoiser
 
-**ProcessConfig fields (key ones):**
-- `ai_denoise: bool` - Enable DeepFilterNet (default: false)
-- `mono: bool` - Enable mono summing / center audio (default: false)
-- `denoiser_preset: u8` - Spectral subtraction level 1-3
-- `dereverb: u8` - DeReverb level 0-3 (0 = off)
-- `spectral_gate: u8` - Gate level 0-3 (0 = off)
+**`ProcessConfig` is built via `ProcessConfig::new()`** — a static preset. There is no `from_strength()` and no runtime branching. Fixed settings:
+- Filters: HP 85Hz @ 24dB/oct
+- Declick: ON
+- Denoise: DeepFilterNet (always)
+- PeakComp: preset 1
+- FixEQ: OFF (reserved — flag exists but default off)
+- DeEsser: ON
+- EnhanceEQ: preset 1
+- FetComp: OFF (reserved)
+- LUFS target: −16
 
-**Configuration:** Voice-only pipeline, configured via `strength` (1-3), `ai_clean` (bool), and `mono` (bool).
-`ProcessConfig::from_strength(strength)` maps strength to all processor settings. `mono` is never auto-enabled by strength.
+**Removed from the API chain** (still in the library — CLI may use them): dereverb, spectral gate, saturation (Channel9), tape, ButterComp, radio voice, mono/center-audio summing, spectral-subtraction denoiser.
 
-**API stages (23 total):**
+**Request body — `CreateS3JobRequest`:**
+- `input_s3_key` (required), `user_id`, `filename`
+- `phoenix_job_id`, `webhook_url`, `webhook_secret`
+- `output_format` ("mp3"/"wav"), `mp3_bitrate` (default 192)
+- No strength, no ai_clean, no mono.
+
+**Pipeline stages (13 total):**
 ```
-0-decoding, 1-filters, 2-input_gain, 3-analyzing_reverb, 4-dereverb,
-5-analyzing_noise, 6-denoise, 7-ai_denoise, 8-spectral_gate,
-9-center_audio, 10-peakcomp, 11-analyzing_eq, 12-fixeq, 13-deesser,
-14-saturation, 15-buttercomp, 16-analyzing_enhance, 17-enhanceeq,
-18-radio, 19-fetcomp, 20-tape, 21-analyzing_levels, 22-output
+0-decoding, 1-filters, 2-input_gain, 3-denoise, 4-peakcomp,
+5-analyzing_eq, 6-fixeq, 7-deesser, 8-analyzing_enhance,
+9-enhanceeq, 10-fetcomp, 11-analyzing_levels, 12-output
 ```
+Stages skip when their processor is disabled; progress indices stay stable.
+
+## Phoenix Backend (`backend/`)
+
+Elixir/Phoenix app that handles auth, billing, job orchestration, and serves the SolidJS frontend. Talks to `poddyclip-api` via HTTP (`PoddyclipBackend.Processing.Client`).
+
+**Key modules:**
+- `PoddyclipBackend.Accounts` — users, sessions, magic-link auth, guest users, guest→user merge
+- `PoddyclipBackend.Billing` — plans, minute packs, Polar integration
+- `PoddyclipBackend.Processing` — job queue (Oban), submit/cancel, lifecycle
+- `PoddyclipBackend.Storage` — S3 (Cloudflare R2) via `ex_aws_s3`, presigned URLs, filter_existing_keys
+- `PoddyclipBackend.Feedback` — form-submitted feedback from `/feedback`
+
+**Routes of note** (`lib/poddyclip_backend_web/router.ex`):
+- `/app` and `/app/*path` → SolidJS app (via `PageController.app`, catch-all)
+- `/api/jobs` (POST) → create job; minimal payload: `s3_key`, `filename`, `duration_seconds`
+- `/api/jobs/current`, `/api/jobs/history`, `/api/jobs/:id/download_url`, etc.
+- `/api/internal/jobs/:id/status` — Rust API webhook callback
+- `/api/webhooks/polar` — Polar billing webhook
+- `/feedback` — form page (Phoenix-rendered), NOT a JSON API
+
+**Workers (Oban):** `ProcessingWorker`, `FreePlanResetWorker`, `SubscriptionExpiryWorker`, `ExpiryNotificationWorker`, `CleanupJobs`, `CleanupOrphanedFiles`, `CleanupExpiredPacks`.
+
+**Admin endpoint** on port 4001 (separate `AdminEndpoint`, only compiled when `ADMIN_ENABLED=true`). Access via SSH tunnel — not exposed publicly.
+
+## Frontend (`backend/assets/js/solid/`)
+
+**Stack:** SolidJS 1.9 + `@solidjs/router` + Tailwind CSS + daisyUI, bundled with esbuild (`build.mjs`). Mounts into `<div id="solid-process-app">` on `/app/*`.
+
+**Routes (client-side):** `/` → `ProcessPage`, `/past-munchings` → `PastMunchingsPage`. Base path is `/app`.
+
+**State:** two contexts — `ProcessContext` (upload/job state, Phoenix Channel subscription for live progress) and `NotificationContext` (toast queue). No i18n.
+
+**Upload flow:** frontend asks `/api/presign-upload` → PUTs file directly to S3 via XHR (progress tracked) → POSTs to `/api/jobs` with just `{s3_key, filename, duration_seconds}`.
+
+**Theme:** custom daisyUI theme `poddyclip` (dark purple, `#9333ea`) in `assets/css/app.css`. DM Sans font.
+
+## Recent cleanup — what was removed
+
+Context for future edits (don't re-add without explicit ask):
+- **Blog** (`nimble_publisher`/`earmark`, markdown posts, `BlogController`, sitemap entries)
+- **Translations** (`gettext`, `Gettext`, `LocaleHelpers`, `SetLocale` plug, `LocaleHook`, all `.po`/`.pot` files, `@solid-primitives/i18n`, `locales/en.js`, `translate.js`)
+- **OpenObserve / LogShipper** (custom Logger `:gen_event` backend, shipper GenServer)
+- **Strength selector** (`ProcessConfig::from_strength`, strength UI, `StrengthKnob.jsx`, strength param across the whole stack)
+- **AI Clean toggle** (now always on)
+- **Center audio / mono summing** (toggle, config field, engine block)
+- **Spectral-subtraction denoiser** (normal `RealtimeDenoiser` path in API; library still has it)
+- **Dereverb, spectral gate, saturation, tape, ButterComp, radio voice** from the API chain (library keeps them)
+- **QualityRating / PmfSurvey** post-job components
+- **JSON feedback API** (`/api/feedback`, `FeedbackController`, `submitFeedback` JS helper) — only the form-based `/feedback` page remains
+- **VST3/CLAP plugin** (`poddyclip-plugin` crate + `xtask` build runner + `nih-plug`/`bundler.toml` tooling) — web-only product now
+
+## Deactivated — kept in code, re-enable later
+
+These are **not dead code** — they're temporarily disabled with routes commented out. Templates, controllers, and schemas are intact.
+- **Legal pages** (`/terms`, `/privacy`, `/legal`) — actions + HEEx templates still exist. Router comments explain: re-enable when the layout/footer has visible links.
+- **User registration page** (`/users/register`) — redirects to `/users/log-in` for now (magic-link auto-creates accounts). `UserRegistrationController` + `user_registration_html/new.html.heex` kept for when a dedicated registration page is needed again.

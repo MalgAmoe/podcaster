@@ -1,9 +1,6 @@
 defmodule PoddyclipBackendWeb.PageController do
   use PoddyclipBackendWeb, :controller
 
-  alias PoddyclipBackend.Processing
-  alias PoddyclipBackend.Storage
-
   # Main app - ensure guest user exists, serve SolidJS app
   def app(conn, _params) do
     conn = PoddyclipBackendWeb.Plugs.EnsureGuestUser.call(conn, [])
@@ -81,39 +78,4 @@ defmodule PoddyclipBackendWeb.PageController do
     |> render(:process)
   end
 
-  def past_munchings(conn, _params) do
-    user = conn.assigns.current_scope.user
-    jobs = load_job_history(user.id)
-
-    conn
-    |> put_layout(false)
-    |> render(:past_munchings, jobs: jobs)
-  end
-
-  defp load_job_history(user_id) do
-    jobs = Processing.list_completed_jobs_for_user(user_id)
-
-    # Get all result keys and batch-check which exist
-    keys = jobs |> Enum.map(& &1.result_s3_key) |> Enum.filter(& &1)
-    existing_keys = Storage.filter_existing_keys(keys) |> MapSet.new()
-
-    jobs
-    |> Enum.filter(&(&1.result_s3_key && MapSet.member?(existing_keys, &1.result_s3_key)))
-    |> Enum.flat_map(fn job ->
-      filename = job.result_s3_key |> String.split("/") |> List.last() || "processed.mp3"
-
-      case Storage.presign_download(job.result_s3_key, filename: filename) do
-        {:ok, download_url} ->
-          [%{
-            id: job.id,
-            filename: filename,
-            inserted_at: job.inserted_at,
-            download_url: download_url
-          }]
-
-        {:error, _reason} ->
-          []
-      end
-    end)
-  end
 end
