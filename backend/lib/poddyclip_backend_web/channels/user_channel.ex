@@ -1,4 +1,8 @@
 defmodule PoddyclipBackendWeb.UserChannel do
+  @moduledoc """
+  `user:navbar` channel pushing live updates to the user's remaining
+  processing seconds.
+  """
   use Phoenix.Channel
 
   alias PoddyclipBackend.Billing

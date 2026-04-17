@@ -1,4 +1,8 @@
 defmodule PoddyclipBackendWeb.PageController do
+  @moduledoc """
+  Public pages: landing redirect, `/app` (SolidJS mount), `/feedback`,
+  `/help`, plus the deactivated legal pages (terms/privacy/legal).
+  """
   use PoddyclipBackendWeb, :controller
 
   # Main app - ensure guest user exists, serve SolidJS app

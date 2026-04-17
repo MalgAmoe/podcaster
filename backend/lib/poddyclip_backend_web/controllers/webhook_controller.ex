@@ -1,4 +1,8 @@
 defmodule PoddyclipBackendWeb.WebhookController do
+  @moduledoc """
+  Receives job status callbacks from the Rust API and time-budget
+  checks used during streaming jobs.
+  """
   use PoddyclipBackendWeb, :controller
   require Logger
 

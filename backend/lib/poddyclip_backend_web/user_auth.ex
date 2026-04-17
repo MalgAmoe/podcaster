@@ -1,4 +1,10 @@
 defmodule PoddyclipBackendWeb.UserAuth do
+  @moduledoc """
+  Session/cookie auth, scope assignment, and route plugs:
+  `require_authenticated_user` (allows guests),
+  `require_non_guest_user` (logged-in only), and
+  `redirect_if_user_is_authenticated`.
+  """
   use PoddyclipBackendWeb, :verified_routes
 
   import Plug.Conn

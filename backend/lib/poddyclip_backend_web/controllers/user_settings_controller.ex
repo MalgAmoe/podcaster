@@ -1,4 +1,7 @@
 defmodule PoddyclipBackendWeb.UserSettingsController do
+  @moduledoc """
+  Email-change confirmation and GDPR data export (rate-limited).
+  """
   use PoddyclipBackendWeb, :controller
 
   alias PoddyclipBackend.{Accounts, RateLimiter}

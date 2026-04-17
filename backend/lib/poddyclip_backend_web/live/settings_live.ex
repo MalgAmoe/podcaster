@@ -1,4 +1,8 @@
 defmodule PoddyclipBackendWeb.SettingsLive do
+  @moduledoc """
+  `/users/settings` — email change, notification preferences, and
+  account deletion. Requires sudo mode (recent authentication).
+  """
   use PoddyclipBackendWeb, :live_view
 
   alias PoddyclipBackend.{Accounts, Billing}

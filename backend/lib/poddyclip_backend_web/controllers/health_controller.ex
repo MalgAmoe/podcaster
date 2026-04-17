@@ -1,4 +1,7 @@
 defmodule PoddyclipBackendWeb.HealthController do
+  @moduledoc """
+  Liveness/readiness probe for k8s. Reports Rust API reachability.
+  """
   use PoddyclipBackendWeb, :controller
 
   alias PoddyclipBackend.Processing.Client

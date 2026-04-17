@@ -1,4 +1,8 @@
 defmodule PoddyclipBackendWeb.JobChannel do
+  @moduledoc """
+  Per-job channel `job:{id}` pushing progress and completion events
+  to the SolidJS client.
+  """
   use Phoenix.Channel
 
   alias PoddyclipBackend.Processing

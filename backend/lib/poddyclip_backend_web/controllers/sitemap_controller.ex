@@ -1,4 +1,7 @@
 defmodule PoddyclipBackendWeb.SitemapController do
+  @moduledoc """
+  Renders `/sitemap.xml` for search engines.
+  """
   use PoddyclipBackendWeb, :controller
 
   @base_url "https://munchycow.com"

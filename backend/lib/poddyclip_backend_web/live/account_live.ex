@@ -1,4 +1,8 @@
 defmodule PoddyclipBackendWeb.AccountLive do
+  @moduledoc """
+  `/account` — plan status, minute-pack balance, and subscription/
+  purchase management via Polar.
+  """
   use PoddyclipBackendWeb, :live_view
 
   alias PoddyclipBackend.{Billing, Polar, Repo}

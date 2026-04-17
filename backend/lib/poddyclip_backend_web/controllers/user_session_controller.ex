@@ -1,4 +1,8 @@
 defmodule PoddyclipBackendWeb.UserSessionController do
+  @moduledoc """
+  Magic-link authentication: request link, confirm, log in, log out.
+  Merges guest sessions into real accounts on first login.
+  """
   use PoddyclipBackendWeb, :controller
 
   alias PoddyclipBackend.Accounts
