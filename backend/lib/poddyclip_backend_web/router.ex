@@ -53,9 +53,10 @@ defmodule PoddyclipBackendWeb.Router do
     pipe_through(:browser)
 
     get("/", PageController, :redirect_to_app)
-    # DEACTIVATED — legal pages temporarily hidden until we add visible links
-    # from the layout/footer. Actions and templates are kept; re-enable these
-    # routes when the legal pages are linked in the UI.
+    # PARKED — legal pages are intentionally kept in the codebase for later
+    # reintroduction, but they are not part of the current public UI.
+    # Keep the controller actions/templates in place, but do not expose the
+    # routes or link to them elsewhere until that work is resumed.
     # get "/terms", PageController, :terms
     # get "/privacy", PageController, :privacy
     # get "/legal", PageController, :legal
@@ -122,10 +123,10 @@ defmodule PoddyclipBackendWeb.Router do
   scope "/", PoddyclipBackendWeb do
     pipe_through([:browser, :redirect_if_user_is_authenticated])
 
-    # DEACTIVATED — separate registration flow is consolidated into sign-in
-    # (magic-link auto-creates account on first login). The UserRegistrationController
-    # and its template are kept for when/if a dedicated registration page is
-    # added back. For now, /users/register redirects to /users/log-in.
+    # PARKED — separate registration remains preserved in code for later
+    # reintroduction, but the current auth product flow is unified sign-in.
+    # Keep /users/register as a redirect so old links keep working without
+    # exposing the parked UI.
     get("/users/register", UserSessionController, :redirect_to_login)
   end
 

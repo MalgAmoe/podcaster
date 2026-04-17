@@ -1,7 +1,8 @@
 defmodule PoddyclipBackendWeb.PageController do
   @moduledoc """
   Public pages: landing redirect, `/app` (SolidJS mount), `/feedback`,
-  `/help`, plus the deactivated legal pages (terms/privacy/legal).
+  `/help`, plus parked legal pages (terms/privacy/legal) kept for later
+  reintroduction.
   """
   use PoddyclipBackendWeb, :controller
 

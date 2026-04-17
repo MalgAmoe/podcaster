@@ -8,10 +8,7 @@ defmodule PoddyclipBackendWeb.SitemapController do
 
   @static_pages [
     {"/", "weekly", "1.0"},
-    {"/help", "monthly", "0.5"},
-    {"/terms", "yearly", "0.3"},
-    {"/privacy", "yearly", "0.3"},
-    {"/legal", "yearly", "0.3"}
+    {"/help", "monthly", "0.5"}
   ]
 
   def index(conn, _params) do

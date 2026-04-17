@@ -484,21 +484,15 @@ defmodule PoddyclipBackendWeb.CoreComponents do
   end
 
   @doc """
-  Renders a minimal footer with copyright and legal links.
+  Renders a minimal footer.
+
+  Legal links are intentionally omitted while the legal pages are parked.
   """
   def mini_footer(assigns) do
     ~H"""
     <footer class="py-6 mt-12 border-t border-base-300">
       <div class="max-w-3xl mx-auto px-6 flex flex-col sm:flex-row justify-center items-center gap-2 text-sm text-base-content/50">
         <span>&copy; 2026 Munchy Cow</span>
-        <span class="hidden sm:inline">&middot;</span>
-        <nav class="flex gap-1 items-center">
-          <.link href="/privacy" class="hover:text-base-content transition-colors">Privacy</.link>
-          <span>&middot;</span>
-          <.link href="/terms" class="hover:text-base-content transition-colors">Terms</.link>
-          <span>&middot;</span>
-          <.link href="/legal" class="hover:text-base-content transition-colors">Legal</.link>
-        </nav>
       </div>
     </footer>
     """

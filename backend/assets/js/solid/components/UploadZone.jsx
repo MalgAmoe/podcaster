@@ -78,7 +78,6 @@ export function UploadZone() {
               </div>
               <div>
                 <p class="font-medium text-base-content text-lg">Feed the cow!</p>
-                <p class="text-sm text-base-content/60 mt-1">She's VERY hungry for your audio</p>
               </div>
               <p class="text-xs text-base-content/40">nom nom nom - WAV, MP3, FLAC</p>
             </div>

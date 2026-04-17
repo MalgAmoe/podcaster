@@ -4,7 +4,8 @@ defmodule PoddyclipBackendWeb.UserRegistrationControllerTest do
   import PoddyclipBackend.AccountsFixtures
 
   describe "GET /users/register" do
-    # Note: Registration page now redirects to login (consolidated auth flow)
+    # Note: standalone registration is parked; the public auth flow redirects
+    # old register URLs into unified sign-in.
     test "redirects to login page", %{conn: conn} do
       conn = get(conn, ~p"/users/register")
       assert redirected_to(conn) == ~p"/users/log-in"

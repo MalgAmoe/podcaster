@@ -1,8 +1,9 @@
 defmodule PoddyclipBackendWeb.UserRegistrationController do
   @moduledoc """
-  Deactivated standalone registration page. Magic-link auto-creates
-  accounts via UserSessionController. Kept for when a dedicated
-  registration flow is re-introduced.
+  Parked standalone registration page. Magic-link auth currently
+  auto-creates accounts via UserSessionController, but this controller
+  and template are kept for later reintroduction of a dedicated
+  registration flow.
   """
   use PoddyclipBackendWeb, :controller
 
