@@ -28,8 +28,8 @@ defmodule PoddyclipBackendWeb.Router do
     plug(:accepts, ["json"])
   end
 
-  # API pipeline with session-based auth (for React frontend)
-  # Also ensures guest users exist so unauthenticated visitors can use the API
+  # API pipeline for the SolidJS app.
+  # Also ensures guest users exist before enforcing authenticated API access.
   pipeline :api_auth do
     plug(:accepts, ["json"])
     plug(:fetch_session)
@@ -61,6 +61,11 @@ defmodule PoddyclipBackendWeb.Router do
     # get "/privacy", PageController, :privacy
     # get "/legal", PageController, :legal
     get("/help", PageController, :help)
+  end
+
+  scope "/app", PoddyclipBackendWeb do
+    pipe_through([:browser, :require_non_guest_user])
+    get("/past-munchings", PageController, :app)
   end
 
   scope "/app", PoddyclipBackendWeb do

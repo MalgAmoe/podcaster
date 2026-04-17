@@ -31,7 +31,7 @@ defmodule PoddyclipBackendWeb.Endpoint do
     websocket: [connect_info: [session: @session_options]],
     longpoll: [connect_info: [session: @session_options]]
 
-  # WebSocket for React frontend job updates
+  # WebSocket for SolidJS app user/job updates
   socket "/socket", PoddyclipBackendWeb.UserSocket,
     websocket: true,
     longpoll: false

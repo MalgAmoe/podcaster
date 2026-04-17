@@ -3,12 +3,6 @@ import dayjs from "dayjs";
 import { api } from "../utils/api";
 
 export function PastMunchingsPage() {
-  // Redirect guests to login
-  if (window.isGuest) {
-    window.location.href = "/users/log-in";
-    return null;
-  }
-
   const [jobs, { refetch }] = createResource(async () => {
     try {
       const data = await api.getJobHistory();

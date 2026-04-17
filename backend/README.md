@@ -1,18 +1,49 @@
-# PoddyclipBackend
+# Poddyclip Backend
 
-To start your Phoenix server:
+Phoenix app for the Munchy Cow web product.
 
-* Run `mix setup` to install and setup dependencies
-* Start Phoenix endpoint with `mix phx.server` or inside IEx with `iex -S mix phx.server`
+It owns:
+- guest and signed-in user sessions,
+- auth and account settings,
+- billing and Polar webhook handling,
+- upload orchestration and job persistence,
+- the server-rendered shell plus the SolidJS app mounted under `/app`,
+- admin/internal HTTP surfaces.
 
-Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
+It does not do the heavy audio processing itself. Phoenix submits work to the Rust
+`poddyclip-api` service and stores the job state/results around that workflow.
 
-Ready to run in production? Please [check our deployment guides](https://hexdocs.pm/phoenix/deployment.html).
+## Local Development
 
-## Learn more
+From `backend/`:
 
-* Official website: https://www.phoenixframework.org/
-* Guides: https://hexdocs.pm/phoenix/overview.html
-* Docs: https://hexdocs.pm/phoenix
-* Forum: https://elixirforum.com/c/phoenix-forum
-* Source: https://github.com/phoenixframework/phoenix
+- `mix setup` installs deps, sets up the database, and builds assets
+- `mix phx.server` starts the Phoenix app on `localhost:4000`
+- `mix test` runs the backend test suite
+
+From the repo root, the normal three-terminal workflow is:
+
+- `./dev.sh infra` for Postgres + MinIO
+- `./dev.sh api` for the Rust processing API
+- `./dev.sh web` for Phoenix
+
+## Runtime Shape
+
+- `/app` serves the main SolidJS processing UI
+- `/api` serves the authenticated JSON API used by the SolidJS app
+- `/api/internal` receives callbacks from the Rust service
+- `/api/webhooks/polar` handles Polar billing webhooks
+- `/account`, `/users/settings`, `/feedback`, `/help` are Phoenix-rendered pages/live views
+- admin routes are served from the separate admin endpoint when enabled
+
+## Current Product Notes
+
+- Legal pages (`terms`, `privacy`, `legal`) are parked in code but intentionally not exposed in the public router.
+- Standalone registration is also parked; the current public auth flow is unified magic-link sign-in.
+- `Past Munchings` is available to signed-in users only.
+
+## Related Areas
+
+- `lib/poddyclip_backend/` contains business logic, billing, storage, and workers
+- `lib/poddyclip_backend_web/` contains controllers, LiveViews, router, endpoint, and plugs
+- `assets/js/solid/` contains the client app bundled into Phoenix static assets

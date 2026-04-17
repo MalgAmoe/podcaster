@@ -140,7 +140,6 @@ defmodule PoddyclipBackend.Processing do
 
   @doc """
   List completed jobs for a user from the last 7 days.
-  Used for job history / "Past Munchings" feature.
   """
   def list_completed_jobs_for_user(user_id) do
     cutoff = DateTime.utc_now() |> DateTime.add(-7, :day)
