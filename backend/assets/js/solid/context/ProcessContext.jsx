@@ -4,6 +4,7 @@ import { Socket } from "phoenix";
 import { api, ApiError } from "../utils/api";
 import { clearAudioCache } from "../components/WaveformPlayer";
 import { getErrorMessage } from "../utils/errors";
+import { trimAudioFileForPreview } from "../utils/previewAudio";
 import { useNotifications } from "./NotificationContext";
 
 const ProcessContext = createContext();
@@ -19,6 +20,7 @@ export function ProcessProvider(props) {
     uploadProgress: 0,
     uploadState: "idle", // idle, uploading, ready, error
     estimatedSeconds: null, // Detected audio duration in seconds
+    previewClip: null,
     submitting: false, // Prevents double-submit
     job: null,
   });
@@ -177,16 +179,44 @@ export function ProcessProvider(props) {
       uploadXhr = null;
     }
 
+    const isGuest = window.isGuest;
+
     setStore({
       file,
       filename: file.name,
       uploadState: "uploading",
       uploadProgress: 0,
       estimatedSeconds: null,
+      previewClip: null,
     });
 
     try {
-      const { url, key } = await api.presignUpload(file.name);
+      let fileToUpload = file;
+      let estimatedSeconds = null;
+      let previewClip = null;
+
+      if (isGuest) {
+        const trimmed = await trimAudioFileForPreview(file);
+        fileToUpload = trimmed.file;
+        estimatedSeconds = trimmed.clippedSeconds;
+        previewClip = {
+          originalFilename: trimmed.originalFilename,
+          originalSeconds: trimmed.originalSeconds,
+          clippedSeconds: trimmed.clippedSeconds,
+          wasTrimmed: trimmed.wasTrimmed,
+        };
+
+        setStore({
+          file: fileToUpload,
+          filename: fileToUpload.name,
+          estimatedSeconds,
+          previewClip,
+        });
+      }
+
+      // TODO: once the guest preview endpoint exists, guest uploads should stop
+      // using the S3/job path entirely and submit the trimmed WAV directly.
+      const { url, key } = await api.presignUpload(fileToUpload.name);
 
       await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
@@ -218,18 +248,22 @@ export function ProcessProvider(props) {
         });
 
         xhr.open("PUT", url, true);
-        xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
-        xhr.send(file);
+        xhr.setRequestHeader("Content-Type", fileToUpload.type || "application/octet-stream");
+        xhr.send(fileToUpload);
       });
 
       setStore({ s3Key: key, uploadState: "ready" });
 
       // Detect audio duration in background (don't block upload completion)
-      getAudioDurationSeconds(file).then((seconds) => {
-        if (seconds !== null) {
-          setStore("estimatedSeconds", seconds);
-        }
-      });
+      if (estimatedSeconds !== null) {
+        setStore("estimatedSeconds", estimatedSeconds);
+      } else {
+        getAudioDurationSeconds(file).then((seconds) => {
+          if (seconds !== null) {
+            setStore("estimatedSeconds", seconds);
+          }
+        });
+      }
     } catch (err) {
       // Don't show error for aborted uploads
       if (err.message !== "Upload cancelled") {
@@ -238,7 +272,6 @@ export function ProcessProvider(props) {
       }
     }
   }
-
 
   async function submitJob() {
     if (!store.s3Key || !store.filename) {
@@ -257,12 +290,6 @@ export function ProcessProvider(props) {
       const job = await api.createJob(store.s3Key, store.filename, config);
       setStore({ job });
     } catch (err) {
-      // Guest limit reached - set flag so ProcessPage shows sign-in card
-      if (err instanceof ApiError && err.code === "guest_limit_reached") {
-        setStore("guestLimitReached", true);
-        setStore("submitting", false);
-        return;
-      }
       // Billing errors get persistent notification with upgrade action
       if (err instanceof ApiError && err.code === "insufficient_seconds") {
         const details = err.details;
@@ -329,6 +356,7 @@ export function ProcessProvider(props) {
       uploadProgress: 0,
       uploadState: "idle",
       estimatedSeconds: null,
+      previewClip: null,
       submitting: false,
       job: null,
     });

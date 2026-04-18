@@ -1,9 +1,6 @@
 export function getErrorMessage(error) {
   if (!error) return "Unknown error";
 
-  if (error.includes("guest_limit_reached")) {
-    return "You've used your 3 free files. Add your email to keep processing.";
-  }
   if (error.includes("insufficient_seconds")) {
     return "Not enough time available. Upgrade to Munch Plan or buy a Snack for more processing time.";
   }

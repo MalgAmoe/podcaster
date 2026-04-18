@@ -34,7 +34,6 @@
       <script>
         window.userToken = <%= raw(Jason.encode!(Phoenix.Token.sign(PoddyclipBackendWeb.Endpoint, "user socket", @current_scope.user.id))) %>;
         window.isGuest = <%= raw(Jason.encode!(@current_scope.user.is_guest)) %>;
-        window.completedJobsCount = <%= raw(Jason.encode!(@current_scope.user.completed_jobs_count)) %>;
         <%= unless @current_scope.user.is_guest do %>
           window.currentUser = <%= raw(Jason.encode!(%{email: @current_scope.user.email, id: @current_scope.user.id})) %>;
         <% end %>

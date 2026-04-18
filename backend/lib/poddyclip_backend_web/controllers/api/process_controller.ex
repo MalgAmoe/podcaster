@@ -61,26 +61,13 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   """
   def create_job(conn, %{"s3_key" => s3_key, "filename" => filename} = params) do
     user = conn.assigns.current_user
-    create_job_validated(conn, user, s3_key, filename, params)
+    create_job_after_checks(conn, user, s3_key, filename, params)
   end
 
   def create_job(conn, _params) do
     conn
     |> put_status(400)
     |> json(%{error: "Missing required parameters: s3_key, filename"})
-  end
-
-  @guest_file_limit 3
-
-  defp create_job_validated(conn, user, s3_key, filename, params) do
-    # Guest users limited to 3 files
-    if user.is_guest and user.completed_jobs_count >= @guest_file_limit do
-      conn
-      |> put_status(403)
-      |> json(%{error: "guest_limit_reached", limit: @guest_file_limit})
-    else
-      create_job_after_checks(conn, user, s3_key, filename, params)
-    end
   end
 
   defp create_job_after_checks(conn, user, s3_key, filename, params) do

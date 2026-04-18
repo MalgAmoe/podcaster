@@ -22,6 +22,12 @@ export function UploadZone() {
     ? "Please select a WAV or MP3 file."
     : "Please select an audio file (WAV, MP3, FLAC, etc.)";
 
+  function formatSeconds(totalSeconds) {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}m ${seconds}s`;
+  }
+
   async function handleFile(file) {
     if (!file) return;
 
@@ -121,12 +127,25 @@ export function UploadZone() {
           <p class="font-medium truncate">{store.filename}</p>
           <Show when={store.uploadState === "ready"}>
             <p class="text-sm text-primary">Ready to munch!</p>
+            <Show when={isGuest && store.previewClip}>
+              <p class="text-xs text-base-content/50 mt-0.5">
+                <Show
+                  when={store.previewClip.wasTrimmed}
+                  fallback={`Preview clip ready: ${formatSeconds(store.previewClip.clippedSeconds)}`}
+                >
+                  Preview clipped from {formatSeconds(store.previewClip.originalSeconds)} to {formatSeconds(store.previewClip.clippedSeconds)}
+                </Show>
+              </p>
+            </Show>
             <Show when={store.estimatedSeconds}>
               <p class="text-xs text-base-content/50">~{Math.floor(store.estimatedSeconds / 60)}m {store.estimatedSeconds % 60}s</p>
               <Show when={!window.isGuest && window.userTotalSeconds !== undefined && store.estimatedSeconds > window.userTotalSeconds}>
                 <p class="text-xs text-warning mt-0.5">This file is {Math.floor(store.estimatedSeconds / 60)}m {store.estimatedSeconds % 60}s but you only have {Math.floor(window.userTotalSeconds / 60)}m {window.userTotalSeconds % 60}s available.</p>
               </Show>
             </Show>
+          </Show>
+          <Show when={store.uploadState === "uploading" && isGuest && store.uploadProgress === 0}>
+            <p class="text-sm text-base-content/60">Preparing 30s preview clip...</p>
           </Show>
           <Show when={store.uploadState === "uploading" && store.uploadProgress >= 100}>
             <p class="text-sm text-base-content/60">Finalizing...</p>

@@ -1,206 +1,168 @@
-# Guest Preview — Design & Implementation Plan
+# Guest Preview v1
 
-> Status: **design locked, implementation deferred**. Scope = local-first; RunPod/production concerns out of scope here and tracked separately in `docs/rust-deploy-plan.md`.
+> Status: **plan refreshed for current repo reality**. This replaces the older WASM-heavy preview design and treats browser-side JS trimming as the first implementation step.
 
 ## Goal
 
-Replace the current "3 trials" guest limit with a **30-second processing preview** for guests, backed by real abuse prevention.
+Replace the current guest `3 files` limit with a simple guest preview flow:
 
-- Browser trims uploaded audio to the first 30 seconds, sends only that
-- Backend re-validates decoded duration and refuses if over budget
-- Rate limits on guest-cookie + IP to make sustained abuse costly
-- Concurrency protection around the Rust call so bursts slow down rather than crash things
-- No change to the full-processing flow for signed-in users
+- guests upload WAV or MP3 in the existing UI
+- the browser trims it to the first 30 seconds in plain JS
+- Phoenix sends that trimmed audio directly to Rust for synchronous processing
+- Rust returns a processed 30-second WAV preview
+- nothing in this path touches S3/R2, Oban, jobs, or billing
 
-Signup-path UX is explicitly out of scope for this plan.
+Signed-in users keep the current full upload/job flow unchanged.
+
+For v1, reuse the existing guest-user/session model because it is already in place and is the simplest fit for the current platform. Abuse prevention should also stay intentionally simple in the first pass, with clear TODOs where stronger protection belongs later.
 
 ## Locked decisions
 
 | Area | Decision |
 |---|---|
-| Browser upload format (v1) | **WAV** — produced by a Rust/WASM trimmer at upload time; Symphonia handles natively |
-| Browser trimming mechanism | **Rust compiled to WASM**, called from SolidJS at upload time (not preview-only). WAV: parse RIFF + byte-slice first 30s, no decode. MP3: Symphonia progressive decode, stop at 30s, emit WAV. Guests already restricted to WAV/MP3 upload. |
-| Trim timing | **At upload**, before any network call — user sees the 30s cut immediately, no post-upload surprise |
-| Phoenix ↔ Rust transport | Raw audio body (`Content-Type: audio/wav`). Not multipart, not base64 |
-| Preview flow | Synchronous HTTP: request carries result, no polling, no channel |
-| Storage for previews | None — no S3/R2/MinIO for the preview path. Audio lives in memory only |
-| Oban involvement | None in the preview path. Oban stays only on the full-job flow |
-| Concurrency control | Custom GenServer semaphore: max running + max queued + max wait |
-| Rate limiting | ETS-backed, dual-keyed (guest cookie + IP), deny on stricter budget |
-| Duration enforcement | Rust decodes and enforces `≤ PREVIEW_MAX_SECONDS + PREVIEW_TOLERANCE_SECONDS` |
-| Limits source of truth | Env vars read by both Phoenix and Rust (not request headers) |
-| Response format (v1) | WAV out — defers encoder decision on the return path |
-| DB persistence | None for previews in v1; rate-limit state is ETS (accepts "resets on restart") |
+| Guest result | Processed **30-second audio preview** |
+| Guest download | Optional later; not required for v1 |
+| Preview storage | None. No S3/R2/MinIO in the preview path |
+| Browser trimming | Plain JS with Web Audio API |
+| Guest input formats | WAV and MP3 only |
+| Trim timing | Immediately after file selection, before submit |
+| User-visible trim | User sees the trimmed clip as the actual guest input |
+| Phoenix ↔ Rust transport | Direct request/response, no job orchestration |
+| Rust hard limit | Rust decodes and enforces preview duration independently |
+| Guest identity model | Reuse existing guest-user/session flow |
+| Abuse prevention | Minimal v1 limiter + concurrency guard, with TODOs for stronger controls |
+
+## Product behavior
+
+### Guests
+
+- Upload WAV or MP3
+- Browser trims to the first 30 seconds
+- Submit that clip for synchronous preview processing
+- Receive a processed WAV preview and listen in the browser
+
+### Signed-in users
+
+- Keep the current upload → S3 → `/api/jobs` → Oban → Rust job flow
+- No guest-preview logic should leak into the normal full-processing path
+
+## Architecture
+
+### Frontend
+
+- Keep the current process page as similar as possible
+- Change guest behavior from “upload full file and maybe hit the 3-file cap” to “prepare a preview clip locally first”
+- Browser decodes WAV/MP3, trims to 30 seconds, and re-encodes to WAV
+- The trimmed clip becomes the guest-side file used for preview submission
+- Reuse the current comparison/player UI where practical
+
+### Phoenix
+
+- Add a dedicated `POST /api/preview` path
+- Keep using `EnsureGuestUser`
+- Accept multipart upload from the browser
+- Forward raw audio bytes to Rust synchronously
+- Return processed WAV bytes directly to the browser
+- Do not create job records, presign uploads, enqueue Oban jobs, or touch billing in this path
+
+### Rust
+
+- Add a dedicated `POST /preview` endpoint in `poddyclip-api`
+- Decode incoming audio
+- Reject if decoded duration exceeds `PREVIEW_MAX_SECONDS + tolerance`
+- Run the normal processing pipeline
+- Return WAV bytes directly
+- No S3, no webhook, no job state
 
 ## HTTP contract
 
 ### Browser → Phoenix
 
-```
-POST /api/preview
-  Content-Type: multipart/form-data
-  Body: audio=<WAV file, trimmed to first 30s>
+`POST /api/preview`
 
-  200 OK
-    Content-Type: audio/wav
-    Body: processed audio bytes
-
-  429 rate_limited       { "error": "rate_limited",  "retry_after_ms": 30000 }
-  503 preview_busy       { "error": "preview_busy",  "retry_after_ms": 5000 }
-  422 too_long           { "error": "too_long", "max_seconds": 30, "tolerance_seconds": 2 }
-  422 invalid_input      { "error": "invalid_input" }
-  502 upstream_error     { "error": "upstream_error" }
-```
+- request: multipart form with trimmed guest audio file
+- success: `200 audio/wav`
+- errors:
+  - `422 invalid_input`
+  - `422 too_long`
+  - `429 rate_limited`
+  - `503 preview_busy`
+  - `502 upstream_error`
 
 ### Phoenix → Rust
 
-```
-POST /preview
-  Content-Type: audio/wav
-  Body: raw WAV bytes
+`POST /preview`
 
-  200 OK
-    Content-Type: audio/wav
-    Body: processed audio bytes
+- request: raw audio body
+- success: `200 audio/wav`
+- errors:
+  - `422 decode_failed`
+  - `422 too_long`
+  - `500 internal`
 
-  422 too_long           { "error": "too_long" }
-  422 decode_failed      { "error": "decode_failed" }
-  500 internal           { "error": "internal" }
-```
+## Abuse prevention, v1
 
-**No `X-Preview-Max-Seconds` header.** Rust reads its own limit from env. Phoenix reads its own limit from env for pre-flight hints. Defense in depth.
+Keep the first pass simple enough to finish:
 
-## Rust `/preview` handler
+- Reuse the current guest-user/session identity
+- Add a lightweight preview-only rate limiter in Phoenix
+- Add a simple in-process concurrency guard around the Rust preview call
+- Let Rust be the hard enforcement point for duration
 
-- Stateless. No S3, no webhooks, no job table.
-- Reads raw body → decodes with Symphonia → checks decoded duration.
-- If duration > `PREVIEW_MAX_SECONDS + PREVIEW_TOLERANCE_SECONDS`, reject `422 too_long` before running the pipeline.
-- Runs the full audio pipeline (same `process_audio` flow as the main path).
-- Encodes as WAV, returns bytes.
-- Local dev: `cargo run` the Rust API, hit `/preview` directly — no MinIO needed.
+TODOs to leave in code at the right boundaries:
 
-## Phoenix semaphore (custom GenServer)
+- IP-aware rate limiting
+- stronger dual-key guest/IP budgets
+- stricter endpoint-level body rejection before multipart parsing
+- more detailed telemetry and abuse monitoring
 
-Three independent bounds:
+## Important notes from current repo state
 
-| Bound | Default | Behaviour |
-|---|---|---|
-| Max concurrency | 2 | Requests over this wait in queue |
-| Max queue depth | 10 | Queue full → reject immediately with `503 preview_busy` |
-| Max wait time | 5000 ms | Waiter times out → reject with `503 preview_busy` |
+- The current guest flow still uses the normal upload/job path and blocks after 3 completed jobs. That should be removed once preview is live.
+- The frontend currently uploads every selected file to S3. Guest preview must become a separate path, not a small tweak to the existing submit call.
+- `Plug.Parsers` is currently global in Phoenix. For v1, do not block on a perfect pre-parser rejection design. Add a TODO instead.
+- Browser-side trimming is a UX and bandwidth improvement, but Rust must still enforce the decoded-duration cap.
 
-All env-configurable. Custom GenServer chosen over `:poolboy` / `:sbroker` because the three-bound policy is trivial to express directly and the generic pools don't match the exact semantics we want.
+## Implementation order
 
-### States exposed to callers
+1. Update this plan and align comments/docs with the new direction
+2. Add browser-side WAV/MP3 → trimmed WAV handling in the Solid frontend
+3. Add Phoenix preview endpoint and simple limiter/concurrency guard
+4. Add Rust `/preview` endpoint
+5. Switch guest submit from the normal job flow to the new preview flow
+6. Remove the old guest `3 files` limit behavior
 
-- `{:ok, token}` — acquired, caller proceeds
-- `{:error, :queue_full}` — immediate rejection
-- `{:error, :wait_timeout}` — queued but didn't get a slot in time
+## Test plan
 
-Both errors map to `503 preview_busy`. The distinction is only for telemetry.
+### Frontend/manual
 
-### Where it's called
+- Guest WAV upload trims immediately to 30 seconds
+- Guest MP3 upload trims immediately to 30 seconds
+- User can see that the guest input is the clipped preview file
+- Signed-in uploads remain unchanged
 
-Inside the preview controller, wrapping the outbound Rust HTTP call specifically. Not as a plug — plug-level acquisition would grab the slot before body read, wasting capacity on malformed uploads.
+### Phoenix
 
-## Rate limiter (ETS, dual-keyed)
+- `/api/preview` success path
+- limiter and busy-path responses
+- route works with existing guest sessions
 
-- Keyed on **guest cookie** and **IP** independently
-- Both buckets must allow the request; denial from either → `429 rate_limited`
-- Starting placeholder budgets (tune via telemetry):
-  - Per cookie: **5 previews / hour**
-  - Per IP: **20 previews / hour**
-- ETS-backed, same pattern as `backend/lib/poddyclip_backend/rate_limiter.ex` (which today only gates data export — generalize, don't duplicate)
+### Rust
 
-### Returns to controller
+- `/preview` success path
+- decode failure handling
+- over-limit rejection
+- WAV response generation
 
-- `:ok` — proceed
-- `{:error, :cookie_limited, retry_after_ms}`
-- `{:error, :ip_limited, retry_after_ms}`
+### Integration
 
-Controller maps both to `429` with the appropriate `retry_after_ms`. Distinction survives in telemetry.
+- Guest preview request never creates an S3 object or DB job
+- Signed-in job flow still uses the existing job infrastructure
 
-## Pipeline order
+## Explicit non-goals for v1
 
-1. `EnsureGuestUser` — ensures every request has a stable cookie-keyed identity for rate limiting
-2. **Preview rate-limit plug** — rejects cheaply before body read
-3. Preview controller — parses multipart body
-4. Semaphore acquire inside controller
-5. HTTP call to Rust `/preview`
-6. Semaphore release, stream response back
-
-## Env vars
-
-| Var | Default | Used by |
-|---|---|---|
-| `PREVIEW_MAX_SECONDS` | 30 | Phoenix + Rust |
-| `PREVIEW_TOLERANCE_SECONDS` | 2 | Rust (decoded-duration gate) |
-| `PREVIEW_MAX_CONCURRENCY` | 2 | Phoenix (semaphore) |
-| `PREVIEW_MAX_QUEUE_DEPTH` | 10 | Phoenix (semaphore) |
-| `PREVIEW_MAX_WAIT_MS` | 5000 | Phoenix (semaphore) |
-| `PREVIEW_RATE_COOKIE_PER_HOUR` | 5 | Phoenix (rate limiter) |
-| `PREVIEW_RATE_IP_PER_HOUR` | 20 | Phoenix (rate limiter) |
-
-## Telemetry (day one)
-
-Events:
-
-- `[:preview, :semaphore, :acquired]`
-- `[:preview, :semaphore, :queued]`
-- `[:preview, :semaphore, :rejected_full]`
-- `[:preview, :semaphore, :rejected_timeout]`
-- `[:preview, :rate_limiter, :cookie_limited]`
-- `[:preview, :rate_limiter, :ip_limited]`
-- `[:preview, :request, :start]`
-- `[:preview, :request, :stop]`
-
-Measurements on `:stop`:
-
-- `queue_wait_ms` — time from controller entry to semaphore acquisition
-- `rust_roundtrip_ms` — time from request sent to response received
-- `total_ms` — end-to-end
-- `bytes_in` / `bytes_out` — upload and response sizes
-
-Purpose: tune the seven env vars above without guessing.
-
-## Verify-before-coding items
-
-Each could invalidate part of the design:
-
-1. **`Plug.Parsers` ordering** — current `endpoint.ex:66-70` mounts `Plug.Parsers` globally. If the multipart body is parsed before route-scoped plugs run, the "cheap early reject" goal is lost. Either:
-   - Move the preview rate-limit plug into `endpoint.ex` before `Plug.Parsers`, **or**
-   - Scope a narrower `Plug.Parsers` to the preview route, dropping the global parser for that path.
-   - Confirm with a test upload once wired: a rate-limited request should not transfer the full body.
-
-2. **Preview route pipeline** — none of the current `/api/*` pipelines apply directly.
-   - Must include `EnsureGuestUser`
-   - Must **not** include `require_non_guest_user`
-   - CSRF: mirror `/api/jobs` (scoped API, skips CSRF)
-
-3. **Rust/WASM trimmer** — new crate (e.g. `crates/poddyclip-wasm-trim`) with two entrypoints: `trim_wav(bytes, seconds) -> Vec<u8>` (header parse + slice, no decode) and `trim_mp3_to_wav(bytes, seconds) -> Vec<u8>` (Symphonia progressive decode, stop at 30s, emit WAV). Build with `wasm-pack`, bundle via esbuild. Expected size ~500KB–1MB gzipped for Symphonia + mp3 feature. WAV parser must handle chunks in arbitrary order, IEEE float / extensible format codes, and reject RF64 / unknown bit depths cleanly.
-
-4. **Rust `ProcessConfig` for preview** — does it reuse `ProcessConfig::new()`, or does preview want a trimmed config (e.g. skip analysis stages that assume long audio)? Likely reuse, but worth verifying on first integration.
-
-## Implementation order (when we pick this up)
-
-1. Verify body-parser ordering and route-pipeline plumbing (step 1 and 2 above)
-2. Phoenix semaphore GenServer + telemetry events
-3. Phoenix rate-limit plug (generalize `RateLimiter`) + telemetry events
-4. `Processing.Client.preview/2` — raw-body HTTP call with typed error atoms
-5. `PreviewController` gluing it all together
-6. Rust `/preview` handler: decode → duration check → pipeline → WAV out
-7. Rust/WASM trimmer crate + `wasm-pack` build; SolidJS calls it from `UploadZone` to trim at upload time, POST resulting WAV to `/api/preview`, render returned blob via `WaveformPlayer` (same pattern as `JobComplete.jsx`)
-8. Flip the "guest blocked after 3 jobs" UX to "guest gets preview, signup for full"
-9. Remove the dead `window.userTotalSeconds` branch in `UploadZone.jsx:103-105`
-
-## What this explicitly does not touch
-
-- Full-job processing pipeline for signed-in users
-- Oban queues, webhooks, S3 upload flow
-- Billing / seconds accounting
-- Magic-link signup flow (already serves as bot-friction layer)
-- RunPod deployment (tracked in `docs/rust-deploy-plan.md` — preview endpoint may later be deployed as a separate RunPod function, but that's a v2 concern)
-
-## On-the-wire cost (v1 estimate)
-
-30s of 44.1kHz stereo 16-bit WAV ≈ **5 MB**. Each preview = ~5 MB upload + ~5 MB download = **~10 MB of traffic**. Acceptable for v1. Telemetry `bytes_in` / `bytes_out` will confirm real aggregate; if this becomes a UX issue, switch browser output to Opus/WebM (Symphonia supports it).
+- No full signup funnel redesign after preview
+- No billing integration
+- No perfect abuse prevention on day one
+- No separate anonymous identity model just for previews
+- No download UX requirement beyond optional later follow-up
