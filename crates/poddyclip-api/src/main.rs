@@ -53,6 +53,7 @@ async fn main() {
         config.preview_max_seconds,
         config.preview_tolerance_seconds
     );
+    info!("  Preview concurrency: {}", config.preview_max_concurrency);
 
     // Initialize S3 storage if configured
     let storage = match StorageConfig::from_env() {

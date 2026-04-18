@@ -21,6 +21,7 @@ export function ProcessProvider(props) {
     uploadState: "idle", // idle, uploading, ready, error
     estimatedSeconds: null, // Detected audio duration in seconds
     previewClip: null,
+    guestPrompt: null,
     submitting: false, // Prevents double-submit
     job: null,
   });
@@ -181,6 +182,29 @@ export function ProcessProvider(props) {
     }
   }
 
+  function formatRetryAfter(retryAfterMs) {
+    const totalSeconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
+    if (totalSeconds >= 60) {
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+    }
+    return `${totalSeconds}s`;
+  }
+
+  function showGuestPrompt(kind, retryAfterMs) {
+    const retryAfterText = retryAfterMs ? formatRetryAfter(retryAfterMs) : null;
+
+    setStore("guestPrompt", {
+      kind,
+      retryAfterText,
+    });
+  }
+
+  function dismissGuestPrompt() {
+    setStore("guestPrompt", null);
+  }
+
   async function uploadFile(file) {
     // Prevent concurrent uploads
     if (store.uploadState === "uploading") return;
@@ -205,6 +229,7 @@ export function ProcessProvider(props) {
       uploadProgress: 0,
       estimatedSeconds: null,
       previewClip: null,
+      guestPrompt: null,
     });
 
     try {
@@ -334,6 +359,7 @@ export function ProcessProvider(props) {
               percent_complete: 100,
             },
           },
+          guestPrompt: null,
         });
       } else {
         const config = {
@@ -346,6 +372,26 @@ export function ProcessProvider(props) {
       if (err.name === "AbortError") {
         setStore("submitting", false);
         return;
+      }
+
+      if (window.isGuest && err instanceof ApiError) {
+        if (err.code === "rate_limited") {
+          showGuestPrompt("rate_limited", err.details?.retry_after_ms);
+          setStore({
+            submitting: false,
+            job: null,
+          });
+          return;
+        }
+
+        if (err.code === "preview_busy") {
+          showGuestPrompt("preview_busy", err.details?.retry_after_ms);
+          setStore({
+            submitting: false,
+            job: null,
+          });
+          return;
+        }
       }
 
       // Billing errors get persistent notification with upgrade action
@@ -426,6 +472,7 @@ export function ProcessProvider(props) {
       uploadState: "idle",
       estimatedSeconds: null,
       previewClip: null,
+      guestPrompt: null,
       submitting: false,
       job: null,
     });
@@ -437,6 +484,7 @@ export function ProcessProvider(props) {
     submitJob,
     cancelJob,
     reset,
+    dismissGuestPrompt,
   };
 
   return (

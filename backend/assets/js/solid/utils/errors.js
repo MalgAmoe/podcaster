@@ -7,8 +7,11 @@ export function getErrorMessage(error) {
   if (error.includes("too_long")) {
     return "Preview clips must stay within the 30-second limit.";
   }
+  if (error.includes("rate_limited")) {
+    return "You have used the preview demo a lot recently. Please try again later.";
+  }
   if (error.includes("preview_busy")) {
-    return "Preview service is busy right now. Try again in a moment.";
+    return "The demo is busy right now. Please try again later.";
   }
   if (error.includes("invalid_input")) {
     return "Could not read that preview clip. Try a different WAV or MP3 file.";

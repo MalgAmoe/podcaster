@@ -18,8 +18,13 @@ pub async fn preview(
     State(state): State<AppState>,
     body: Bytes,
 ) -> Result<impl IntoResponse, ApiError> {
-    // TODO: add a small preview queue or better limiter if contention becomes a problem.
-    let _permit = state
+    let _preview_permit = state
+        .preview_semaphore
+        .clone()
+        .try_acquire_owned()
+        .map_err(|_| ApiError::PreviewBusy)?;
+
+    let _processing_permit = state
         .processing_semaphore
         .clone()
         .try_acquire_owned()

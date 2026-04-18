@@ -7,6 +7,7 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   require Logger
 
   alias PoddyclipBackend.Billing
+  alias PoddyclipBackend.PreviewGate
   alias PoddyclipBackend.Processing
   alias PoddyclipBackend.Processing.Job
   alias PoddyclipBackend.Processing.Client, as: ProcessingClient
@@ -77,42 +78,69 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   Accepts multipart form data with an `audio` file upload and returns WAV bytes.
   """
   def preview(conn, %{"audio" => %Plug.Upload{} = upload}) do
-    with {:ok, audio_bytes} <- File.read(upload.path),
-         {:ok, wav_bytes} <- ProcessingClient.preview(audio_bytes, upload.content_type || "audio/wav") do
-      conn
-      |> put_resp_content_type("audio/wav")
-      |> send_resp(200, wav_bytes)
-    else
-      {:error, :enoent} ->
-        conn
-        |> put_status(422)
-        |> json(%{error: "invalid_input"})
+    user = conn.assigns.current_user
 
-      {:error, :invalid_input} ->
-        conn
-        |> put_status(422)
-        |> json(%{error: "invalid_input"})
+    case maybe_acquire_preview(user) do
+      {:ok, token} ->
+        try do
+          case File.read(upload.path) do
+            {:ok, audio_bytes} ->
+              case ProcessingClient.preview(audio_bytes, upload.content_type || "audio/wav") do
+                {:ok, wav_bytes} ->
+                  conn
+                  |> put_resp_content_type("audio/wav")
+                  |> send_resp(200, wav_bytes)
 
-      {:error, {:too_long, max_seconds, tolerance_seconds}} ->
-        conn
-        |> put_status(422)
-        |> json(%{
-          error: "too_long",
-          max_seconds: max_seconds,
-          tolerance_seconds: tolerance_seconds
-        })
+                {:error, :invalid_input} ->
+                  conn
+                  |> put_status(422)
+                  |> json(%{error: "invalid_input"})
 
-      {:error, :preview_busy} ->
+                {:error, {:too_long, max_seconds, tolerance_seconds}} ->
+                  conn
+                  |> put_status(422)
+                  |> json(%{
+                    error: "too_long",
+                    max_seconds: max_seconds,
+                    tolerance_seconds: tolerance_seconds
+                  })
+
+                {:error, {:preview_busy, retry_after_ms}} ->
+                  conn
+                  |> put_status(503)
+                  |> json(%{error: "preview_busy", retry_after_ms: retry_after_ms})
+
+                {:error, :preview_busy} ->
+                  conn
+                  |> put_status(503)
+                  |> json(%{error: "preview_busy", retry_after_ms: default_preview_busy_retry_ms()})
+
+                {:error, reason} ->
+                  Logger.error("Preview processing failed: #{inspect(reason)}")
+
+                  conn
+                  |> put_status(502)
+                  |> json(%{error: "upstream_error"})
+              end
+
+            {:error, :enoent} ->
+              conn
+              |> put_status(422)
+              |> json(%{error: "invalid_input"})
+          end
+        after
+          release_preview(token)
+        end
+
+      {:error, :rate_limited, retry_after_ms} ->
+        conn
+        |> put_status(429)
+        |> json(%{error: "rate_limited", retry_after_ms: retry_after_ms})
+
+      {:error, :preview_busy, retry_after_ms} ->
         conn
         |> put_status(503)
-        |> json(%{error: "preview_busy"})
-
-      {:error, reason} ->
-        Logger.error("Preview processing failed: #{inspect(reason)}")
-
-        conn
-        |> put_status(502)
-        |> json(%{error: "upstream_error"})
+        |> json(%{error: "preview_busy", retry_after_ms: retry_after_ms})
     end
   end
 
@@ -120,6 +148,19 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
     conn
     |> put_status(400)
     |> json(%{error: "Missing required parameter: audio"})
+  end
+
+  defp maybe_acquire_preview(%{is_guest: true, id: user_id}) do
+    PreviewGate.acquire_guest_preview(user_id)
+  end
+
+  defp maybe_acquire_preview(_user), do: {:ok, nil}
+
+  defp release_preview(nil), do: :ok
+  defp release_preview(token), do: PreviewGate.release_guest_preview(token)
+
+  defp default_preview_busy_retry_ms do
+    Application.get_env(:poddyclip_backend, :preview_busy_retry_ms, 10_000)
   end
 
   defp create_job_after_checks(conn, user, s3_key, filename, params) do

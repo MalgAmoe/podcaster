@@ -18,6 +18,8 @@ defmodule PoddyclipBackend.Application do
         {Phoenix.PubSub, name: PoddyclipBackend.PubSub},
         # Rate limiter for data exports
         PoddyclipBackend.RateLimiter,
+        # Guest preview shaping
+        PoddyclipBackend.PreviewGate,
         # Oban job queue
         {Oban, Application.fetch_env!(:poddyclip_backend, Oban)},
         # Subscription expiry checker
