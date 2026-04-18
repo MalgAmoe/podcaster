@@ -39,7 +39,7 @@ From the repo root, the normal three-terminal workflow is:
 ## Current Product Notes
 
 - Legal pages (`terms`, `privacy`, `legal`) are parked in code but intentionally not exposed in the public router.
-- Standalone registration is also parked; the current public auth flow is unified magic-link sign-in.
+- Standalone registration has been removed; the public auth flow is unified magic-link sign-in.
 - `Past Munchings` is available to signed-in users only.
 
 ## Related Areas

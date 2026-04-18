@@ -126,16 +126,6 @@ defmodule PoddyclipBackendWeb.Router do
   ## Authentication routes
 
   scope "/", PoddyclipBackendWeb do
-    pipe_through([:browser, :redirect_if_user_is_authenticated])
-
-    # PARKED — separate registration remains preserved in code for later
-    # reintroduction, but the current auth product flow is unified sign-in.
-    # Keep /users/register as a redirect so old links keep working without
-    # exposing the parked UI.
-    get("/users/register", UserSessionController, :redirect_to_login)
-  end
-
-  scope "/", PoddyclipBackendWeb do
     pipe_through([:browser, :require_non_guest_user])
 
     get("/feedback", PageController, :feedback)

@@ -18,11 +18,6 @@ defmodule PoddyclipBackendWeb.UserSessionController do
     |> render(:new, form: form)
   end
 
-  # Redirect old register URLs to unified sign-in
-  def redirect_to_login(conn, _params) do
-    redirect(conn, to: "/users/log-in")
-  end
-
   # magic link login
   def create(conn, %{"user" => %{"token" => token} = user_params} = params) do
     info =

@@ -10,15 +10,26 @@ export function UploadZone() {
 
   const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
 
+  const isGuest = window.isGuest;
+  const guestExtensions = [".wav", ".mp3"];
+  const userExtensions = [".wav", ".mp3", ".flac", ".m4a", ".aac", ".ogg"];
+  const validExtensions = isGuest ? guestExtensions : userExtensions;
+  const acceptAttr = isGuest
+    ? "audio/wav,audio/mpeg,.wav,.mp3"
+    : "audio/*,.flac,.wav,.mp3,.m4a,.aac,.ogg";
+  const formatHint = isGuest ? "WAV, MP3" : "WAV, MP3, FLAC";
+  const invalidFileMessage = isGuest
+    ? "Please select a WAV or MP3 file."
+    : "Please select an audio file (WAV, MP3, FLAC, etc.)";
+
   async function handleFile(file) {
     if (!file) return;
 
-    const validExtensions = [".wav", ".mp3", ".flac", ".m4a", ".aac", ".ogg", ".opus"];
     const ext = file.name.toLowerCase().slice(file.name.lastIndexOf("."));
-    const isAudio = file.type.startsWith("audio/") || validExtensions.includes(ext);
+    const isAudio = validExtensions.includes(ext) || (!isGuest && file.type.startsWith("audio/"));
 
     if (!isAudio) {
-      notify({ type: "error", message: "Please select an audio file (WAV, MP3, FLAC, etc.)" });
+      notify({ type: "error", message: invalidFileMessage });
       return;
     }
 
@@ -54,7 +65,7 @@ export function UploadZone() {
           <input
             ref={el => fileInput = el}
             type="file"
-            accept="audio/*,.flac,.wav,.mp3,.m4a,.aac,.ogg,.opus"
+            accept={acceptAttr}
             onChange={(e) => handleFile(e.target.files[0])}
             class="hidden"
             id="audio-file-input"
@@ -79,7 +90,19 @@ export function UploadZone() {
               <div>
                 <p class="font-medium text-base-content text-lg">Feed the cow!</p>
               </div>
-              <p class="text-xs text-base-content/40">nom nom nom - WAV, MP3, FLAC</p>
+              <p class="text-xs text-base-content/40">
+                nom nom nom - {formatHint}
+                <Show when={isGuest}>
+                  {" "}·{" "}
+                  <a
+                    href="/users/log-in"
+                    class="link link-hover text-primary/70"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >Sign in</a>
+                  {" "}for more formats
+                </Show>
+              </p>
             </div>
           </div>
         </>

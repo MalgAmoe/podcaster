@@ -1,7 +1,6 @@
 # Munchy Cow robots.txt
 User-agent: *
 Allow: /
-Allow: /users/register
 Allow: /users/log-in
 
 # Disallow private pages
