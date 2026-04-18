@@ -113,7 +113,7 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
                 {:error, :preview_busy} ->
                   conn
                   |> put_status(503)
-                  |> json(%{error: "preview_busy", retry_after_ms: default_preview_busy_retry_ms()})
+                  |> json(%{error: "preview_busy"})
 
                 {:error, reason} ->
                   Logger.error("Preview processing failed: #{inspect(reason)}")
@@ -158,10 +158,6 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
 
   defp release_preview(nil), do: :ok
   defp release_preview(token), do: PreviewGate.release_guest_preview(token)
-
-  defp default_preview_busy_retry_ms do
-    Application.get_env(:poddyclip_backend, :preview_busy_retry_ms, 10_000)
-  end
 
   defp create_job_after_checks(conn, user, s3_key, filename, params) do
     estimated_seconds = params["duration_seconds"] || 60
