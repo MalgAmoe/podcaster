@@ -155,14 +155,6 @@ defmodule PoddyclipBackend.Accounts do
   def upgrade_guest_to_user(_, _), do: {:error, :not_a_guest}
 
   @doc """
-  Increments the completed jobs counter for a user.
-  """
-  def increment_completed_jobs_count(user_id) do
-    from(u in User, where: u.id == ^user_id)
-    |> Repo.update_all(inc: [completed_jobs_count: 1])
-  end
-
-  @doc """
   Merges a guest user's data into a real user account.
   Transfers jobs and feedback, then deletes the guest.
   """

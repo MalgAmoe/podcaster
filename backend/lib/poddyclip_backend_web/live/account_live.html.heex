@@ -123,12 +123,8 @@
                 14-day right of withdrawal once the service begins.
               </p>
               <a href={@checkout_url} class="btn btn-primary w-full">
-                Upgrade to Munch Plan - $15/mo
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
+                Upgrade to Munch Plan - $15/mo + applicable tax
               </a>
-              <p class="text-xs text-base-content/50 mt-1 text-center">+ applicable tax</p>
             </div>
           <% else %>
             <div class="flex-1 text-center p-4 rounded-lg bg-base-100 border border-base-300">
@@ -203,7 +199,7 @@
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
           </svg>
-          Buy Snack (<%= @minute_pack_minutes %> min) - <%= @minute_pack_price %>
+          Buy Snack (<%= @minute_pack_minutes %> min) - <%= @minute_pack_price %> + applicable tax
         </a>
       <% else %>
         <div class="text-center p-4 rounded-lg bg-base-100 border border-base-300">
@@ -212,9 +208,6 @@
           </p>
         </div>
       <% end %>
-
-      <!-- Info note -->
-      <p class="text-xs text-base-content/50 mt-1 text-center">+ applicable tax</p>
 
       <div class="mt-4 pt-4 border-t border-base-300">
         <p class="text-sm font-medium mb-3">Good to know:</p>

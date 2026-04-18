@@ -123,6 +123,32 @@ defmodule PoddyclipBackendWeb.UserSessionControllerTest do
     end
   end
 
+  describe "signed-in app shell" do
+    test "shows account and settings links for signed-in users", %{conn: conn, user: user} do
+      html =
+        conn
+        |> log_in_user(user)
+        |> get(~p"/app")
+        |> html_response(200)
+
+      assert html =~ ~s(href="/account")
+      assert html =~ ~s(href="/users/settings")
+    end
+
+    test "does not show account and settings links for guest users", %{conn: conn} do
+      {:ok, guest} = Accounts.create_guest_user()
+
+      html =
+        conn
+        |> log_in_user(guest)
+        |> get(~p"/app")
+        |> html_response(200)
+
+      refute html =~ ~s(href="/account")
+      refute html =~ ~s(href="/users/settings")
+    end
+  end
+
   describe "DELETE /users/log-out" do
     test "logs the user out", %{conn: conn, user: user} do
       conn = conn |> log_in_user(user) |> delete(~p"/users/log-out")

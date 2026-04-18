@@ -261,7 +261,6 @@ defmodule PoddyclipBackend.Processing do
             deduct_actual_seconds(updated_job)
           end
 
-          Accounts.increment_completed_jobs_count(updated_job.user_id)
         end
 
         broadcast_update(updated_job)

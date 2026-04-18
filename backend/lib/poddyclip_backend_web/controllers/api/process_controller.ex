@@ -451,7 +451,6 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
       id: user.id,
       email: user.email,
       is_guest: user.is_guest,
-      completed_jobs_count: user.completed_jobs_count,
       plan: plan_info,
       seconds_available: user.seconds_available,
       subscription_status: user.subscription_status,

@@ -23,7 +23,6 @@ defmodule PoddyclipBackend.Accounts.User do
 
     # Guest user fields
     field :is_guest, :boolean, default: false
-    field :completed_jobs_count, :integer, default: 0
 
     # Notification preferences
     field :notification_preferences, :map,

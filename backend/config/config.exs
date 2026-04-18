@@ -100,14 +100,18 @@ config :poddyclip_backend, Oban,
        # Cleanup orphaned S3 files daily at 3am
        {"0 3 * * *", PoddyclipBackend.Workers.CleanupOrphanedFiles},
        # Cleanup expired minute packs daily at 4am
-       {"0 4 * * *", PoddyclipBackend.Workers.CleanupExpiredPacks}
+       {"0 4 * * *", PoddyclipBackend.Workers.CleanupExpiredPacks},
+       # Cleanup stale guest users daily at 5am
+       {"0 5 * * *", PoddyclipBackend.Workers.CleanupGuestUsers}
      ]}
   ]
 
 # Cleanup configuration
 config :poddyclip_backend, :cleanup,
   job_retention_days: 7,
-  stale_job_hours: 2
+  stale_job_hours: 2,
+  guest_retention_days: 30,
+  guest_cleanup_batch_size: 100
 
 # Admin routes - disabled by default (compile-time setting)
 # Set ADMIN_ENABLED=true at BUILD time to include admin routes in the release
