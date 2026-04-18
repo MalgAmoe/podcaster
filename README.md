@@ -1,6 +1,6 @@
 # Poddyclip
 
-Professional podcast audio enhancement with spectral denoising, dynamics processing, and analog-style saturation.
+Podcast audio enhancement with a Rust DSP engine, a production Rust API, and a Phoenix + SolidJS web app.
 
 Only pay for what you eat.
 
@@ -30,8 +30,11 @@ The CLI is primarily for internal testing and benchmarking.
 # Basic processing
 poddyclip input.wav -o output.wav
 
-# Stronger denoising with de-reverb
-poddyclip input.wav --preset 4 --dereverb 3 -o output.wav
+# Enable the spectral denoiser with a stronger preset
+poddyclip input.wav --denoise --preset 3 -o output.wav
+
+# AI cleaning with MossFormer2
+poddyclip input.wav --ai-denoise -o output.wav
 
 # FET compression (1176-style) instead of peak compression
 poddyclip input.wav --fet -o output.wav
@@ -44,9 +47,11 @@ poddyclip input.wav --depeak -o output.wav
 
 | Option | Description |
 |--------|-------------|
-| `--preset 1-5` | Denoising strength (default: 3) |
-| `--dereverb 1-5` | De-reverb strength (0 = off) |
-| `--spectral-gate 1-5` | Non-stationary noise gate (0 = off) |
+| `--denoise` | Enable the normal spectral denoiser |
+| `--preset 1-3` | Spectral denoiser strength |
+| `--ai-denoise` | Run MossFormer2 voice cleaning |
+| `--dereverb 1-3` | De-reverb strength (0 = off) |
+| `--spectral-gate 1-3` | Non-stationary noise gate (0 = off) |
 | `--depeak` | Remove tonal peaks (hum, whine) |
 | `--fet` | Use FET compressor instead of peak compressor |
 | `--radio` | Broadcast-style automatic EQ |
@@ -66,19 +71,20 @@ Fine-tune individual stages: `--expander-preset`, `--peakcomp-preset`, `--fetcom
 2. **Input Gain** - Normalize to -18dB RMS
 3. **Declick** - Click/pop removal (optional, offline)
 4. **De-reverb** - Spectral reverb reduction (optional)
-5. **Denoise** - Spectral subtraction with minimum statistics noise floor
-6. **Spectral Gate** - Non-stationary noise handling (optional)
-7. **Peak Attenuator** - Tonal noise removal (optional)
-8. **Expander** - Downward expansion for quiet passages
-9. **Compressor** - Peak VCA (lookahead) or FET (1176-style)
-10. **FixEQ** - Dynamic 3-band correction
-11. **De-esser** - Sibilance reduction
-12. **Channel9** - Neve-style transformer saturation
-13. **ButterComp** - Smooth bipolar compression
-14. **EnhanceEQ** - Presence and air boost
-15. **TapeGlue** - Tape hysteresis saturation
-16. **LUFS Normalization** - Target loudness
-17. **Limiter** - True peak limiting (-1dBTP)
+5. **Denoise** - Spectral subtraction with minimum statistics noise floor (optional)
+6. **AI Clean** - MossFormer2 voice cleaning at a 48k internal model rate (optional)
+7. **Spectral Gate** - Non-stationary noise handling (optional)
+8. **Peak Attenuator** - Tonal noise removal (optional)
+9. **Expander** - Downward expansion for quiet passages
+10. **Compressor** - Peak VCA (lookahead) or FET (1176-style)
+11. **FixEQ** - Dynamic 3-band correction
+12. **De-esser** - Sibilance reduction
+13. **Channel9** - Neve-style transformer saturation
+14. **ButterComp** - Smooth bipolar compression
+15. **EnhanceEQ** - Presence and air boost
+16. **TapeGlue** - Tape hysteresis saturation
+17. **LUFS Normalization** - Target loudness
+18. **Limiter** - True peak limiting (-1dBTP)
 
 ## Technical Details
 
@@ -123,12 +129,14 @@ Fine-tune individual stages: `--expander-preset`, `--peakcomp-preset`, `--fetcom
 
 ```
 crates/poddyclip/src/
+├── ai_clean/      # MossFormer2 model adapter
 ├── analysis/      # LUFS, spectral, cepstral, reverb analysis
 ├── denoiser/      # Spectral subtraction, gates, peak attenuation
 ├── dereverb/      # Spectral de-reverb
 ├── dynamics/      # Compressors, expander, limiter, autogain
 ├── eq/            # Filters, deesser, enhancement, radio EQ
 ├── repair/        # Declicker
+├── sample_rate.rs # Shared resampling helper
 ├── saturation/    # TapeGlue, Channel9
 ├── stft/          # FFT infrastructure
 └── traits.rs      # AudioProcessor, StereoProcessor traits
@@ -144,8 +152,6 @@ crates/poddyclip-api/    # HTTP processing service
 | 1 | Gentle | Minimal processing |
 | 2 | Light | Subtle effect |
 | 3 | Moderate | Balanced (default) |
-| 4 | Strong | Noticeable processing |
-| 5 | Aggressive | Maximum effect |
 
 ## License
 

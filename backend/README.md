@@ -38,6 +38,8 @@ From the repo root, the normal three-terminal workflow is:
 
 ## Current Product Notes
 
+- Guest users get a browser-trimmed 30-second preview via `/api/preview`; that path is synchronous and does not use S3, Oban, or persisted jobs.
+- Signed-in users keep the full upload flow: `/api/presign-upload` → direct upload → `/api/jobs` → Rust async processing.
 - Legal pages (`terms`, `privacy`, `legal`) are parked in code but intentionally not exposed in the public router.
 - Standalone registration has been removed; the public auth flow is unified magic-link sign-in.
 - `Past Munchings` is available to signed-in users only.

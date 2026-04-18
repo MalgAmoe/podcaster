@@ -36,6 +36,7 @@ cd backend && mix test
 # SolidJS frontend
 cd backend/assets && node build.mjs         # one-shot build
 cd backend/assets && node build.mjs --watch # watch mode
+cd backend/assets && npm test               # Playwright guest-preview checks
 
 # Full dev stack (Postgres + MinIO, then API, then Phoenix)
 ./dev.sh infra    # terminal 1
@@ -261,8 +262,8 @@ Complete chain with all stages:
 2. Input gain normalization (-18 LUFS target)
 3. Declick (optional, offline only)
 4. DeReverb (optional, init with ReverbAnalysis)
-5. Denoise (spectral subtraction)
-6. AI Clean (optional, isolates voice)
+5. Denoise (spectral subtraction, optional)
+6. AI Clean (MossFormer2, optional)
 7. Spectral Gate (non-stationary noise)
 8. Peak Attenuator (tonal noise removal)
 9. Dynamics:
@@ -282,11 +283,12 @@ Complete chain with all stages:
 
 ## Denoising
 
-DeepFilterNet (deep-learning) is the sole denoiser in the API pipeline. It runs unconditionally on every job — there's no toggle and no spectral-subtraction stage anymore.
+The production AI-clean path is now MossFormer2 behind the generic `ai_clean` interface.
 
-- Feature-gated in the Rust API by the `deepfilter` feature (default on)
-- Per-channel analysis via `analyze_for_deepfilter` before processing (stereo: analyze + reset + analyze right)
-- The library still exposes `RealtimeDenoiser`, `SpectralGate`, `DeReverbProcessor`, etc. — the CLI may still use them, but the API does not
+- Feature-gated in Rust by the `mossformer2` feature
+- `AiCleanProcessor` expects 48kHz input; CLI and API resample in and back out around that step
+- The CLI can still use the normal spectral denoiser, spectral gate, dereverb, etc.
+- The API uses MossFormer2 in the fixed production chain and does not expose a user toggle for it
 
 ## Module Organization
 
@@ -294,6 +296,7 @@ DeepFilterNet (deep-learning) is the sole denoiser in the API pipeline. It runs 
 crates/poddyclip/src/
 ├── lib.rs           # Public exports
 ├── traits.rs        # AudioProcessor, StereoProcessor, etc.
+├── ai_clean/        # MossFormer2 model adapter
 ├── stft/            # Shared STFT infrastructure
 ├── denoiser/        # Spectral subtraction
 │   ├── core.rs      # RealtimeDenoiser, StreamingDenoiser
@@ -301,9 +304,6 @@ crates/poddyclip/src/
 │   ├── analysis.rs  # One-pass FFT analysis
 │   ├── spectral_gate.rs    # Non-stationary noise gate
 │   └── peak_attenuator.rs  # Tonal peak removal
-├── deepfilter/      # AI denoiser (optional, feature-gated)
-│   ├── core.rs      # DeepFilterDenoiser wrapper
-│   └── analysis.rs  # SNR analysis for auto-tuning
 ├── dereverb/        # Spectral de-reverb
 │   ├── core.rs      # DeReverbProcessor
 │   └── common.rs    # Presets, params
@@ -324,6 +324,7 @@ crates/poddyclip/src/
 │   └── channel9.rs  # Neve transformer model
 ├── repair/          # Audio repair
 │   └── declicker.rs # Click/pop removal (offline)
+├── sample_rate.rs   # Shared resampling helper
 └── analysis/        # Audio analysis
     ├── lufs.rs      # LUFS metering
     ├── spectral.rs  # 4096-FFT spectral analysis
@@ -393,12 +394,12 @@ processor.process_stereo(&mut left[0], &mut right[0]);
 HTTP server (Axum) that processes audio with a single fixed pipeline. Not configurable per-request — there's no strength selector, no toggles, no presets exposed to the client.
 
 **Features:**
-- `deepfilter` (default) — DeepFilterNet AI denoiser
+- `mossformer2` (default) — MossFormer2 AI clean path
 
 **`ProcessConfig` is built via `ProcessConfig::new()`** — a static preset. There is no `from_strength()` and no runtime branching. Fixed settings:
 - Filters: HP 85Hz @ 24dB/oct
 - Declick: ON
-- Denoise: DeepFilterNet (always)
+- Denoise: MossFormer2 AI clean in the `denoise` stage
 - PeakComp: preset 1
 - FixEQ: OFF (reserved — flag exists but default off)
 - DeEsser: ON
@@ -413,6 +414,13 @@ HTTP server (Axum) that processes audio with a single fixed pipeline. Not config
 - `phoenix_job_id`, `webhook_url`, `webhook_secret`
 - `output_format` ("mp3"/"wav"), `mp3_bitrate` (default 192)
 - No strength, no ai_clean, no mono.
+
+**Preview path — `POST /preview`:**
+- raw audio bytes in
+- synchronous processing
+- hard duration limit enforcement for the guest demo path
+- WAV bytes out
+- no S3, no webhook, no background job state
 
 **Pipeline stages (13 total):**
 ```
@@ -435,6 +443,7 @@ Elixir/Phoenix app that handles auth, billing, job orchestration, and serves the
 
 **Routes of note** (`lib/poddyclip_backend_web/router.ex`):
 - `/app` and `/app/*path` → SolidJS app (via `PageController.app`, catch-all)
+- `/api/preview` (POST) → synchronous guest preview path
 - `/api/jobs` (POST) → create job; minimal payload: `s3_key`, `filename`, `duration_seconds`
 - `/api/jobs/current`, `/api/jobs/history`, `/api/jobs/:id/download_url`, etc.
 - `/api/internal/jobs/:id/status` — Rust API webhook callback
@@ -453,7 +462,10 @@ Elixir/Phoenix app that handles auth, billing, job orchestration, and serves the
 
 **State:** two contexts — `ProcessContext` (upload/job state, Phoenix Channel subscription for live progress) and `NotificationContext` (toast queue). No i18n.
 
-**Upload flow:** frontend asks `/api/presign-upload` → PUTs file directly to S3 via XHR (progress tracked) → POSTs to `/api/jobs` with just `{s3_key, filename, duration_seconds}`.
+**Upload / preview flow:**
+- signed-in users: `/api/presign-upload` → direct upload to S3 via XHR → `POST /api/jobs`
+- guests: browser trims to a 30-second WAV preview → `POST /api/preview` → synchronous processed WAV result
+- guest preview does not use S3, Oban, or persisted jobs
 
 **Theme:** custom daisyUI theme `poddyclip` (dark purple, `#9333ea`) in `assets/css/app.css`. DM Sans font.
 
@@ -471,9 +483,9 @@ Context for future edits (don't re-add without explicit ask):
 - **QualityRating / PmfSurvey** post-job components
 - **JSON feedback API** (`/api/feedback`, `FeedbackController`, `submitFeedback` JS helper) — only the form-based `/feedback` page remains
 - **VST3/CLAP plugin** (`poddyclip-plugin` crate + `xtask` build runner + `nih-plug`/`bundler.toml` tooling) — web-only product now
+- **Standalone registration page** (`/users/register`) — removed; public auth is unified magic-link sign-in
 
 ## Deactivated — kept in code, re-enable later
 
 These are **not dead code** — they're temporarily disabled with routes commented out. Templates, controllers, and schemas are intact.
 - **Legal pages** (`/terms`, `/privacy`, `/legal`) — actions + HEEx templates still exist. Router comments explain: re-enable when the layout/footer has visible links.
-- **User registration page** (`/users/register`) — redirects to `/users/log-in` for now (magic-link auto-creates accounts). `UserRegistrationController` + `user_registration_html/new.html.heex` kept for when a dedicated registration page is needed again.
