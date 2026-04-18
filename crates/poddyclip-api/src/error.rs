@@ -20,6 +20,9 @@ pub enum ApiError {
     #[error("Invalid request: {0}")]
     InvalidRequest(String),
 
+    #[error("Could not decode audio: {0}")]
+    DecodeFailed(String),
+
     #[error("Unsupported audio format: {0}")]
     UnsupportedFormat(String),
 
@@ -31,6 +34,15 @@ pub enum ApiError {
 
     #[error("Internal error: {0}")]
     Internal(String),
+
+    #[error("Preview exceeds allowed duration")]
+    PreviewTooLong {
+        max_seconds: u32,
+        tolerance_seconds: f64,
+    },
+
+    #[error("Preview service is busy")]
+    PreviewBusy,
 }
 
 impl IntoResponse for ApiError {
@@ -42,6 +54,7 @@ impl IntoResponse for ApiError {
             }
             ApiError::JobFailed(m) => (StatusCode::OK, "job_failed", m.clone()),
             ApiError::InvalidRequest(m) => (StatusCode::BAD_REQUEST, "invalid_request", m.clone()),
+            ApiError::DecodeFailed(m) => (StatusCode::UNPROCESSABLE_ENTITY, "decode_failed", m.clone()),
             ApiError::UnsupportedFormat(f) => {
                 (StatusCode::BAD_REQUEST, "unsupported_format", f.clone())
             }
@@ -56,14 +69,41 @@ impl IntoResponse for ApiError {
             ApiError::Internal(m) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal_error", m.clone())
             }
+            ApiError::PreviewTooLong {
+                max_seconds,
+                tolerance_seconds,
+            } => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "too_long",
+                format!(
+                    "Preview exceeds {}s limit (+{}s tolerance)",
+                    max_seconds, tolerance_seconds
+                ),
+            ),
+            ApiError::PreviewBusy => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "preview_busy",
+                "Preview service is busy".to_string(),
+            ),
         };
 
-        let body = Json(json!({
+        let mut payload = json!({
             "error": {
                 "type": error_type,
                 "message": message,
             }
-        }));
+        });
+
+        if let ApiError::PreviewTooLong {
+            max_seconds,
+            tolerance_seconds,
+        } = &self
+        {
+            payload["max_seconds"] = json!(max_seconds);
+            payload["tolerance_seconds"] = json!(tolerance_seconds);
+        }
+
+        let body = Json(payload);
 
         (status, body).into_response()
     }

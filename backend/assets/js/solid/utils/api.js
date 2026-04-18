@@ -116,6 +116,16 @@ async function request(method, path, body = null) {
   throw lastError || new Error("Request failed after retries");
 }
 
+async function parsePreviewError(response) {
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    const data = await response.json();
+    throw new ApiError(data, response.status);
+  }
+
+  throw new Error(`Preview request failed (${response.status})`);
+}
+
 export const api = {
   async getCurrentJob() {
     return request("GET", "/api/jobs/current");
@@ -131,6 +141,27 @@ export const api = {
       filename,
       duration_seconds: config.duration_seconds,
     });
+  },
+
+  async createPreview(file, signal) {
+    const formData = new FormData();
+    formData.append("audio", file);
+
+    const response = await fetch("/api/preview", {
+      method: "POST",
+      headers: {
+        "X-CSRF-Token": getCSRFToken(),
+      },
+      credentials: "same-origin",
+      body: formData,
+      signal,
+    });
+
+    if (!response.ok) {
+      await parsePreviewError(response);
+    }
+
+    return response.blob();
   },
 
   async cancelJob(jobId) {

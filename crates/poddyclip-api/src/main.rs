@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use axum::{
+    extract::DefaultBodyLimit,
     middleware,
     routing::{delete, get, post},
     Router,
@@ -17,7 +18,7 @@ use tower_http::{
 use tracing::{error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use poddyclip_api::handlers::{create_s3_job, delete_job, health};
+use poddyclip_api::handlers::{create_s3_job, delete_job, health, preview};
 use poddyclip_api::require_api_key;
 use poddyclip_api::state::{AppConfig, AppState};
 use poddyclip_api::storage::{Storage, StorageConfig};
@@ -47,6 +48,11 @@ async fn main() {
     info!("  Max file size: {} MB", config.max_file_size_mb);
     info!("  Job timeout: {}s", config.job_timeout_seconds);
     info!("  Result retention: {}s", config.result_retention_seconds);
+    info!(
+        "  Preview limit: {}s (+{}s tolerance)",
+        config.preview_max_seconds,
+        config.preview_tolerance_seconds
+    );
 
     // Initialize S3 storage if configured
     let storage = match StorageConfig::from_env() {
@@ -90,6 +96,7 @@ async fn main() {
     let protected_routes = Router::new()
         .route("/jobs", post(create_s3_job))
         .route("/jobs/{id}", delete(delete_job))
+        .route("/preview", post(preview).layer(DefaultBodyLimit::max(max_body_size)))
         .route_layer(middleware::from_fn_with_state(state.clone(), require_api_key));
 
     // Public routes

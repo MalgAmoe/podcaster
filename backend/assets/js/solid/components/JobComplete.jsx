@@ -34,6 +34,9 @@ export function JobComplete() {
 
   function isValidDownloadUrl(url) {
     try {
+      if (url.startsWith("blob:")) {
+        return true;
+      }
       const parsed = new URL(url, window.location.origin);
       return (
         parsed.origin === window.location.origin ||
@@ -51,7 +54,14 @@ export function JobComplete() {
   function handleDownload() {
     const url = store.job?.download_url;
     if (url && isValidDownloadUrl(url)) {
-      window.location.href = url;
+      if (url.startsWith("blob:")) {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = store.job?.filename || "preview.wav";
+        link.click();
+      } else {
+        window.location.href = url;
+      }
     } else if (url) {
       console.error("Invalid download URL origin:", url);
     }

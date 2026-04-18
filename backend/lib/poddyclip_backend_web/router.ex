@@ -94,6 +94,7 @@ defmodule PoddyclipBackendWeb.Router do
     pipe_through(:api_auth)
 
     post("/presign-upload", ProcessController, :presign_upload)
+    post("/preview", ProcessController, :preview)
     get("/jobs/current", ProcessController, :current_job)
     get("/jobs/history", ProcessController, :job_history)
     post("/jobs", ProcessController, :create_job)

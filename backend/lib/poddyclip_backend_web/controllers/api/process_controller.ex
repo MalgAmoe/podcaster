@@ -9,6 +9,7 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   alias PoddyclipBackend.Billing
   alias PoddyclipBackend.Processing
   alias PoddyclipBackend.Processing.Job
+  alias PoddyclipBackend.Processing.Client, as: ProcessingClient
   alias PoddyclipBackend.Storage
 
   @doc """
@@ -68,6 +69,57 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
     conn
     |> put_status(400)
     |> json(%{error: "Missing required parameters: s3_key, filename"})
+  end
+
+  @doc """
+  POST /api/preview - Process a short preview clip synchronously.
+
+  Accepts multipart form data with an `audio` file upload and returns WAV bytes.
+  """
+  def preview(conn, %{"audio" => %Plug.Upload{} = upload}) do
+    with {:ok, audio_bytes} <- File.read(upload.path),
+         {:ok, wav_bytes} <- ProcessingClient.preview(audio_bytes, upload.content_type || "audio/wav") do
+      conn
+      |> put_resp_content_type("audio/wav")
+      |> send_resp(200, wav_bytes)
+    else
+      {:error, :enoent} ->
+        conn
+        |> put_status(422)
+        |> json(%{error: "invalid_input"})
+
+      {:error, :invalid_input} ->
+        conn
+        |> put_status(422)
+        |> json(%{error: "invalid_input"})
+
+      {:error, {:too_long, max_seconds, tolerance_seconds}} ->
+        conn
+        |> put_status(422)
+        |> json(%{
+          error: "too_long",
+          max_seconds: max_seconds,
+          tolerance_seconds: tolerance_seconds
+        })
+
+      {:error, :preview_busy} ->
+        conn
+        |> put_status(503)
+        |> json(%{error: "preview_busy"})
+
+      {:error, reason} ->
+        Logger.error("Preview processing failed: #{inspect(reason)}")
+
+        conn
+        |> put_status(502)
+        |> json(%{error: "upstream_error"})
+    end
+  end
+
+  def preview(conn, _params) do
+    conn
+    |> put_status(400)
+    |> json(%{error: "Missing required parameter: audio"})
   end
 
   defp create_job_after_checks(conn, user, s3_key, filename, params) do

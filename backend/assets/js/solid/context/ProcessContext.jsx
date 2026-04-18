@@ -36,20 +36,28 @@ export function ProcessProvider(props) {
   const MAX_RECONNECT_ATTEMPTS = 3;
   const INITIAL_RECONNECT_DELAY = 1000; // 1s, 2s, 4s with exponential backoff
 
-  // Upload abort controller - prevents race conditions and orphaned uploads
+  // Upload / preview cancellation handles prevent overlapping guest/user flows
   let uploadXhr = null;
+  let previewAbortController = null;
+  let previewBlobUrl = null;
+
+  function revokePreviewBlobUrl() {
+    if (previewBlobUrl) {
+      URL.revokeObjectURL(previewBlobUrl);
+      previewBlobUrl = null;
+    }
+  }
 
   // Check for existing job on mount
   onMount(async () => {
     try {
-      // Check for existing job (reload recovery)
-      // Server excludes dismissed jobs, so we just restore if one exists
+      // Restore an existing server-backed job after reload.
       const { job } = await api.getCurrentJob();
       if (job) {
         setStore({
           job,
           filename: job.filename,
-          uploadState: "ready", // Show job result, not upload form
+          uploadState: "ready",
         });
       }
     } catch (err) {
@@ -66,13 +74,18 @@ export function ProcessProvider(props) {
       uploadXhr.abort();
       uploadXhr = null;
     }
+    if (previewAbortController) {
+      previewAbortController.abort();
+      previewAbortController = null;
+    }
+    revokePreviewBlobUrl();
     if (channel) channel.leave();
     if (socket) socket.disconnect();
   });
 
-  // Connect to job channel when job.id changes (fine-grained tracking)
+  // Connect to Phoenix channels only for server-backed jobs.
   createEffect(() => {
-    const jobId = store.job?.id;  // Track only job.id, not entire job object
+    const jobId = store.job?.id;
 
     // Clean up previous connection
     if (channel) {
@@ -92,7 +105,7 @@ export function ProcessProvider(props) {
     }
 
     // Connect if we have a job and token
-    if (jobId && window.userToken) {
+    if (jobId && window.userToken && !store.job?.localPreview) {
       socket = new Socket("/socket", {
         params: { token: window.userToken },
         reconnectAfterMs: (tries) => {
@@ -149,13 +162,12 @@ export function ProcessProvider(props) {
         .receive("error", (e) => { if (import.meta.env.DEV) console.error("Join failed", e); });
 
       channel.on("job_updated", (payload) => {
-        // Merge to preserve fields like original_url that server doesn't send
+        // Merge to preserve fields the server doesn't resend on updates.
         setStore("job", (prev) => ({ ...prev, ...payload.job }));
       });
     }
   });
 
-  // Get audio duration in seconds using Web Audio API
   async function getAudioDurationSeconds(file) {
     try {
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -178,6 +190,11 @@ export function ProcessProvider(props) {
       uploadXhr.abort();
       uploadXhr = null;
     }
+    if (previewAbortController) {
+      previewAbortController.abort();
+      previewAbortController = null;
+    }
+    revokePreviewBlobUrl();
 
     const isGuest = window.isGuest;
 
@@ -211,48 +228,48 @@ export function ProcessProvider(props) {
           filename: fileToUpload.name,
           estimatedSeconds,
           previewClip,
+          s3Key: null,
+          uploadState: "ready",
         });
+      } else {
+        const { url, key } = await api.presignUpload(fileToUpload.name);
+
+        await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          uploadXhr = xhr;
+
+          xhr.upload.addEventListener("progress", (e) => {
+            if (e.lengthComputable) {
+              setStore("uploadProgress", Math.round((e.loaded / e.total) * 100));
+            }
+          });
+
+          xhr.addEventListener("load", () => {
+            uploadXhr = null;
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve();
+            } else {
+              reject(new Error(`Upload failed: ${xhr.status}`));
+            }
+          });
+
+          xhr.addEventListener("error", () => {
+            uploadXhr = null;
+            reject(new Error("Upload failed"));
+          });
+
+          xhr.addEventListener("abort", () => {
+            uploadXhr = null;
+            reject(new Error("Upload cancelled"));
+          });
+
+          xhr.open("PUT", url, true);
+          xhr.setRequestHeader("Content-Type", fileToUpload.type || "application/octet-stream");
+          xhr.send(fileToUpload);
+        });
+
+        setStore({ s3Key: key, uploadState: "ready" });
       }
-
-      // TODO: once the guest preview endpoint exists, guest uploads should stop
-      // using the S3/job path entirely and submit the trimmed WAV directly.
-      const { url, key } = await api.presignUpload(fileToUpload.name);
-
-      await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        uploadXhr = xhr;
-
-        xhr.upload.addEventListener("progress", (e) => {
-          if (e.lengthComputable) {
-            setStore("uploadProgress", Math.round((e.loaded / e.total) * 100));
-          }
-        });
-
-        xhr.addEventListener("load", () => {
-          uploadXhr = null;
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve();
-          } else {
-            reject(new Error(`Upload failed: ${xhr.status}`));
-          }
-        });
-
-        xhr.addEventListener("error", () => {
-          uploadXhr = null;
-          reject(new Error("Upload failed"));
-        });
-
-        xhr.addEventListener("abort", () => {
-          uploadXhr = null;
-          reject(new Error("Upload cancelled"));
-        });
-
-        xhr.open("PUT", url, true);
-        xhr.setRequestHeader("Content-Type", fileToUpload.type || "application/octet-stream");
-        xhr.send(fileToUpload);
-      });
-
-      setStore({ s3Key: key, uploadState: "ready" });
 
       // Detect audio duration in background (don't block upload completion)
       if (estimatedSeconds !== null) {
@@ -274,7 +291,7 @@ export function ProcessProvider(props) {
   }
 
   async function submitJob() {
-    if (!store.s3Key || !store.filename) {
+    if (!store.filename || !store.file || (!window.isGuest && !store.s3Key)) {
       notify({ type: "error", message: "Please upload a file first" });
       return;
     }
@@ -284,12 +301,53 @@ export function ProcessProvider(props) {
     setStore("submitting", true);
 
     try {
-      const config = {
-        duration_seconds: store.estimatedSeconds || 60,
-      };
-      const job = await api.createJob(store.s3Key, store.filename, config);
-      setStore({ job });
+      if (window.isGuest) {
+        previewAbortController = new AbortController();
+        setStore({
+          job: {
+            id: "preview",
+            localPreview: true,
+            status: "processing",
+            filename: store.filename,
+            progress: {
+              stage: "denoise",
+              percent_complete: 50,
+            },
+          },
+        });
+
+        const previewBlob = await api.createPreview(store.file, previewAbortController.signal);
+        previewAbortController = null;
+        revokePreviewBlobUrl();
+        previewBlobUrl = URL.createObjectURL(previewBlob);
+
+        setStore({
+          submitting: false,
+          job: {
+            id: "preview",
+            localPreview: true,
+            status: "completed",
+            filename: store.filename,
+            download_url: previewBlobUrl,
+            progress: {
+              stage: "completed",
+              percent_complete: 100,
+            },
+          },
+        });
+      } else {
+        const config = {
+          duration_seconds: store.estimatedSeconds || 60,
+        };
+        const job = await api.createJob(store.s3Key, store.filename, config);
+        setStore({ job });
+      }
     } catch (err) {
+      if (err.name === "AbortError") {
+        setStore("submitting", false);
+        return;
+      }
+
       // Billing errors get persistent notification with upgrade action
       if (err instanceof ApiError && err.code === "insufficient_seconds") {
         const details = err.details;
@@ -312,12 +370,18 @@ export function ProcessProvider(props) {
         notify({ type: "error", message: err.message, persistent: true });
       }
       // Reset submitting on error so user can retry
-      setStore("submitting", false);
+      setStore({
+        submitting: false,
+        job: null,
+      });
     }
   }
 
   async function cancelJob() {
-    if (store.job?.id) {
+    if (store.job?.localPreview && previewAbortController) {
+      previewAbortController.abort();
+      previewAbortController = null;
+    } else if (store.job?.id) {
       try {
         await api.cancelJob(store.job.id);
       } catch (err) {
@@ -330,8 +394,13 @@ export function ProcessProvider(props) {
   async function reset() {
     // Clear audio buffer cache to free memory
     clearAudioCache();
+    revokePreviewBlobUrl();
+    if (previewAbortController) {
+      previewAbortController.abort();
+      previewAbortController = null;
+    }
 
-    if (store.job?.id) {
+    if (store.job?.id && !store.job.localPreview) {
       if (store.job.status === "completed") {
         // Mark completed jobs as dismissed server-side so they don't restore on reload
         // Job remains in DB for job history

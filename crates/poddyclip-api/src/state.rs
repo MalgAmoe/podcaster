@@ -26,6 +26,8 @@ pub struct AppConfig {
     pub max_file_size_mb: usize,
     pub job_timeout_seconds: u64,
     pub result_retention_seconds: u64,
+    pub preview_max_seconds: u32,
+    pub preview_tolerance_seconds: f64,
     pub port: u16,
     pub api_key: Option<String>,
     /// Comma-separated list of allowed CORS origins. Empty = allow any (dev mode).
@@ -38,6 +40,8 @@ impl Default for AppConfig {
             max_file_size_mb: DEFAULT_MAX_FILE_SIZE_MB,
             job_timeout_seconds: 600,
             result_retention_seconds: 3600,
+            preview_max_seconds: 30,
+            preview_tolerance_seconds: 2.0,
             port: 3000,
             api_key: None,
             cors_origins: None, // None = allow any (dev mode)
@@ -60,6 +64,14 @@ impl AppConfig {
                 .ok()
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(3600),
+            preview_max_seconds: std::env::var("PREVIEW_MAX_SECONDS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(30),
+            preview_tolerance_seconds: std::env::var("PREVIEW_TOLERANCE_SECONDS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(2.0),
             port: std::env::var("PORT")
                 .ok()
                 .and_then(|s| s.parse().ok())

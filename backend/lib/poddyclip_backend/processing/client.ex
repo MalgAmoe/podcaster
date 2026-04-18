@@ -109,4 +109,33 @@ defmodule PoddyclipBackend.Processing.Client do
     end
   end
 
+  @doc """
+  Process a short preview clip synchronously and return WAV bytes.
+  """
+  def preview(audio_bytes, content_type \\ "audio/wav") do
+    case Req.post("#{base_url()}/preview",
+           body: audio_bytes,
+           headers: [{"content-type", content_type} | auth_headers()],
+           receive_timeout: 120_000
+         ) do
+      {:ok, %{status: 200, body: body}} when is_binary(body) ->
+        {:ok, body}
+
+      {:ok, %{status: 422, body: %{"error" => %{"type" => "too_long"}, "max_seconds" => max_seconds, "tolerance_seconds" => tolerance_seconds}}} ->
+        {:error, {:too_long, max_seconds, tolerance_seconds}}
+
+      {:ok, %{status: 422, body: %{"error" => %{"type" => "decode_failed"}}}} ->
+        {:error, :invalid_input}
+
+      {:ok, %{status: 503, body: %{"error" => %{"type" => "preview_busy"}}}} ->
+        {:error, :preview_busy}
+
+      {:ok, %{status: status, body: body}} ->
+        {:error, {:http_error, status, body}}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
 end

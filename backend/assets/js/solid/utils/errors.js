@@ -4,6 +4,15 @@ export function getErrorMessage(error) {
   if (error.includes("insufficient_seconds")) {
     return "Not enough time available. Upgrade to Munch Plan or buy a Snack for more processing time.";
   }
+  if (error.includes("too_long")) {
+    return "Preview clips must stay within the 30-second limit.";
+  }
+  if (error.includes("preview_busy")) {
+    return "Preview service is busy right now. Try again in a moment.";
+  }
+  if (error.includes("invalid_input")) {
+    return "Could not read that preview clip. Try a different WAV or MP3 file.";
+  }
   if (error.includes("probe") || error.includes("Unsupported")) {
     return "Audio format not supported. Try converting to WAV or MP3.";
   }

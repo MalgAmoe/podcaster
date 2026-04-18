@@ -1,6 +1,6 @@
 # Guest Preview v1
 
-> Status: **plan refreshed for current repo reality**. This replaces the older WASM-heavy preview design and treats browser-side JS trimming as the first implementation step.
+> Status: **partially implemented**. Browser-side trimming, Phoenix `/api/preview`, Rust `/preview`, and guest direct-preview submission are in place. Simple abuse controls and follow-up polish are still pending.
 
 ## Goal
 
@@ -118,19 +118,26 @@ TODOs to leave in code at the right boundaries:
 
 ## Important notes from current repo state
 
-- The current guest flow still uses the normal upload/job path and blocks after 3 completed jobs. That should be removed once preview is live.
-- The frontend currently uploads every selected file to S3. Guest preview must become a separate path, not a small tweak to the existing submit call.
-- `Plug.Parsers` is currently global in Phoenix. For v1, do not block on a perfect pre-parser rejection design. Add a TODO instead.
+- Guest preview now bypasses S3 and the normal job path.
+- The old guest `3 files` limit has been removed.
+- `Plug.Parsers` is still global in Phoenix. For v1, do not block on a perfect pre-parser rejection design. Add a TODO instead.
 - Browser-side trimming is a UX and bandwidth improvement, but Rust must still enforce the decoded-duration cap.
+- Current guest preview UI is synchronous and intentionally does not have real backend progress reporting.
 
 ## Implementation order
 
+Done:
 1. Update this plan and align comments/docs with the new direction
 2. Add browser-side WAV/MP3 → trimmed WAV handling in the Solid frontend
-3. Add Phoenix preview endpoint and simple limiter/concurrency guard
+3. Add Phoenix preview endpoint
 4. Add Rust `/preview` endpoint
 5. Switch guest submit from the normal job flow to the new preview flow
 6. Remove the old guest `3 files` limit behavior
+
+Next:
+1. Add simple Phoenix-side preview limiter
+2. Add simple concurrency guard around the Phoenix → Rust preview call
+3. Run fuller end-to-end browser validation and tighten UX details where needed
 
 ## Test plan
 
