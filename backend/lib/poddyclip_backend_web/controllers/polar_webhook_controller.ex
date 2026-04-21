@@ -150,7 +150,9 @@ defmodule PoddyclipBackendWeb.PolarWebhookController do
     subscription = data["subscription"] || data
     subscription_id = subscription["id"]
 
-    user = Billing.get_user_by_subscription_id(subscription_id)
+    user =
+      Billing.get_user_by_subscription_id(subscription_id) ||
+        find_user_for_subscription(subscription)
 
     if user do
       period_end = parse_period_end(subscription)
@@ -183,7 +185,9 @@ defmodule PoddyclipBackendWeb.PolarWebhookController do
     subscription = data["subscription"] || data
     subscription_id = subscription["id"]
 
-    user = Billing.get_user_by_subscription_id(subscription_id)
+    user =
+      Billing.get_user_by_subscription_id(subscription_id) ||
+        find_user_for_subscription(subscription)
 
     if user do
       Logger.info("Subscription canceled for user #{user.id}")
@@ -199,7 +203,9 @@ defmodule PoddyclipBackendWeb.PolarWebhookController do
     subscription = data["subscription"] || data
     subscription_id = subscription["id"]
 
-    user = Billing.get_user_by_subscription_id(subscription_id)
+    user =
+      Billing.get_user_by_subscription_id(subscription_id) ||
+        find_user_for_subscription(subscription)
 
     if user do
       Logger.info("Subscription uncanceled for user #{user.id}")
@@ -215,7 +221,9 @@ defmodule PoddyclipBackendWeb.PolarWebhookController do
     subscription = data["subscription"] || data
     subscription_id = subscription["id"]
 
-    user = Billing.get_user_by_subscription_id(subscription_id)
+    user =
+      Billing.get_user_by_subscription_id(subscription_id) ||
+        find_user_for_subscription(subscription)
 
     if user do
       Logger.warning("Subscription past due for user #{user.id}")
@@ -232,7 +240,9 @@ defmodule PoddyclipBackendWeb.PolarWebhookController do
     subscription = data["subscription"] || data
     subscription_id = subscription["id"]
 
-    user = Billing.get_user_by_subscription_id(subscription_id)
+    user =
+      Billing.get_user_by_subscription_id(subscription_id) ||
+        find_user_for_subscription(subscription)
 
     if user do
       Logger.info("Subscription revoked for user #{user.id}")
@@ -401,15 +411,26 @@ defmodule PoddyclipBackendWeb.PolarWebhookController do
     subscription_id = subscription["id"]
     customer_id = get_customer_id(subscription)
     customer_email = get_in(subscription, ["customer", "email"])
+    reference_id = get_in(subscription, ["metadata", "reference_id"])
+    customer_external_id =
+      subscription["customer_external_id"] ||
+        get_in(subscription, ["customer", "external_id"])
 
-    # Try finding by subscription ID first (if already linked),
-    # then by customer ID, then by email as last resort for initial activation.
-    # Email lookup is safe here because Polar verifies the checkout email
-    # matches the customer, and this only matters for the first webhook
-    # before polar_customer_id is stored on the user.
+    # Try finding by existing linkage first, then by explicit user identifiers
+    # from checkout metadata, then by customer/email fallback for initial activation.
     Billing.get_user_by_subscription_id(subscription_id) ||
       (customer_id && Billing.get_user_by_customer_id(customer_id)) ||
+      find_user_by_external_identifier(reference_id || customer_external_id) ||
       (customer_email && PoddyclipBackend.Accounts.get_user_by_email(customer_email))
+  end
+
+  defp find_user_by_external_identifier(nil), do: nil
+
+  defp find_user_by_external_identifier(value) do
+    case parse_user_id(value) do
+      nil -> nil
+      user_id -> PoddyclipBackend.Accounts.get_user(user_id)
+    end
   end
 
   defp get_plan_for_product(product) do

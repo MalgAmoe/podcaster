@@ -6,6 +6,7 @@ defmodule PoddyclipBackendWeb.AccountLive do
   use PoddyclipBackendWeb, :live_view
 
   alias PoddyclipBackend.{Billing, Polar, Repo}
+  alias PoddyclipBackend.Accounts.Scope
   alias PoddyclipBackend.Billing.MinutePack
   alias PoddyclipBackendWeb.Endpoint
 
@@ -39,7 +40,13 @@ defmodule PoddyclipBackendWeb.AccountLive do
   @impl true
   def handle_info({:user_updated, user}, socket) do
     user = Repo.preload(user, :plan)
-    {:noreply, assign_user_data(socket, user)}
+
+    socket =
+      socket
+      |> assign(:current_scope, Scope.for_user(user))
+      |> assign_user_data(user)
+
+    {:noreply, socket}
   end
 
   defp assign_user_data(socket, user) do
@@ -75,7 +82,7 @@ defmodule PoddyclipBackendWeb.AccountLive do
       remaining_min: remaining_min,
       remaining_sec: remaining_sec,
       usage_percent: usage_percent,
-      checkout_url: Polar.checkout_url(user, Billing.get_plan_by_name("munch")),
+      checkout_url: Polar.checkout_url(user, Billing.get_plan_by_name("munch"), Endpoint.url() <> "/account?upgraded=true"),
       portal_url: Polar.customer_portal_url(user),
       # Minute packs
       pack_minutes: pack_minutes,

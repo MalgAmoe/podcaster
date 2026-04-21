@@ -70,7 +70,7 @@ defmodule PoddyclipBackend.Accounts do
   @doc """
   Registers a user.
 
-  New users are assigned the free plan with 10800 seconds (3 hours).
+  New users are assigned the free plan with 1800 seconds (30 minutes).
 
   ## Examples
 

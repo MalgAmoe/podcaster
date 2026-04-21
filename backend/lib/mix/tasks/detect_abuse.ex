@@ -45,7 +45,7 @@ defmodule Mix.Tasks.DetectAbuse do
       domain_clusters: find_domain_clusters(),
 
       # PATTERN 4: Heavy free-tier usage
-      # Free tier gets 10800 seconds (3 hours). Users who have processed more than that
+      # Free tier gets 1800 seconds (30 minutes). Users who have processed more than that
       # while still on free plan might be gaming (got refunds, exploits, etc)
       # Calculated by summing estimated_seconds from completed jobs
       free_tier_heavy_users: find_free_tier_heavy_users()
@@ -191,15 +191,15 @@ defmodule Mix.Tasks.DetectAbuse do
 
   # Find free-tier users who have used more seconds than the free allowance.
   #
-  # Free tier gives 10800 seconds (3 hours). If a user on free plan has completed jobs
-  # totaling more than 10800 estimated_seconds, something is off:
+  # Free tier gives 1800 seconds (30 minutes). If a user on free plan has completed jobs
+  # totaling more than 1800 estimated_seconds, something is off:
   # - They got refunds/credits
   # - They exploited a bug
   # - They're part of a Sybil cluster rotating through accounts
   #
   # Sums estimated_seconds from completed jobs per user.
   #
-  # Returns: List of free-tier users with total_seconds_used > 10800
+  # Returns: List of free-tier users with total_seconds_used > 1800
   defp find_free_tier_heavy_users do
     # Get all users on free plan
     free_users =
@@ -222,13 +222,13 @@ defmodule Mix.Tasks.DetectAbuse do
       |> Repo.all()
       |> Map.new()
 
-    # Find users who've used more than free tier allows (900 seconds)
+    # Find users who've used more than free tier allows
     free_users
     |> Enum.map(fn user ->
       total_used = Map.get(usage_by_user, user.id, 0) || 0
       Map.put(user, :total_seconds_used, total_used)
     end)
-    |> Enum.filter(fn user -> user.total_seconds_used > 10_800 end)
+    |> Enum.filter(fn user -> user.total_seconds_used > 1800 end)
     |> Enum.sort_by(& &1.total_seconds_used, :desc)
   end
 end

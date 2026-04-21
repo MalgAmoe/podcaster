@@ -147,6 +147,35 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
       assert response["status"] == "ok"
       assert response["warning"] == "user_not_found"
     end
+
+    test "finds user by metadata reference_id when customer linkage is missing", %{
+      conn: conn,
+      munch_plan: munch_plan
+    } do
+      user = user_fixture()
+
+      body =
+        Jason.encode!(%{
+          id: "evt_ref_#{System.unique_integer()}",
+          type: "subscription.active",
+          data: %{
+            subscription: %{
+              id: "sub_ref_123",
+              metadata: %{"reference_id" => to_string(user.id)},
+              product: %{id: munch_plan.polar_product_id},
+              current_period_end: System.system_time(:second) + 86400 * 30
+            }
+          }
+        })
+
+      conn = post_webhook(conn, body)
+      assert json_response(conn, 200)["status"] == "ok"
+
+      updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
+      assert updated_user.plan_id == munch_plan.id
+      assert updated_user.subscription_status == "active"
+      assert updated_user.polar_subscription_id == "sub_ref_123"
+    end
   end
 
   describe "subscription.updated" do

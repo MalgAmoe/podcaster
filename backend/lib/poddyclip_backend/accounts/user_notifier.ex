@@ -250,14 +250,14 @@ defmodule PoddyclipBackend.Accounts.UserNotifier do
     text = """
     Hi there,
 
-    Your cancelled subscription ends on #{end_date}. After that, you'll be on the Free plan (3 hours/month).
+    Your cancelled subscription ends on #{end_date}. After that, you'll be on the Free plan (30 minutes/month).
 
     Changed your mind? Reactivate here:
     #{app_link}
     """
 
     html = html_template(
-      "<p>Hi there,</p><p>Your cancelled subscription ends on <strong>#{end_date}</strong>.</p><p>After that, you'll be on the Free plan (3 hours/month).</p><p>Changed your mind?</p>",
+      "<p>Hi there,</p><p>Your cancelled subscription ends on <strong>#{end_date}</strong>.</p><p>After that, you'll be on the Free plan (30 minutes/month).</p><p>Changed your mind?</p>",
       button_text: "Reactivate",
       button_url: app_link
     )

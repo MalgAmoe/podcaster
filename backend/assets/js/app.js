@@ -30,9 +30,11 @@ window.liveSocket = liveSocket
 
 // Connect to user channel for navbar seconds updates (skip for guests)
 if (window.userToken && !window.isGuest) {
-  const updateNavbar = ({mins, secs}) => {
-    const el = document.getElementById("navbar-remaining")
-    if (el) el.textContent = `${mins}m ${secs}s`
+  const updateNavbar = ({mins, secs, minutes_available, plan_display_name}) => {
+    const summaryEl = document.getElementById("navbar-account-summary")
+    if (summaryEl && plan_display_name && minutes_available !== undefined) {
+      summaryEl.textContent = `${plan_display_name} · ${minutes_available} min available`
+    }
     window.userTotalSeconds = mins * 60 + secs
   }
   const userSocket = new Socket("/socket", { params: { token: window.userToken } })

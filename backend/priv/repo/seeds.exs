@@ -18,7 +18,7 @@ plans = [
   %{
     name: "free",
     display_name: "Free",
-    seconds: 10800,
+    seconds: 1800,
     price_cents: 0,
     polar_product_id: nil,
     active: true

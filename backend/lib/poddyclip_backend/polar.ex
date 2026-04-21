@@ -127,13 +127,20 @@ defmodule PoddyclipBackend.Polar do
 
   The checkout URL as a string, or nil if the plan has no polar_product_id.
   """
-  def checkout_url(user, _plan) do
+  def checkout_url(user, _plan, success_url \\ nil) do
     checkout_link_id = Application.get_env(:poddyclip_backend, :polar_checkout_link_id)
 
     if checkout_link_id do
       api_host = polar_api_host()
 
-      query = URI.encode_query(%{"customer_email" => user.email})
+      params = %{
+        "customer_email" => user.email,
+        "reference_id" => to_string(user.id),
+        "customer_external_id" => to_string(user.id)
+      }
+
+      params = if success_url, do: Map.put(params, "success_url", success_url), else: params
+      query = URI.encode_query(params)
 
       "https://#{api_host}/v1/checkout-links/#{checkout_link_id}/redirect?#{query}"
     else
