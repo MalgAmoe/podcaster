@@ -6,7 +6,6 @@ defmodule PoddyclipBackendWeb.AccountLive do
   use PoddyclipBackendWeb, :live_view
 
   alias PoddyclipBackend.{Billing, Polar, Repo}
-  alias PoddyclipBackend.Accounts.Scope
   alias PoddyclipBackend.Billing.MinutePack
   alias PoddyclipBackendWeb.Endpoint
 
@@ -40,13 +39,7 @@ defmodule PoddyclipBackendWeb.AccountLive do
   @impl true
   def handle_info({:user_updated, user}, socket) do
     user = Repo.preload(user, :plan)
-
-    socket =
-      socket
-      |> assign(:current_scope, Scope.for_user(user))
-      |> assign_user_data(user)
-
-    {:noreply, socket}
+    {:noreply, assign_user_data(socket, user)}
   end
 
   defp assign_user_data(socket, user) do

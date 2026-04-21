@@ -30,18 +30,39 @@ window.liveSocket = liveSocket
 
 // Connect to user channel for navbar seconds updates (skip for guests)
 if (window.userToken && !window.isGuest) {
-  const updateNavbar = ({mins, secs, minutes_available, plan_display_name}) => {
-    const summaryEl = document.getElementById("navbar-account-summary")
-    if (summaryEl && plan_display_name && minutes_available !== undefined) {
-      summaryEl.textContent = `${plan_display_name} · ${minutes_available} min available`
+  let latestNavbarPayload = null
+
+  const renderNavbar = ({mins, secs, minutes_available, plan_display_name}) => {
+    const planEl = document.getElementById("navbar-plan-name")
+    const minutesEl = document.getElementById("navbar-minutes-available")
+
+    if (planEl && plan_display_name) {
+      planEl.textContent = plan_display_name
     }
+
+    if (minutesEl && minutes_available !== undefined) {
+      minutesEl.textContent = `${minutes_available}`
+    }
+
     window.userTotalSeconds = mins * 60 + secs
   }
+
+  const updateNavbar = payload => {
+    latestNavbarPayload = payload
+    renderNavbar(payload)
+  }
+
   const userSocket = new Socket("/socket", { params: { token: window.userToken } })
   userSocket.connect()
   const navbarChannel = userSocket.channel("user:navbar", {})
   navbarChannel.join().receive("ok", updateNavbar)
   navbarChannel.on("seconds_updated", updateNavbar)
+
+  window.addEventListener("phx:page-loading-stop", () => {
+    if (latestNavbarPayload) {
+      window.requestAnimationFrame(() => renderNavbar(latestNavbarPayload))
+    }
+  })
 }
 
 // Mount Solid app if container exists
