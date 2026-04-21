@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use s3::creds::Credentials;
 use s3::region::Region;
 use s3::Bucket;
@@ -156,20 +156,35 @@ impl Storage {
             .await
             .context("Failed to download from S3")?;
 
+        let status = response.status_code();
+        let bytes = response.bytes().to_vec();
+
         debug!(
-            "Downloaded {} bytes from s3://{}/{}",
-            response.bytes().len(),
+            "GET s3://{}/{} -> status {} ({} bytes)",
             self.bucket.name(),
-            key
+            key,
+            status,
+            bytes.len()
         );
 
-        Ok(response.bytes().to_vec())
+        if status < 200 || status >= 300 {
+            let preview = String::from_utf8_lossy(&bytes[..bytes.len().min(200)]);
+            return Err(anyhow!(
+                "S3 GET failed for s3://{}/{}: status={} body_preview={}",
+                self.bucket.name(),
+                key,
+                status,
+                preview
+            ));
+        }
+
+        Ok(bytes)
     }
 
     /// Get object metadata (Content-Length) without downloading
     /// Returns the size in bytes
     pub async fn head_object(&self, key: &str) -> Result<u64> {
-        let (head, _) = self
+        let (head, status) = self
             .bucket
             .head_object(key)
             .await
@@ -178,11 +193,21 @@ impl Storage {
         let content_length = head.content_length.unwrap_or(0) as u64;
 
         debug!(
-            "HEAD s3://{}/{} -> {} bytes",
+            "HEAD s3://{}/{} -> status {} ({} bytes)",
             self.bucket.name(),
             key,
+            status,
             content_length
         );
+
+        if status < 200 || status >= 300 {
+            return Err(anyhow!(
+                "S3 HEAD failed for s3://{}/{}: status={}",
+                self.bucket.name(),
+                key,
+                status
+            ));
+        }
 
         Ok(content_length)
     }
