@@ -6,8 +6,8 @@
 use std::f32::consts::PI;
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Result};
-use ort::session::Session;
+use anyhow::{bail, Context, Result};
+use ort::{ep, session::Session};
 use ort::value::TensorRef;
 use realfft::{num_complex, ComplexToReal, RealFftPlanner, RealToComplex};
 
@@ -71,8 +71,20 @@ impl AiCleanProcessor {
         let mel_path = model_dir.join("mel_fb.bin");
 
         let session = Session::builder()?
+            .with_execution_providers([
+                ep::CUDA::default()
+                    .with_device_id(0)
+                    .build()
+                    .error_on_failure(),
+            ])?
             .with_intra_threads(4)?
-            .commit_from_file(&onnx_path)?;
+            .commit_from_file(&onnx_path)
+            .with_context(|| {
+                format!(
+                    "failed to initialize MossFormer2 ONNX session with CUDA for {}",
+                    onnx_path.display()
+                )
+            })?;
 
         let mel_fb = load_mel_filterbank(&mel_path)?;
 

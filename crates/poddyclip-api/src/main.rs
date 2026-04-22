@@ -18,7 +18,7 @@ use tower_http::{
 use tracing::{error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use poddyclip_api::handlers::{create_s3_job, delete_job, health, preview};
+use poddyclip_api::handlers::{create_s3_job, delete_job, health, ping, preview};
 use poddyclip_api::require_api_key;
 use poddyclip_api::state::{AppConfig, AppState};
 use poddyclip_api::storage::{Storage, StorageConfig};
@@ -102,7 +102,8 @@ async fn main() {
 
     // Public routes
     let public_routes = Router::new()
-        .route("/health", get(health));
+        .route("/health", get(health))
+        .route("/ping", get(ping));
 
     // Configure CORS based on CORS_ORIGINS env var
     // - Not set or empty: allow any origin (dev mode)

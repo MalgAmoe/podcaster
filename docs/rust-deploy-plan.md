@@ -1,33 +1,34 @@
 # Rust API → RunPod Serverless Deployment Plan
 
-> Status: **draft, to be validated**. Based on RunPod docs as of 2026-04. Pin exact versions and test each phase before committing to the design.
+> Status: **draft, updated from working pod validation**. Based on repo state and RunPod docs as of 2026-04.
 
 ## Architecture
 
 Axum HTTP server on a **load-balancing Serverless endpoint** (not queue-based). Keeps the existing Phoenix ↔ Rust API contract intact — the per-stage webhook progress flow, auth, and route design all survive unchanged. Phoenix just points at the RunPod endpoint URL instead of the direct Rust host.
 
-- **Image**: Rust binary + CUDA runtime + cuDNN + ONNX Runtime GPU (`libonnxruntime.so`)
-- **Network volume**: MossFormer2 weights, mounted at `/runpod-volume/models/mossformer2/`
+- **Image**: custom Docker image with Rust binary + CUDA runtime + cuDNN + ONNX Runtime GPU libs + baked-in MossFormer2 model assets
 - **Endpoint**: load-balancing, GPU, min CUDA 12.x filter, no SKU lock-in
 
 ## Versions (pinned)
 
-| Component | Version |
+| Component | Version / choice |
 |---|---|
-| Base image | `nvidia/cuda:12.6.0-cudnn-runtime-ubuntu22.04` (pinned tag, cuDNN 9) |
-| `ort` crate | `=2.0.0-rc.12`, features `["cuda", "load-dynamic"]` |
-| ONNX Runtime GPU | `v1.24.3` (`libonnxruntime.so` shipped in image) |
-| CUDA / cuDNN | 12.x / 9.x |
-| GPU pool | A4000/A5000/3090/4090/L4/A40/… (filter by min CUDA 12.x) |
+| Base image | NVIDIA `cudnn-runtime` Ubuntu image, pinned tag |
+| Build pattern | multi-stage Docker build |
+| `ort` crate | current repo pin with `cuda` enabled |
+| ONNX Runtime GPU | bundled runtime/provider libs in the image |
+| CUDA / cuDNN | pinned to a compatible pair for the chosen ORT build |
+| GPU pool | A4500-class and similar, filter by compatible CUDA generation |
 
 ## Rust app changes
 
-- Env-driven model path:
-  - `MODEL_ROOT=crates/poddyclip/models` for local dev
-  - `MODEL_ROOT=/runpod-volume` for prod
+- Keep the first production image simple:
+  - bake `model.onnx` and `mel_fb.bin` into the image
+  - do not require a network volume for v1
+- Add `GET /ping` returning healthy only once the worker is ready.
 - `GET /ping` returns 200 only after MossFormer2 session init completes — this is RunPod's readiness gate, and it's the "init hook."
 - Initialize ORT session once at startup, not per-request.
-- Set `ORT_DYLIB_PATH` to the bundled `libonnxruntime.so`.
+- Ensure ONNX Runtime shared libraries are available in the image and on the runtime library path.
 
 ## Endpoint configuration
 
@@ -35,19 +36,22 @@ Axum HTTP server on a **load-balancing Serverless endpoint** (not queue-based). 
 - **Execution timeout**: raised above default 600s — podcast jobs run 5–90 min (default would silently kill long jobs)
 - **Idle timeout**: modest bump if traffic is bursty enough that warm reuse matters
 - **FlashBoot**: on (default)
-- **Env vars**: `MODEL_ROOT=/runpod-volume`, plus any secrets (declared on the endpoint, not inherited from local `.env`)
-- **Network volume**: single volume for v1; multi-region only if availability becomes a real problem
+- **Env vars**: app secrets and storage settings only; no model-volume dependency for v1
+- **Network volume**: not required for the first version
 
 ## Model delivery
 
-Populate the network volume via RunPod's **S3-compatible API** — no temporary Pod rental needed. One-time upload from your local machine:
+For v1, keep model delivery simple:
 
-```
-s3://<volume-id>/models/mossformer2/model.onnx
-s3://<volume-id>/models/mossformer2/mel_fb.bin
-```
+- bake `model.onnx` and `mel_fb.bin` into the image
+- rebuild the image when the model changes
 
-Update the model later the same way — no image rebuild required.
+Reasoning:
+
+- the model is modest by RunPod standards
+- the CUDA/cuDNN base is already several gigabytes
+- the extra model weight does not buy enough simplification to justify a separate model-delivery path yet
+- one image is easier to reproduce from scratch than image + volume + model sync
 
 ## Deployment workflow
 
@@ -55,12 +59,16 @@ Update the model later the same way — no image rebuild required.
 
 Rent a GPU Pod, get Rust + Axum + `ort` + CUDA + MossFormer2 loading end-to-end. Codify the working setup into the repo as `Dockerfile`, entrypoint, and env-var declarations. Tear down the Pod. **Any fix that exists only inside the Pod and not in Git is not real** — it must flow back to the repo before the Pod dies.
 
+This phase already yielded two important repo changes:
+
+- `ort` CUDA enabled in the Rust dependency graph
+- explicit CUDA execution provider selection so the app does not silently fall back to CPU
+
 ### Phase 2 — Endpoint creation (one-time)
 
 - Build image once, push to GHCR (`ghcr.io/malgamoe/poddyclip-api:<sha>`)
 - Create load-balancing Serverless endpoint pointing at that image
-- Attach the pre-populated network volume
-- Set env vars (`MODEL_ROOT`, etc.)
+- Set env vars (storage, auth, webhook secrets, CORS, etc.)
 
 ### Phase 3 — Ongoing (no Pods)
 
@@ -76,8 +84,9 @@ Immutable tags only (commit SHA, never `latest`) — rollback is just pointing t
 Realistic first-request latency: **several seconds**, not milliseconds. Don't plan around the "sub-250ms" FlashBoot figure — that's image revival, not ORT + 500MB model init. Levers, in order of impact:
 
 1. Init session at worker startup, not per-request (covered by `/ping` gate)
-2. Keep the image lean (only what CUDA/cuDNN/ORT/binary need)
-3. If `/runpod-volume` read proves slow, copy the `.onnx` to container-local `/tmp` at startup and load from there (measure first)
+2. Keep the image lean relative to the workload:
+   use NVIDIA CUDA/cuDNN runtime, not a heavy RunPod/PyTorch image
+3. Use a multi-stage build so the final image does not carry Rust toolchains and build deps
 4. Raise idle timeout to favor warm reuse
 
 ## Cost posture
@@ -87,16 +96,19 @@ Break-even between always-on Pod and Serverless for A4000-class sits at roughly 
 ## Operational rules
 
 1. **Pinned image tags, always** — commit SHA, not `latest`
-2. **Volume and image are independent** — code changes redeploy, model changes are S3 uploads
+2. **One image for v1** — code + runtime libs + model assets ship together
 3. **Pods are disposable dev machines**, never production
 4. **Endpoint env vars are declared explicitly**, not inherited from local `.env`
 5. **Don't lock GPU SKU**, set min CUDA filter and let RunPod schedule across the pool
 
 ## Changes to the current repo
 
-- Add `Dockerfile` targeting the pinned CUDA base, installing `libonnxruntime.so` 1.24.3
-- Update `Cargo.toml` for `ort` pin and features (`cuda`, `load-dynamic`)
-- Refactor model-loading to read `MODEL_ROOT` env var (currently hardcoded path)
+- Add `Dockerfile` with:
+  - build stage
+  - final stage based on NVIDIA `cudnn-runtime`
+  - baked-in model assets
+  - ONNX Runtime provider libs available at runtime
+- Keep `Cargo.toml` and AI-clean session setup aligned with CUDA EP usage
 - Add `GET /ping` handler to Axum with the readiness gate
 - Add GH Actions workflow: build image, push to GHCR, call RunPod endpoint update
 
@@ -104,10 +116,10 @@ Everything else in the stack (Phoenix, SolidJS, webhook contract, billing, auth)
 
 ## Open items to validate
 
-- [ ] Confirm `ort 2.0.0-rc.12` + ONNX Runtime GPU `v1.24.3` actually build cleanly with the `cuda` + `load-dynamic` feature combo
-- [ ] Confirm the exact `libonnxruntime.so` filename(s) shipped in ORT 1.24.3 GPU release tarball
-- [ ] Benchmark `/runpod-volume` read speed vs. container-local for the ONNX load on first request
-- [ ] Verify RunPod's S3 API supports multipart upload for the 500MB+ model file
+- [ ] Pin the exact NVIDIA `cudnn-runtime` tag we want to ship
+- [ ] Decide whether the final image should also keep `poddyclip-cli` for emergency debugging
+- [ ] Verify the exact ONNX Runtime shared-library set needed in the final image
+- [ ] Add `GET /ping` and startup readiness behavior
 - [ ] Measure actual cold-start time with FlashBoot for the final image
 - [ ] Decide on GH Actions → endpoint-update auth (API key in GH secret; rotate policy)
 - [ ] Confirm Phoenix webhook delivery works from the RunPod worker network (no egress restrictions)

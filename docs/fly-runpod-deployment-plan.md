@@ -154,13 +154,14 @@ No architectural change is needed here.
 2. Add a production Dockerfile for `poddyclip-api`
    - build Rust binary
    - include runtime dependencies
-   - include MossFormer2 assets or mount them from a volume
+   - use an NVIDIA CUDA/cuDNN runtime base
+   - bake MossFormer2 assets into the image for v1
 
 3. Decide model asset strategy
    - **simple first version:** bake model assets into the image
-   - **better long-term:** use RunPod network volume mounted at `/runpod-volume`
+   - **later only if needed:** externalize model delivery after measuring real cold starts
 
-4. If model assets move out of the image, make model loading use an env-driven root path
+4. If model assets are ever moved out of the image later, make model loading use an env-driven root path
 
 ### Phoenix
 
@@ -224,6 +225,13 @@ Goal:
 ### Phase 2: Containerize Rust
 
 Build a production image for `poddyclip-api` and run it locally first.
+
+Recommended shape:
+
+- multi-stage build
+- NVIDIA `cudnn-runtime` base for the final image
+- no heavy RunPod/PyTorch base image
+- one image containing app + runtime libs + model assets
 
 Validate:
 

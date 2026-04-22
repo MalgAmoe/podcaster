@@ -15,3 +15,8 @@ pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
         available_slots: state.processing_semaphore.available_permits(),
     })
 }
+
+/// GET /ping - RunPod readiness/health endpoint
+pub async fn ping(State(state): State<AppState>) -> Json<HealthResponse> {
+    health(State(state)).await
+}

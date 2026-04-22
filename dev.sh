@@ -12,6 +12,11 @@ NC='\033[0m'
 PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$PROJECT_ROOT"
 
+API_IMAGE_REPO="${API_IMAGE_REPO:-malgamoe/stuff}"
+API_IMAGE_TAG="${API_IMAGE_TAG:-api}"
+API_IMAGE="${API_IMAGE_REPO}:${API_IMAGE_TAG}"
+API_PLATFORM="${API_PLATFORM:-linux/amd64}"
+
 # Load env
 if [ -f .env.local ]; then
     export $(grep -v '^#' .env.local | xargs)
@@ -74,8 +79,24 @@ case "${1:-}" in
         echo -e "${GREEN}Done! Images: malgamoe/stuff:api, malgamoe/stuff:phoenix${NC}"
         ;;
     build-api)
-        echo -e "${GREEN}Building Rust API image...${NC}"
-        docker build --network=host -f Dockerfile.api -t malgamoe/stuff:api .
+        echo -e "${GREEN}Building Rust API image for ${API_PLATFORM}...${NC}"
+        echo -e "${GREEN}Image: ${API_IMAGE}${NC}"
+        docker buildx build \
+            --platform "${API_PLATFORM}" \
+            -f Dockerfile.api \
+            -t "${API_IMAGE}" \
+            --load \
+            .
+        ;;
+    build-api-push)
+        echo -e "${GREEN}Building and pushing Rust API image for ${API_PLATFORM}...${NC}"
+        echo -e "${GREEN}Image: ${API_IMAGE}${NC}"
+        docker buildx build \
+            --platform "${API_PLATFORM}" \
+            -f Dockerfile.api \
+            -t "${API_IMAGE}" \
+            --push \
+            .
         ;;
     build-phoenix)
         echo -e "${GREEN}Building Phoenix image...${NC}"
@@ -89,7 +110,7 @@ case "${1:-}" in
         ;;
     push-api)
         echo -e "${GREEN}Pushing Rust API image...${NC}"
-        docker push malgamoe/stuff:api
+        docker push "${API_IMAGE}"
         ;;
     push-phoenix)
         echo -e "${GREEN}Pushing Phoenix image...${NC}"
@@ -119,13 +140,19 @@ case "${1:-}" in
         echo ""
         echo "  build          - Build both Docker images"
         echo "  build-no-cache - Build both images without cache"
-        echo "  build-api      - Build Rust API image only"
+        echo "  build-api      - Build Rust API image only (buildx, linux/amd64 by default)"
+        echo "  build-api-push - Build and push Rust API image only"
         echo "  build-phoenix  - Build Phoenix image only"
         echo "  push           - Push both images to Docker Hub"
         echo "  push-api       - Push Rust API image only"
         echo "  push-phoenix   - Push Phoenix image only"
         echo "  deploy         - Build + push all"
         echo "  deploy-clean   - Build (no cache) + push all"
+        echo ""
+        echo "Rust API image env overrides:"
+        echo "  API_IMAGE_REPO - default: malgamoe/stuff"
+        echo "  API_IMAGE_TAG  - default: api"
+        echo "  API_PLATFORM   - default: linux/amd64"
         echo ""
         echo "Run in 3 terminals:"
         echo "  Terminal 1: ./dev.sh infra"
