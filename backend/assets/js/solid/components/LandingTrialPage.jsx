@@ -11,7 +11,7 @@ export function LandingTrialPage() {
 
   return (
     <>
-      <div class="rounded-3xl border border-base-300/70 bg-base-200 p-6 shadow-[0_0_60px_-15px_rgba(147,51,234,0.15)]">
+      <div class="panel rounded-3xl border-base-300/70 p-6">
         <Show
           when={window.isGuest}
           fallback={

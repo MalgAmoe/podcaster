@@ -10,10 +10,20 @@ defmodule PoddyclipBackendWeb.PageControllerTest do
         |> get(~p"/")
         |> html_response(200)
 
-      assert html =~ "Clean up voice recordings online."
+      assert html =~ "Make your voice recordings sound clean"
       assert html =~ "solid-landing-trial"
-      assert html =~ "Free 20-second preview"
       refute html =~ "solid-process-app"
+    end
+
+    test "redirects signed-in users to the app", %{conn: conn} do
+      user = user_fixture()
+
+      conn =
+        conn
+        |> log_in_user(user)
+        |> get(~p"/")
+
+      assert redirected_to(conn) == ~p"/app"
     end
   end
 

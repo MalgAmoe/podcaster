@@ -77,7 +77,7 @@ export function PastMunchingsPage() {
         </Show>
 
         <Show when={!jobs.loading && jobs()?.length === 0}>
-          <div class="card bg-base-200 border border-base-300 rounded-2xl">
+          <div class="card panel">
             <div class="card-body text-center py-12">
               <p class="text-base-content/60">
                 No munchings yet. Your processed files will appear here for 7 days.
@@ -87,7 +87,7 @@ export function PastMunchingsPage() {
         </Show>
 
         <Show when={!jobs.loading && jobs()?.length > 0}>
-          <div class="card bg-base-200 border border-base-300 rounded-2xl overflow-hidden">
+          <div class="card panel overflow-hidden">
             <ul class="divide-y divide-base-300">
               <For each={jobs()}>
                 {(job) => (

@@ -8,16 +8,21 @@ defmodule PoddyclipBackendWeb.PageController do
 
   def landing(conn, _params) do
     conn = PoddyclipBackendWeb.Plugs.EnsureGuestUser.call(conn, [])
+    user = conn.assigns[:current_scope] && conn.assigns.current_scope.user
 
-    conn
-    |> put_layout(false)
-    |> assign(:conn, conn)
-    |> assign(:page_title, "Munchy Cow | Clean Up Voice Recordings Online")
-    |> assign(
-      :meta_description,
-      "Clean up spoken audio online with a free 20-second preview. Reduce noise, tame harshness, and level voice recordings for clearer listening."
-    )
-    |> render(:landing)
+    if user && !user.is_guest do
+      redirect(conn, to: "/app")
+    else
+      conn
+      |> put_layout(false)
+      |> assign(:conn, conn)
+      |> assign(:page_title, "Munchy Cow | Clean Up Voice Recordings Online")
+      |> assign(
+        :meta_description,
+        "Clean up spoken audio online with a free 20-second preview. Reduce noise, tame harshness, and level voice recordings for clearer listening."
+      )
+      |> render(:landing)
+    end
   end
 
   # Main app - ensure guest user exists, serve SolidJS app

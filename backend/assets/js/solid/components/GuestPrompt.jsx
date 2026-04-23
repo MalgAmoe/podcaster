@@ -5,7 +5,7 @@ export function GuestPrompt(props) {
 
   return (
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-base-100/65 backdrop-blur-sm">
-      <div class="w-full max-w-md rounded-3xl border border-base-300/70 bg-base-200 shadow-[0_0_70px_-20px_rgba(147,51,234,0.28)]">
+      <div class="w-full max-w-md rounded-3xl border border-base-300/70 bg-base-200 shadow-[0_0_70px_-20px_rgba(147,51,234,0.15)]">
         <div class="p-6 sm:p-7 text-center">
           <div class="w-20 h-20 mx-auto flex items-center justify-center mb-5">
             <img src="/images/munchy_cow.svg" alt="Munchy Cow" class="w-full h-full" />
