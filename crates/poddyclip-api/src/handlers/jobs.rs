@@ -229,7 +229,7 @@ pub async fn create_s3_job(
     let webhook_client = state.webhook.clone();
     let semaphore = state.processing_semaphore.clone();
     #[cfg(feature = "mossformer2")]
-    let ai_clean_runtime = state.ai_clean_runtime.clone();
+    let ai_clean_runtime_pool = state.ai_clean_runtime_pool.clone();
     let background_task = state.begin_background_task();
 
     task::spawn(async move {
@@ -378,7 +378,7 @@ pub async fn create_s3_job(
                     metadata.sample_rate,
                     &config,
                     #[cfg(feature = "mossformer2")]
-                    Some(ai_clean_runtime.clone()),
+                    Some(ai_clean_runtime_pool.clone()),
                     Some(progress_callback),
                 )?;
 

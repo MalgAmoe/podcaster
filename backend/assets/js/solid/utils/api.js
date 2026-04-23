@@ -143,9 +143,10 @@ export const api = {
     });
   },
 
-  async createPreview(file, signal) {
+  async createPreview(file, signal, requestId) {
     const formData = new FormData();
     formData.append("audio", file);
+    if (requestId) formData.append("request_id", requestId);
 
     const response = await fetch("/api/preview", {
       method: "POST",

@@ -16,6 +16,11 @@ const INITIAL_SERVER_JOB_PROGRESS = {
   percent_complete: 0,
 };
 
+function generatePreviewRequestId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `preview-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function ProcessProvider(props) {
   const { notify } = useNotifications();
 
@@ -48,6 +53,49 @@ export function ProcessProvider(props) {
   let uploadXhr = null;
   let previewAbortController = null;
   let previewBlobUrl = null;
+
+  function applyPreviewStatus(payload) {
+    if (!store.job?.localPreview || store.job?.preview_request_id !== payload.request_id) return;
+
+    if (payload.status === "queued" || payload.status === "pending") {
+      setStore("job", {
+        ...store.job,
+        preview_status: "queued",
+        progress: {
+          stage: "waiting",
+          percent_complete: 0,
+        },
+      });
+      return;
+    }
+
+    if (payload.status === "processing") {
+      setStore("job", {
+        ...store.job,
+        preview_status: "processing",
+        progress: {
+          stage: "processing",
+          percent_complete: 50,
+        },
+      });
+      return;
+    }
+
+    if (payload.status === "failed") {
+      setStore("job", {
+        ...store.job,
+        preview_status: "failed",
+      });
+      return;
+    }
+
+    if (payload.status === "completed") {
+      setStore("job", {
+        ...store.job,
+        preview_status: "completed",
+      });
+    }
+  }
 
   function revokePreviewBlobUrl() {
     if (previewBlobUrl) {
@@ -94,6 +142,14 @@ export function ProcessProvider(props) {
   // Connect to Phoenix channels only for server-backed jobs.
   createEffect(() => {
     const jobId = store.job?.id;
+    const previewRequestId = store.job?.preview_request_id;
+    const isLocalPreview = !!store.job?.localPreview;
+    const topic =
+      isLocalPreview && previewRequestId
+        ? `preview:${previewRequestId}`
+        : !isLocalPreview && jobId
+          ? `job:${jobId}`
+          : null;
 
     // Clean up previous connection
     if (channel) {
@@ -113,7 +169,7 @@ export function ProcessProvider(props) {
     }
 
     // Connect if we have a job and token
-    if (jobId && window.userToken && !store.job?.localPreview) {
+    if (topic && window.userToken) {
       socket = new Socket("/socket", {
         params: { token: window.userToken },
         reconnectAfterMs: (tries) => {
@@ -165,14 +221,25 @@ export function ProcessProvider(props) {
 
       socket.connect();
 
-      channel = socket.channel(`job:${jobId}`, {});
+      channel = socket.channel(topic, {});
       channel.join()
+        .receive("ok", (payload) => {
+          if (isLocalPreview) {
+            applyPreviewStatus(payload);
+          }
+        })
         .receive("error", (e) => { if (import.meta.env.DEV) console.error("Join failed", e); });
 
-      channel.on("job_updated", (payload) => {
-        // Merge to preserve fields the server doesn't resend on updates.
-        setStore("job", (prev) => ({ ...prev, ...payload.job }));
-      });
+      if (isLocalPreview) {
+        channel.on("preview_updated", (payload) => {
+          applyPreviewStatus(payload);
+        });
+      } else {
+        channel.on("job_updated", (payload) => {
+          // Merge to preserve fields the server doesn't resend on updates.
+          setStore("job", (prev) => ({ ...prev, ...payload.job }));
+        });
+      }
     }
   });
 
@@ -334,6 +401,7 @@ export function ProcessProvider(props) {
 
     try {
       if (window.isGuest) {
+        const previewRequestId = generatePreviewRequestId();
         previewAbortController = new AbortController();
         setStore({
           job: {
@@ -341,14 +409,20 @@ export function ProcessProvider(props) {
             localPreview: true,
             status: "processing",
             filename: store.filename,
+            preview_request_id: previewRequestId,
+            preview_status: "queued",
             progress: {
-              stage: "denoise",
-              percent_complete: 50,
+              stage: "waiting",
+              percent_complete: 0,
             },
           },
         });
 
-        const previewBlob = await api.createPreview(store.file, previewAbortController.signal);
+        const previewBlob = await api.createPreview(
+          store.file,
+          previewAbortController.signal,
+          previewRequestId,
+        );
         previewAbortController = null;
         revokePreviewBlobUrl();
         previewBlobUrl = URL.createObjectURL(previewBlob);
@@ -360,6 +434,8 @@ export function ProcessProvider(props) {
             localPreview: true,
             status: "completed",
             filename: store.filename,
+            preview_request_id: null,
+            preview_status: "completed",
             download_url: previewBlobUrl,
             progress: {
               stage: "completed",

@@ -19,13 +19,13 @@ defmodule PoddyclipBackendWeb.ProcessControllerTest do
       preview_burst_limit: Application.get_env(:poddyclip_backend, :preview_burst_limit),
       preview_rate_window_ms: Application.get_env(:poddyclip_backend, :preview_rate_window_ms),
       preview_busy_retry_ms: Application.get_env(:poddyclip_backend, :preview_busy_retry_ms),
-      preview_max_inflight: Application.get_env(:poddyclip_backend, :preview_max_inflight)
+      preview_max_inflight: Application.get_env(:poddyclip_backend, :preview_max_inflight),
+      preview_queue_wait_ms: Application.get_env(:poddyclip_backend, :preview_queue_wait_ms)
     }
 
     on_exit(fn ->
       restore_env(previous_env)
-      :ets.delete_all_objects(:preview_gate_timestamps)
-      :sys.replace_state(PreviewGate, fn _ -> %{active_tokens: %{}} end)
+      PreviewGate.reset_for_test()
     end)
 
     {:ok, conn: conn, audio_path: audio_path, guest: guest}
@@ -104,18 +104,61 @@ defmodule PoddyclipBackendWeb.ProcessControllerTest do
     assert body["retry_after_ms"] > 0
   end
 
-  test "POST /api/preview returns preview_busy when demo slot is occupied", %{
+  test "POST /api/preview waits for a free demo slot and then succeeds", %{
     conn: conn,
     audio_path: audio_path
   } do
     Application.put_env(:poddyclip_backend, :preview_max_inflight, 1)
+    Application.put_env(:poddyclip_backend, :preview_queue_wait_ms, 500)
+
+    parent = self()
+
+    start_preview_server(fn conn ->
+      send(parent, :preview_request_started)
+      Process.sleep(150)
+      Plug.Conn.send_resp(conn, 200, "processed-wav")
+    end)
+
+    upload = %Plug.Upload{
+      path: audio_path,
+      filename: "preview.wav",
+      content_type: "audio/wav"
+    }
+
+    task =
+      Task.async(fn ->
+        post(recycle(conn), ~p"/api/preview", %{"audio" => upload})
+      end)
+
+    assert_receive :preview_request_started, 1_000
+
+    queued_task =
+      Task.async(fn ->
+        post(recycle(conn), ~p"/api/preview", %{"audio" => upload})
+      end)
+
+    assert Task.yield(queued_task, 50) == nil
+
+    first_conn = Task.await(task, 2_000)
+    second_conn = Task.await(queued_task, 2_000)
+
+    assert response(first_conn, 200) == "processed-wav"
+    assert response(second_conn, 200) == "processed-wav"
+  end
+
+  test "POST /api/preview returns preview_busy after queue timeout", %{
+    conn: conn,
+    audio_path: audio_path
+  } do
+    Application.put_env(:poddyclip_backend, :preview_max_inflight, 1)
+    Application.put_env(:poddyclip_backend, :preview_queue_wait_ms, 50)
     Application.put_env(:poddyclip_backend, :preview_busy_retry_ms, 10_000)
 
     parent = self()
 
     start_preview_server(fn conn ->
       send(parent, :preview_request_started)
-      Process.sleep(300)
+      Process.sleep(200)
       Plug.Conn.send_resp(conn, 200, "processed-wav")
     end)
 

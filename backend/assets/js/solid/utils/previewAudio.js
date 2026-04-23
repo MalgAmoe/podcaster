@@ -1,4 +1,4 @@
-const DEFAULT_PREVIEW_SECONDS = 30;
+const DEFAULT_PREVIEW_SECONDS = 20;
 
 function getAudioContextCtor() {
   return window.AudioContext || window.webkitAudioContext;

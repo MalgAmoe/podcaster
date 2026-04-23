@@ -9,7 +9,7 @@ use thiserror::Error;
 use tracing::{debug, info, warn};
 
 #[cfg(feature = "mossformer2")]
-use poddyclip::ai_clean::{AiCleanProcessor, AiCleanRuntime};
+use poddyclip::ai_clean::AiCleanProcessor;
 #[cfg(feature = "mossformer2")]
 use poddyclip::sample_rate::{resample_mono, resample_mono_if_needed};
 
@@ -28,6 +28,8 @@ use poddyclip::eq::get_eq_preset;
 use poddyclip::traits::{Stereo, StereoProcessor};
 
 use crate::models::ProcessConfig;
+#[cfg(feature = "mossformer2")]
+use crate::state::AiCleanRuntimePool;
 
 /// Error returned when a job is cancelled
 #[derive(Debug, Error)]
@@ -87,7 +89,7 @@ pub fn process_audio(
     samples: &mut Vec<Vec<f32>>,
     sample_rate: u32,
     config: &ProcessConfig,
-    #[cfg(feature = "mossformer2")] ai_clean_runtime: Option<Arc<AiCleanRuntime>>,
+    #[cfg(feature = "mossformer2")] ai_clean_runtime_pool: Option<Arc<AiCleanRuntimePool>>,
     mut on_progress: Option<ProgressCallback>,
 ) -> Result<()> {
     let processing_start = Instant::now();
@@ -154,17 +156,27 @@ pub fn process_audio(
 
     #[cfg(feature = "mossformer2")]
     {
-        match ai_clean_runtime {
-            Some(runtime) => {
+        match ai_clean_runtime_pool {
+            Some(pool) => {
                 let denoise_start = Instant::now();
-                let denoiser = AiCleanProcessor::from_runtime(runtime);
+                let acquire_start = Instant::now();
+                let lease = pool
+                    .acquire_blocking()
+                    .map_err(|e| anyhow::anyhow!("AI clean runtime pool error: {}", e))?;
+                let wait_ms = acquire_start.elapsed().as_millis();
+                let denoiser = AiCleanProcessor::from_runtime(lease.runtime());
                 let model_sample_rate = denoiser.model_sample_rate();
                 let left_input =
                     resample_mono_if_needed(&samples[0], sample_rate, denoiser.model_sample_rate())?;
                 let plan = denoiser.analyze_run(left_input.len());
                 info!(
-                    "AI clean: MossFormer2 mode={:?} segments={} input_sr={} model_sr={}",
-                    plan.mode, plan.segment_count, sample_rate, model_sample_rate,
+                    "AI clean: MossFormer2 mode={:?} segments={} input_sr={} model_sr={} pool_size={} wait_ms={}",
+                    plan.mode,
+                    plan.segment_count,
+                    sample_rate,
+                    model_sample_rate,
+                    pool.size(),
+                    wait_ms,
                 );
 
                 if is_stereo {
@@ -212,6 +224,8 @@ pub fn process_audio(
                 info!(
                     mode = ?plan.mode,
                     segments = plan.segment_count,
+                    pool_size = pool.size(),
+                    wait_ms,
                     duration_ms = denoise_start.elapsed().as_millis(),
                     "AI clean completed"
                 );

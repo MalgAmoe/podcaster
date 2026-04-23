@@ -36,7 +36,7 @@ pub async fn preview(
     let preview_limit = state.config.preview_max_seconds;
     let preview_tolerance = state.config.preview_tolerance_seconds;
     #[cfg(feature = "mossformer2")]
-    let ai_clean_runtime = state.ai_clean_runtime.clone();
+    let ai_clean_runtime_pool = state.ai_clean_runtime_pool.clone();
 
     let wav_bytes = tokio::time::timeout(
         std::time::Duration::from_secs(job_timeout),
@@ -63,7 +63,7 @@ pub async fn preview(
                 metadata.sample_rate,
                 &ProcessConfig::new(),
                 #[cfg(feature = "mossformer2")]
-                Some(ai_clean_runtime),
+                Some(ai_clean_runtime_pool),
                 None,
             )
             .map_err(|e| ApiError::ProcessingError(e.to_string()))?;

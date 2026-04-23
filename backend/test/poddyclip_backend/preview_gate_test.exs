@@ -8,7 +8,8 @@ defmodule PoddyclipBackend.PreviewGateTest do
       preview_burst_limit: Application.get_env(:poddyclip_backend, :preview_burst_limit),
       preview_rate_window_ms: Application.get_env(:poddyclip_backend, :preview_rate_window_ms),
       preview_busy_retry_ms: Application.get_env(:poddyclip_backend, :preview_busy_retry_ms),
-      preview_max_inflight: Application.get_env(:poddyclip_backend, :preview_max_inflight)
+      preview_max_inflight: Application.get_env(:poddyclip_backend, :preview_max_inflight),
+      preview_queue_wait_ms: Application.get_env(:poddyclip_backend, :preview_queue_wait_ms)
     }
 
     on_exit(fn ->
@@ -20,8 +21,7 @@ defmodule PoddyclipBackend.PreviewGateTest do
         end
       end)
 
-      :ets.delete_all_objects(:preview_gate_timestamps)
-      :sys.replace_state(PreviewGate, fn _ -> %{active_tokens: %{}} end)
+      PreviewGate.reset_for_test()
     end)
 
     :ok
@@ -43,14 +43,57 @@ defmodule PoddyclipBackend.PreviewGateTest do
     assert retry_after_ms > 0
   end
 
-  test "returns preview_busy when the in-flight limit is reached" do
+  test "queues a guest preview and grants it when a slot is released" do
     Application.put_env(:poddyclip_backend, :preview_max_inflight, 1)
+    Application.put_env(:poddyclip_backend, :preview_queue_wait_ms, 500)
+
+    {:ok, token} = PreviewGate.acquire_guest_preview(123)
+
+    task =
+      Task.async(fn ->
+        PreviewGate.acquire_guest_preview(456, 2_000)
+      end)
+
+    assert Task.yield(task, 50) == nil
+
+    :ok = PreviewGate.release_guest_preview(token)
+
+    assert {:ok, queued_token} = Task.await(task, 2_000)
+    assert is_reference(queued_token)
+  end
+
+  test "returns preview_busy when a queued preview waits too long" do
+    Application.put_env(:poddyclip_backend, :preview_max_inflight, 1)
+    Application.put_env(:poddyclip_backend, :preview_queue_wait_ms, 50)
     Application.put_env(:poddyclip_backend, :preview_busy_retry_ms, 10_000)
 
     {:ok, token} = PreviewGate.acquire_guest_preview(123)
 
-    assert {:error, :preview_busy, 10_000} = PreviewGate.acquire_guest_preview(456)
+    assert {:error, :preview_busy, 10_000} = PreviewGate.acquire_guest_preview(456, 1_000)
 
-    PreviewGate.release_guest_preview(token)
+    :ok = PreviewGate.release_guest_preview(token)
+  end
+
+  test "removes disconnected callers from the queue" do
+    Application.put_env(:poddyclip_backend, :preview_max_inflight, 1)
+    Application.put_env(:poddyclip_backend, :preview_queue_wait_ms, 500)
+
+    {:ok, token} = PreviewGate.acquire_guest_preview(123)
+
+    pid =
+      spawn(fn ->
+        PreviewGate.acquire_guest_preview(456, 2_000)
+      end)
+
+    Process.sleep(50)
+    Process.exit(pid, :kill)
+    Process.sleep(50)
+
+    :ok = PreviewGate.release_guest_preview(token)
+
+    assert {:ok, next_token} = PreviewGate.acquire_guest_preview(789, 500)
+    assert is_reference(next_token)
+
+    :ok = PreviewGate.release_guest_preview(next_token)
   end
 end

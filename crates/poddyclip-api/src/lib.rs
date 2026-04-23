@@ -16,6 +16,8 @@ pub mod webhook;
 
 pub use auth::require_api_key;
 pub use error::ApiError;
+#[cfg(feature = "mossformer2")]
+pub use state::AiCleanRuntimePool;
 pub use state::{AppConfig, AppState};
 pub use storage::{Storage, StorageConfig};
 pub use webhook::WebhookClient;

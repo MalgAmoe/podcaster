@@ -4,6 +4,7 @@ defmodule PoddyclipBackendWeb.UserSocket do
   alias PoddyclipBackend.Accounts
 
   channel "job:*", PoddyclipBackendWeb.JobChannel
+  channel "preview:*", PoddyclipBackendWeb.PreviewChannel
   channel "user:*", PoddyclipBackendWeb.UserChannel
 
   @doc """

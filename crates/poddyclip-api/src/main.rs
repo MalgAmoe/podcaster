@@ -24,6 +24,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use poddyclip::ai_clean::AiCleanRuntime;
 use poddyclip_api::handlers::{create_s3_job, delete_job, health, ping, preview};
 use poddyclip_api::require_api_key;
+#[cfg(feature = "mossformer2")]
+use poddyclip_api::state::AiCleanRuntimePool;
 use poddyclip_api::state::{AppConfig, AppState};
 use poddyclip_api::storage::{Storage, StorageConfig};
 
@@ -54,6 +56,8 @@ async fn main() {
     info!("  Result retention: {}s", config.result_retention_seconds);
     #[cfg(feature = "mossformer2")]
     info!("  AI clean CUDA: {}", config.ai_clean_use_cuda);
+    #[cfg(feature = "mossformer2")]
+    info!("  AI clean pool size: {}", config.ai_clean_pool_size);
     info!(
         "  Preview limit: {}s (+{}s tolerance)",
         config.preview_max_seconds, config.preview_tolerance_seconds
@@ -87,29 +91,48 @@ async fn main() {
     };
 
     #[cfg(feature = "mossformer2")]
-    let ai_clean_runtime = {
+    let ai_clean_runtime_pool = {
         let start = Instant::now();
-        let runtime = match AiCleanRuntime::new_with_cuda(48_000, config.ai_clean_use_cuda) {
-            Ok(runtime) => runtime,
-            Err(e) => {
-                error!("Failed to initialize shared AI clean runtime: {}", e);
-                std::process::exit(1);
-            }
-        };
+        let mut runtimes = Vec::with_capacity(config.ai_clean_pool_size);
+
+        for slot_idx in 0..config.ai_clean_pool_size {
+            let slot_start = Instant::now();
+            let runtime = match AiCleanRuntime::new_with_cuda(48_000, config.ai_clean_use_cuda) {
+                Ok(runtime) => runtime,
+                Err(e) => {
+                    error!(
+                        slot = slot_idx + 1,
+                        "Failed to initialize AI clean runtime slot: {}",
+                        e
+                    );
+                    std::process::exit(1);
+                }
+            };
+            info!(
+                slot = slot_idx + 1,
+                init_ms = slot_start.elapsed().as_millis(),
+                model_sample_rate = runtime.model_sample_rate(),
+                use_cuda = config.ai_clean_use_cuda,
+                "AI clean runtime slot ready"
+            );
+            runtimes.push(runtime);
+        }
+
+        let pool = AiCleanRuntimePool::new(runtimes);
         info!(
+            pool_size = pool.size(),
             init_ms = start.elapsed().as_millis(),
-            model_sample_rate = runtime.model_sample_rate(),
             use_cuda = config.ai_clean_use_cuda,
-            "Shared AI clean runtime ready"
+            "AI clean runtime pool ready"
         );
-        runtime
+        pool
     };
 
     let state = AppState::new(
         config,
         storage,
         #[cfg(feature = "mossformer2")]
-        ai_clean_runtime,
+        ai_clean_runtime_pool,
     );
 
     // Log API key status

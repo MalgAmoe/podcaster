@@ -145,7 +145,7 @@ export function UploadZone() {
             </Show>
           </Show>
           <Show when={store.uploadState === "uploading" && isGuest && store.uploadProgress === 0}>
-            <p class="text-sm text-base-content/60">Preparing 30s preview clip...</p>
+            <p class="text-sm text-base-content/60">Preparing 20s preview clip...</p>
           </Show>
           <Show when={store.uploadState === "uploading" && store.uploadProgress >= 100}>
             <p class="text-sm text-base-content/60">Finalizing...</p>

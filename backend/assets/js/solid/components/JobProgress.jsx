@@ -4,6 +4,10 @@ import { getStageLabel } from "../utils/stages";
 
 export function JobProgress() {
   const { store, cancelJob } = useProcess();
+  const previewStageLabel = () =>
+    store.job?.preview_status === "queued" || store.job?.progress?.stage === "waiting"
+      ? "Waiting for a demo slot..."
+      : "Processing preview...";
 
   return (
     <Show when={store.job}>
@@ -39,7 +43,7 @@ export function JobProgress() {
         <p class="text-base-content/60 mt-2">
           <Show
             when={!store.job?.localPreview}
-            fallback={"Preparing your 30s preview..."}
+            fallback={previewStageLabel()}
           >
             {getStageLabel(store.job?.progress?.stage)}
           </Show>

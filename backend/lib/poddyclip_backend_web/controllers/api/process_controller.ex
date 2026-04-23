@@ -77,26 +77,43 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
 
   Accepts multipart form data with an `audio` file upload and returns WAV bytes.
   """
-  def preview(conn, %{"audio" => %Plug.Upload{} = upload}) do
+  def preview(conn, %{"audio" => %Plug.Upload{} = upload} = params) do
     user = conn.assigns.current_user
+    preview_request_id = preview_request_id(user, params)
 
-    case maybe_acquire_preview(user) do
+    if preview_request_id do
+      PreviewGate.register_preview_request(user.id, preview_request_id)
+    end
+
+    case maybe_acquire_preview(user, preview_request_id) do
       {:ok, token} ->
         try do
+          if preview_request_id do
+            PreviewGate.mark_preview_processing(user.id, preview_request_id)
+          end
+
           case File.read(upload.path) do
             {:ok, audio_bytes} ->
               case ProcessingClient.preview(audio_bytes, upload.content_type || "audio/wav") do
                 {:ok, wav_bytes} ->
+                  if preview_request_id do
+                    PreviewGate.mark_preview_completed(user.id, preview_request_id)
+                  end
+
                   conn
                   |> put_resp_content_type("audio/wav")
                   |> send_resp(200, wav_bytes)
 
                 {:error, :invalid_input} ->
+                  maybe_mark_preview_failed(user.id, preview_request_id)
+
                   conn
                   |> put_status(422)
                   |> json(%{error: "invalid_input"})
 
                 {:error, {:too_long, max_seconds, tolerance_seconds}} ->
+                  maybe_mark_preview_failed(user.id, preview_request_id)
+
                   conn
                   |> put_status(422)
                   |> json(%{
@@ -106,16 +123,21 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
                   })
 
                 {:error, {:preview_busy, retry_after_ms}} ->
+                  maybe_mark_preview_failed(user.id, preview_request_id)
+
                   conn
                   |> put_status(503)
                   |> json(%{error: "preview_busy", retry_after_ms: retry_after_ms})
 
                 {:error, :preview_busy} ->
+                  maybe_mark_preview_failed(user.id, preview_request_id)
+
                   conn
                   |> put_status(503)
                   |> json(%{error: "preview_busy"})
 
                 {:error, reason} ->
+                  maybe_mark_preview_failed(user.id, preview_request_id)
                   Logger.error("Preview processing failed: #{inspect(reason)}")
 
                   conn
@@ -124,6 +146,8 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
               end
 
             {:error, :enoent} ->
+              maybe_mark_preview_failed(user.id, preview_request_id)
+
               conn
               |> put_status(422)
               |> json(%{error: "invalid_input"})
@@ -133,11 +157,15 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
         end
 
       {:error, :rate_limited, retry_after_ms} ->
+        maybe_mark_preview_failed(user.id, preview_request_id)
+
         conn
         |> put_status(429)
         |> json(%{error: "rate_limited", retry_after_ms: retry_after_ms})
 
       {:error, :preview_busy, retry_after_ms} ->
+        maybe_mark_preview_failed(user.id, preview_request_id)
+
         conn
         |> put_status(503)
         |> json(%{error: "preview_busy", retry_after_ms: retry_after_ms})
@@ -150,14 +178,27 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
     |> json(%{error: "Missing required parameter: audio"})
   end
 
-  defp maybe_acquire_preview(%{is_guest: true, id: user_id}) do
-    PreviewGate.acquire_guest_preview(user_id)
+  defp maybe_acquire_preview(%{is_guest: true, id: user_id}, preview_request_id) do
+    PreviewGate.acquire_guest_preview(user_id, preview_request_id)
   end
 
-  defp maybe_acquire_preview(_user), do: {:ok, nil}
+  defp maybe_acquire_preview(_user, _preview_request_id), do: {:ok, nil}
 
   defp release_preview(nil), do: :ok
   defp release_preview(token), do: PreviewGate.release_guest_preview(token)
+
+  defp preview_request_id(%{is_guest: true}, %{"request_id" => request_id})
+       when is_binary(request_id) and byte_size(request_id) > 0 do
+    request_id
+  end
+
+  defp preview_request_id(_user, _params), do: nil
+
+  defp maybe_mark_preview_failed(_user_id, nil), do: :ok
+
+  defp maybe_mark_preview_failed(user_id, preview_request_id) do
+    PreviewGate.mark_preview_failed(user_id, preview_request_id)
+  end
 
   defp create_job_after_checks(conn, user, s3_key, filename, params) do
     estimated_seconds = params["duration_seconds"] || 60

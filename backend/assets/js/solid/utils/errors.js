@@ -5,7 +5,7 @@ export function getErrorMessage(error) {
     return "Not enough time available. Upgrade to Munch Plan or buy a Snack for more processing time.";
   }
   if (error.includes("too_long")) {
-    return "Preview clips must stay within the 30-second limit.";
+    return "Preview clips must stay within the 20-second limit.";
   }
   if (error.includes("rate_limited")) {
     return "You have used the preview demo a lot recently. Please try again later.";

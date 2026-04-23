@@ -53,7 +53,7 @@ test("guest preview happy path trims locally and shows completed preview", async
   });
 
   await expect(page.getByText("Ready to munch!")).toBeVisible();
-  await expect(page.getByText("Preview clipped from 0m 35s to 0m 30s")).toBeVisible();
+  await expect(page.getByText("Preview clipped from 0m 35s to 0m 20s")).toBeVisible();
 
   await page.getByRole("button", { name: "MUNCH IT!" }).click();
 
