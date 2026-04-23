@@ -319,6 +319,8 @@ pub async fn create_s3_job(
 
                 // Progress callback that updates job state, sends webhook, and checks for cancellation
                 // Note: index is offset by 1 to account for "waiting" stage (index 0)
+                let mut last_stage: Option<&'static str> = None;
+                let mut last_percent_sent: Option<u8> = None;
                 let progress_callback = Box::new(move |update: ProgressUpdate| -> Result<(), CancelledError> {
                     // Check if job was cancelled
                     if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
@@ -327,19 +329,34 @@ pub async fn create_s3_job(
                     }
 
                     let adjusted_index = update.stage_index + 1; // +1 for "waiting" stage
+                    let clamped_progress = update.stage_progress.clamp(0.0, 1.0);
+                    let percent_complete =
+                        (((adjusted_index as f32 + clamped_progress) / get_total_stages() as f32) * 100.0)
+                        .min(100.0) as u8;
+
+                    let stage_changed = last_stage != Some(update.stage);
+                    let percent_changed = last_percent_sent != Some(percent_complete);
+
+                    if !stage_changed && !percent_changed && clamped_progress < 1.0 {
+                        return Ok(());
+                    }
+
+                    last_stage = Some(update.stage);
+                    last_percent_sent = Some(percent_complete);
+
                     debug!(
                         "Job {} progress: {} ({}/{}) {:.0}%",
                         job_id,
                         update.stage,
                         adjusted_index,
                         get_total_stages(),
-                        update.stage_progress * 100.0
+                        clamped_progress * 100.0
                     );
                     progress_state.update_job(&job_id, |j| {
                         j.progress.update_with_stage_progress(
                             update.stage,
                             adjusted_index,
-                            update.stage_progress,
+                            clamped_progress,
                         );
                         j.updated_at = now();
                     });

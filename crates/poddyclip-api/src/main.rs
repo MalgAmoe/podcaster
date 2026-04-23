@@ -52,6 +52,8 @@ async fn main() {
     info!("  Max file size: {} MB", config.max_file_size_mb);
     info!("  Job timeout: {}s", config.job_timeout_seconds);
     info!("  Result retention: {}s", config.result_retention_seconds);
+    #[cfg(feature = "mossformer2")]
+    info!("  AI clean CUDA: {}", config.ai_clean_use_cuda);
     info!(
         "  Preview limit: {}s (+{}s tolerance)",
         config.preview_max_seconds, config.preview_tolerance_seconds
@@ -87,7 +89,7 @@ async fn main() {
     #[cfg(feature = "mossformer2")]
     let ai_clean_runtime = {
         let start = Instant::now();
-        let runtime = match AiCleanRuntime::new(48_000) {
+        let runtime = match AiCleanRuntime::new_with_cuda(48_000, config.ai_clean_use_cuda) {
             Ok(runtime) => runtime,
             Err(e) => {
                 error!("Failed to initialize shared AI clean runtime: {}", e);
@@ -97,6 +99,7 @@ async fn main() {
         info!(
             init_ms = start.elapsed().as_millis(),
             model_sample_rate = runtime.model_sample_rate(),
+            use_cuda = config.ai_clean_use_cuda,
             "Shared AI clean runtime ready"
         );
         runtime

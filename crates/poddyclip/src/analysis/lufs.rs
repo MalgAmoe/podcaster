@@ -185,69 +185,60 @@ pub fn measure_integrated_lufs(samples: &[Vec<f32>], sample_rate: u32) -> f32 {
         return ms_to_lufs(total_ms / num_channels as f32);
     }
 
-    // Streaming approach: process audio in blocks, applying K-weighting on the fly
-    // We need to maintain filter state across blocks for continuity
-
-    // Create filters for each channel
+    // Streaming approach: process audio in blocks, applying K-weighting on the fly.
+    // Keep a rolling sum of squared K-weighted samples per channel so we do not
+    // repeatedly drain front slices or rescan the full 400ms window each hop.
     let mut filters: Vec<KWeightingFilter> = (0..num_channels)
         .map(|_| KWeightingFilter::new(sample_rate_f))
         .collect();
-
-    // Rolling buffer to handle overlap - we need to keep block_samples worth of weighted data
-    // and shift by hop_samples each iteration
-    let mut rolling_buffers: Vec<Vec<f32>> = (0..num_channels)
-        .map(|_| Vec::with_capacity(block_samples + hop_samples))
+    let mut rolling_squares: Vec<Vec<f32>> = (0..num_channels)
+        .map(|_| vec![0.0; block_samples])
         .collect();
+    let mut rolling_sum_sq = vec![0.0_f32; num_channels];
+    let mut rolling_write_pos = vec![0usize; num_channels];
 
     let mut block_ms: Vec<f32> = Vec::with_capacity(num_samples / hop_samples + 1);
 
-    // Process samples in chunks, maintaining K-weighting filter state
     let mut sample_idx = 0;
     let mut first_block = true;
 
     while sample_idx < num_samples {
-        // How many new samples to process this iteration
         let chunk_size = if first_block {
             block_samples
         } else {
             hop_samples
         };
         let end_idx = (sample_idx + chunk_size).min(num_samples);
+        let processed = end_idx - sample_idx;
 
-        // Process chunk through K-weighting for each channel
         for (ch_idx, channel) in samples.iter().enumerate() {
-            // Apply K-weighting to new samples and append to rolling buffer
             for i in sample_idx..end_idx {
                 let weighted = filters[ch_idx].process(channel[i]);
-                rolling_buffers[ch_idx].push(weighted);
+                let weighted_sq = weighted * weighted;
+
+                if first_block {
+                    rolling_squares[ch_idx][rolling_write_pos[ch_idx]] = weighted_sq;
+                    rolling_sum_sq[ch_idx] += weighted_sq;
+                    rolling_write_pos[ch_idx] += 1;
+                } else {
+                    let pos = rolling_write_pos[ch_idx];
+                    rolling_sum_sq[ch_idx] += weighted_sq - rolling_squares[ch_idx][pos];
+                    rolling_squares[ch_idx][pos] = weighted_sq;
+                    rolling_write_pos[ch_idx] = (pos + 1) % block_samples;
+                }
+            }
+
+            if first_block && processed == block_samples {
+                rolling_write_pos[ch_idx] = 0;
             }
         }
 
-        // Check if we have enough for a block
-        if rolling_buffers[0].len() >= block_samples {
-            // Calculate mean square for this block across all channels
+        if processed > 0 && (first_block || sample_idx + processed >= block_samples) {
             let mut block_ms_sum = 0.0_f32;
             for ch_idx in 0..num_channels {
-                let buf = &rolling_buffers[ch_idx];
-                let start = buf.len() - block_samples;
-                let mut sum_sq = 0.0_f32;
-                for i in start..buf.len() {
-                    sum_sq += buf[i] * buf[i];
-                }
-                block_ms_sum += sum_sq / block_samples as f32;
+                block_ms_sum += rolling_sum_sq[ch_idx] / block_samples as f32;
             }
             block_ms.push(block_ms_sum / num_channels as f32);
-
-            // Trim rolling buffers to keep only what we need for overlap
-            // Keep the last (block_samples - hop_samples) samples
-            let keep_from = rolling_buffers[0]
-                .len()
-                .saturating_sub(block_samples - hop_samples);
-            for buf in &mut rolling_buffers {
-                if keep_from > 0 {
-                    buf.drain(0..keep_from);
-                }
-            }
             first_block = false;
         }
 

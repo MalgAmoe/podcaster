@@ -42,6 +42,7 @@ pub struct AppConfig {
     pub preview_max_concurrency: usize,
     pub port: u16,
     pub api_key: Option<String>,
+    pub ai_clean_use_cuda: bool,
     /// Comma-separated list of allowed CORS origins. Empty = allow any (dev mode).
     pub cors_origins: Option<String>,
 }
@@ -57,6 +58,7 @@ impl Default for AppConfig {
             preview_max_concurrency: DEFAULT_PREVIEW_MAX_CONCURRENCY,
             port: 3000,
             api_key: None,
+            ai_clean_use_cuda: true,
             cors_origins: None, // None = allow any (dev mode)
         }
     }
@@ -94,6 +96,10 @@ impl AppConfig {
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(3000),
             api_key: std::env::var("API_KEY").ok().filter(|s| !s.is_empty()),
+            ai_clean_use_cuda: std::env::var("AI_CLEAN_USE_CUDA")
+                .ok()
+                .map(|s| matches!(s.to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+                .unwrap_or(true),
             cors_origins: std::env::var("CORS_ORIGINS").ok().filter(|s| !s.is_empty()),
         }
     }
@@ -147,7 +153,10 @@ impl AppState {
                 return false;
             }
 
-            if tokio::time::timeout(deadline - now, notified).await.is_err() {
+            if tokio::time::timeout(deadline - now, notified)
+                .await
+                .is_err()
+            {
                 return self.active_background_task_count() == 0;
             }
         }

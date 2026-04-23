@@ -67,6 +67,10 @@ pub struct AiCleanProcessor {
 
 impl AiCleanRuntime {
     pub fn new(input_sample_rate: u32) -> Result<Self> {
+        Self::new_with_cuda(input_sample_rate, true)
+    }
+
+    pub fn new_with_cuda(input_sample_rate: u32, use_cuda: bool) -> Result<Self> {
         if input_sample_rate != MODEL_SAMPLE_RATE {
             bail!(
                 "AiCleanRuntime requires {} Hz audio, got {} Hz",
@@ -79,19 +83,26 @@ impl AiCleanRuntime {
         let onnx_path = model_dir.join("model.onnx");
         let mel_path = model_dir.join("mel_fb.bin");
 
-        let session = Session::builder()?
-            .with_execution_providers([ep::CUDA::default()
+        let mut builder = Session::builder()?.with_intra_threads(4)?;
+        if use_cuda {
+            builder = builder.with_execution_providers([ep::CUDA::default()
                 .with_device_id(0)
                 .build()
-                .error_on_failure()])?
-            .with_intra_threads(4)?
-            .commit_from_file(&onnx_path)
-            .with_context(|| {
+                .error_on_failure()])?;
+        }
+        let session = builder.commit_from_file(&onnx_path).with_context(|| {
+            if use_cuda {
                 format!(
                     "failed to initialize MossFormer2 ONNX session with CUDA for {}",
                     onnx_path.display()
                 )
-            })?;
+            } else {
+                format!(
+                    "failed to initialize MossFormer2 ONNX session on CPU for {}",
+                    onnx_path.display()
+                )
+            }
+        })?;
 
         let mel_fb = load_mel_filterbank(&mel_path)?;
 
@@ -235,64 +246,49 @@ impl AiCleanRuntime {
 
     fn process_segment(&self, audio: &[f32], session: &mut Session) -> Result<Vec<f32>> {
         let scaled: Vec<f32> = audio.iter().map(|&x| x * 32768.0).collect();
-        let features = self.compute_features(&scaled);
-        if features.is_empty() {
+        let (features, num_frames) = self.compute_features(&scaled);
+        if num_frames == 0 {
             return Ok(vec![0.0; audio.len()]);
         }
 
-        let mask = self.run_model(session, &features)?;
-        let (stft_real, stft_imag) = self.stft(&scaled);
+        let mask = self.run_model(session, &features, num_frames)?;
+        let (stft_real, stft_imag, stft_frames) = self.stft(&scaled);
 
-        let num_frames = stft_real.len().min(mask.len());
-        let mut masked_real = Vec::with_capacity(num_frames);
-        let mut masked_imag = Vec::with_capacity(num_frames);
+        let num_frames = num_frames.min(stft_frames);
+        let mut masked_real = vec![0f32; num_frames * FREQ_BINS];
+        let mut masked_imag = vec![0f32; num_frames * FREQ_BINS];
         for t in 0..num_frames {
-            let mut real = Vec::with_capacity(FREQ_BINS);
-            let mut imag = Vec::with_capacity(FREQ_BINS);
+            let frame_offset = t * FREQ_BINS;
             for f in 0..FREQ_BINS {
-                real.push(stft_real[t][f] * mask[t][f]);
-                imag.push(stft_imag[t][f] * mask[t][f]);
+                let idx = frame_offset + f;
+                masked_real[idx] = stft_real[idx] * mask[idx];
+                masked_imag[idx] = stft_imag[idx] * mask[idx];
             }
-            masked_real.push(real);
-            masked_imag.push(imag);
         }
 
-        let output = self.istft(&masked_real, &masked_imag, scaled.len());
+        let output = self.istft(&masked_real, &masked_imag, num_frames, scaled.len());
         Ok(output.iter().map(|&x| x / 32768.0).collect())
     }
 
-    fn run_model(&self, session: &mut Session, features: &[Vec<f32>]) -> Result<Vec<Vec<f32>>> {
-        let num_frames = features.len();
-        let mut flat = vec![0f32; num_frames * FEAT_DIM];
-        for (i, frame) in features.iter().enumerate() {
-            flat[i * FEAT_DIM..(i + 1) * FEAT_DIM].copy_from_slice(frame);
-        }
-
-        let input = TensorRef::from_array_view((
-            [1i64, num_frames as i64, FEAT_DIM as i64],
-            flat.as_slice(),
-        ))?;
+    fn run_model(
+        &self,
+        session: &mut Session,
+        features: &[f32],
+        num_frames: usize,
+    ) -> Result<Vec<f32>> {
+        let input =
+            TensorRef::from_array_view(([1i64, num_frames as i64, FEAT_DIM as i64], features))?;
         let outputs = session.run(ort::inputs![input])?;
         let output_array = outputs[0].try_extract_tensor::<f32>()?;
         let data = output_array.1;
 
-        let mut mask = Vec::with_capacity(num_frames);
-        for t in 0..num_frames {
-            let start = t * FREQ_BINS;
-            mask.push(data[start..start + FREQ_BINS].to_vec());
-        }
-        Ok(mask)
+        Ok(data[..num_frames * FREQ_BINS].to_vec())
     }
 
-    fn stft(&self, audio: &[f32]) -> (Vec<Vec<f32>>, Vec<Vec<f32>>) {
-        let num_frames = if audio.len() >= WIN_LEN {
-            (audio.len() - WIN_LEN) / HOP_SIZE + 1
-        } else {
-            0
-        };
-
-        let mut reals = Vec::with_capacity(num_frames);
-        let mut imags = Vec::with_capacity(num_frames);
+    fn stft(&self, audio: &[f32]) -> (Vec<f32>, Vec<f32>, usize) {
+        let num_frames = frame_count(audio.len());
+        let mut reals = vec![0f32; num_frames * FREQ_BINS];
+        let mut imags = vec![0f32; num_frames * FREQ_BINS];
         let mut scratch = self.fft_forward.make_scratch_vec();
 
         for i in 0..num_frames {
@@ -308,21 +304,23 @@ impl AiCleanRuntime {
                 .process_with_scratch(&mut buf, &mut spectrum, &mut scratch)
                 .expect("FFT size is fixed");
 
-            let mut real = Vec::with_capacity(FREQ_BINS);
-            let mut imag = Vec::with_capacity(FREQ_BINS);
-            for c in &spectrum {
-                real.push(c.re);
-                imag.push(c.im);
+            let frame_offset = i * FREQ_BINS;
+            for (bin_idx, c) in spectrum.iter().enumerate().take(FREQ_BINS) {
+                reals[frame_offset + bin_idx] = c.re;
+                imags[frame_offset + bin_idx] = c.im;
             }
-            reals.push(real);
-            imags.push(imag);
         }
 
-        (reals, imags)
+        (reals, imags, num_frames)
     }
 
-    fn istft(&self, reals: &[Vec<f32>], imags: &[Vec<f32>], output_len: usize) -> Vec<f32> {
-        let num_frames = reals.len();
+    fn istft(
+        &self,
+        reals: &[f32],
+        imags: &[f32],
+        num_frames: usize,
+        output_len: usize,
+    ) -> Vec<f32> {
         let full_len = if num_frames > 0 {
             (num_frames - 1) * HOP_SIZE + WIN_LEN
         } else {
@@ -333,11 +331,14 @@ impl AiCleanRuntime {
         let mut scratch = self.fft_inverse.make_scratch_vec();
 
         for i in 0..num_frames {
-            let mut spectrum: Vec<_> = reals[i]
-                .iter()
-                .zip(imags[i].iter())
-                .map(|(&r, &im)| num_complex::Complex::new(r, im))
-                .collect();
+            let frame_offset = i * FREQ_BINS;
+            let mut spectrum = vec![num_complex::Complex::new(0.0, 0.0); FREQ_BINS];
+            for bin_idx in 0..FREQ_BINS {
+                spectrum[bin_idx] = num_complex::Complex::new(
+                    reals[frame_offset + bin_idx],
+                    imags[frame_offset + bin_idx],
+                );
+            }
 
             spectrum[0].im = 0.0;
             let last = spectrum.len() - 1;
@@ -367,35 +368,35 @@ impl AiCleanRuntime {
         output
     }
 
-    fn compute_features(&self, audio: &[f32]) -> Vec<Vec<f32>> {
+    fn compute_features(&self, audio: &[f32]) -> (Vec<f32>, usize) {
         let preemphasized = preemphasis(audio);
-        let power = self.power_spectrum(&preemphasized);
-        let fbank = self.apply_mel_filterbank(&power);
-        let delta = compute_deltas(&fbank);
-        let delta_delta = compute_deltas(&delta);
+        let (power, num_frames) = self.power_spectrum(&preemphasized);
+        if num_frames == 0 {
+            return (Vec::new(), 0);
+        }
 
-        fbank
-            .into_iter()
-            .zip(delta)
-            .zip(delta_delta)
-            .map(|((f, d), dd)| {
-                let mut feat = Vec::with_capacity(FEAT_DIM);
-                feat.extend_from_slice(&f);
-                feat.extend_from_slice(&d);
-                feat.extend_from_slice(&dd);
-                feat
-            })
-            .collect()
+        let fbank = self.apply_mel_filterbank(&power, num_frames);
+        let delta = compute_deltas_flat(&fbank, num_frames, NUM_MELS);
+        let delta_delta = compute_deltas_flat(&delta, num_frames, NUM_MELS);
+
+        let mut features = vec![0f32; num_frames * FEAT_DIM];
+        for frame_idx in 0..num_frames {
+            let mel_offset = frame_idx * NUM_MELS;
+            let feat_offset = frame_idx * FEAT_DIM;
+            features[feat_offset..feat_offset + NUM_MELS]
+                .copy_from_slice(&fbank[mel_offset..mel_offset + NUM_MELS]);
+            features[feat_offset + NUM_MELS..feat_offset + (NUM_MELS * 2)]
+                .copy_from_slice(&delta[mel_offset..mel_offset + NUM_MELS]);
+            features[feat_offset + (NUM_MELS * 2)..feat_offset + FEAT_DIM]
+                .copy_from_slice(&delta_delta[mel_offset..mel_offset + NUM_MELS]);
+        }
+
+        (features, num_frames)
     }
 
-    fn power_spectrum(&self, audio: &[f32]) -> Vec<Vec<f32>> {
-        let num_frames = if audio.len() >= WIN_LEN {
-            (audio.len() - WIN_LEN) / HOP_SIZE + 1
-        } else {
-            0
-        };
-
-        let mut result = Vec::with_capacity(num_frames);
+    fn power_spectrum(&self, audio: &[f32]) -> (Vec<f32>, usize) {
+        let num_frames = frame_count(audio.len());
+        let mut result = vec![0f32; num_frames * FREQ_BINS];
         let mut scratch = self.fft_forward.make_scratch_vec();
 
         for i in 0..num_frames {
@@ -411,29 +412,32 @@ impl AiCleanRuntime {
                 .process_with_scratch(&mut buf, &mut spectrum, &mut scratch)
                 .expect("FFT size is fixed");
 
-            let power: Vec<f32> = spectrum.iter().map(|c| c.re * c.re + c.im * c.im).collect();
-            result.push(power);
+            let frame_offset = i * FREQ_BINS;
+            for (bin_idx, c) in spectrum.iter().enumerate().take(FREQ_BINS) {
+                result[frame_offset + bin_idx] = c.re * c.re + c.im * c.im;
+            }
         }
 
-        result
+        (result, num_frames)
     }
 
-    fn apply_mel_filterbank(&self, power_spec: &[Vec<f32>]) -> Vec<Vec<f32>> {
-        power_spec
-            .iter()
-            .map(|frame| {
-                let mut mel = vec![0f32; NUM_MELS];
-                for (f, value) in frame.iter().enumerate().take(FREQ_BINS) {
-                    for (m, mel_bin) in mel.iter_mut().enumerate() {
-                        *mel_bin += *value * self.mel_fb[f * NUM_MELS + m];
-                    }
+    fn apply_mel_filterbank(&self, power_spec: &[f32], num_frames: usize) -> Vec<f32> {
+        let mut mel = vec![0f32; num_frames * NUM_MELS];
+        for frame_idx in 0..num_frames {
+            let power_offset = frame_idx * FREQ_BINS;
+            let mel_offset = frame_idx * NUM_MELS;
+            for f in 0..FREQ_BINS {
+                let value = power_spec[power_offset + f];
+                let fb_offset = f * NUM_MELS;
+                for m in 0..NUM_MELS {
+                    mel[mel_offset + m] += value * self.mel_fb[fb_offset + m];
                 }
-                for value in &mut mel {
-                    *value = (*value).max(1e-10).ln();
-                }
-                mel
-            })
-            .collect()
+            }
+            for m in 0..NUM_MELS {
+                mel[mel_offset + m] = mel[mel_offset + m].max(1e-10).ln();
+            }
+        }
+        mel
     }
 }
 
@@ -513,37 +517,37 @@ fn preemphasis(audio: &[f32]) -> Vec<f32> {
     out
 }
 
-fn compute_deltas(features: &[Vec<f32>]) -> Vec<Vec<f32>> {
-    let num_frames = features.len();
+fn compute_deltas_flat(features: &[f32], num_frames: usize, dim: usize) -> Vec<f32> {
     if num_frames == 0 {
         return vec![];
     }
-    let dim = features[0].len();
-
-    let get_frame = |i: i32| -> &Vec<f32> {
-        let idx = i.clamp(0, num_frames as i32 - 1) as usize;
-        &features[idx]
-    };
 
     let denom: f32 = 2.0 * (1..=DELTA_WIN as i32).map(|n| (n * n) as f32).sum::<f32>();
-    let mut deltas = Vec::with_capacity(num_frames);
+    let mut deltas = vec![0f32; num_frames * dim];
 
     for t in 0..num_frames {
-        let mut delta = vec![0f32; dim];
         for n in 1..=DELTA_WIN as i32 {
-            let ahead = get_frame(t as i32 + n);
-            let behind = get_frame(t as i32 - n);
+            let ahead_idx = (t as i32 + n).clamp(0, num_frames as i32 - 1) as usize;
+            let behind_idx = (t as i32 - n).clamp(0, num_frames as i32 - 1) as usize;
             for d in 0..dim {
-                delta[d] += n as f32 * (ahead[d] - behind[d]);
+                deltas[t * dim + d] +=
+                    n as f32 * (features[ahead_idx * dim + d] - features[behind_idx * dim + d]);
             }
         }
-        for value in &mut delta {
-            *value /= denom;
+        for d in 0..dim {
+            deltas[t * dim + d] /= denom;
         }
-        deltas.push(delta);
     }
 
     deltas
+}
+
+fn frame_count(audio_len: usize) -> usize {
+    if audio_len >= WIN_LEN {
+        (audio_len - WIN_LEN) / HOP_SIZE + 1
+    } else {
+        0
+    }
 }
 
 fn padded_length(input_len: usize, window: usize, stride: usize) -> usize {

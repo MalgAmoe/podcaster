@@ -1,7 +1,21 @@
+use std::borrow::Cow;
+
 use anyhow::Result;
 use rubato::{
     Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
 };
+
+pub fn resample_mono_if_needed<'a>(
+    audio: &'a [f32],
+    from_sr: u32,
+    to_sr: u32,
+) -> Result<Cow<'a, [f32]>> {
+    if from_sr == to_sr {
+        return Ok(Cow::Borrowed(audio));
+    }
+
+    Ok(Cow::Owned(resample_mono(audio, from_sr, to_sr)?))
+}
 
 pub fn resample_mono(audio: &[f32], from_sr: u32, to_sr: u32) -> Result<Vec<f32>> {
     if from_sr == to_sr {

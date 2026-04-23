@@ -40,7 +40,7 @@ use poddyclip::eq::{
 };
 use poddyclip::repair::Declicker;
 #[cfg(feature = "mossformer2")]
-use poddyclip::sample_rate::resample_mono;
+use poddyclip::sample_rate::{resample_mono, resample_mono_if_needed};
 use poddyclip::saturation::{
     get_saturation_preset, get_saturation_preset_name, Channel9, TapeGlue,
 };
@@ -535,8 +535,11 @@ fn main() -> Result<()> {
                     );
                 }
 
-                let left_input =
-                    resample_mono(&samples[0], sample_rate, denoiser.model_sample_rate())?;
+                let left_input = resample_mono_if_needed(
+                    &samples[0],
+                    sample_rate,
+                    denoiser.model_sample_rate(),
+                )?;
                 let plan = denoiser.analyze_run(left_input.len());
                 println!("  Model sample rate: {} Hz", denoiser.model_sample_rate());
                 match plan.mode {
@@ -548,8 +551,11 @@ fn main() -> Result<()> {
                 }
 
                 if is_stereo {
-                    let right_input =
-                        resample_mono(&samples[1], sample_rate, denoiser.model_sample_rate())?;
+                    let right_input = resample_mono_if_needed(
+                        &samples[1],
+                        sample_rate,
+                        denoiser.model_sample_rate(),
+                    )?;
                     let left_output = denoiser.process_with_progress(&left_input, |progress| {
                         if progress.mode == AiCleanMode::Segmented {
                             println!(
@@ -569,10 +575,18 @@ fn main() -> Result<()> {
                             }
                             Ok(())
                         })?;
-                    samples[0] =
-                        resample_mono(&left_output, denoiser.model_sample_rate(), sample_rate)?;
-                    samples[1] =
-                        resample_mono(&right_output, denoiser.model_sample_rate(), sample_rate)?;
+                    if sample_rate == denoiser.model_sample_rate() {
+                        samples[0] = left_output;
+                        samples[1] = right_output;
+                    } else {
+                        samples[0] =
+                            resample_mono(&left_output, denoiser.model_sample_rate(), sample_rate)?;
+                        samples[1] = resample_mono(
+                            &right_output,
+                            denoiser.model_sample_rate(),
+                            sample_rate,
+                        )?;
+                    }
                 } else {
                     let output = denoiser.process_with_progress(&left_input, |progress| {
                         if progress.mode == AiCleanMode::Segmented {
@@ -583,7 +597,12 @@ fn main() -> Result<()> {
                         }
                         Ok(())
                     })?;
-                    samples[0] = resample_mono(&output, denoiser.model_sample_rate(), sample_rate)?;
+                    if sample_rate == denoiser.model_sample_rate() {
+                        samples[0] = output;
+                    } else {
+                        samples[0] =
+                            resample_mono(&output, denoiser.model_sample_rate(), sample_rate)?;
+                    }
                 }
                 println!("  AI cleaning complete");
             }
