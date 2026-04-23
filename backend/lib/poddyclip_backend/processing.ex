@@ -4,6 +4,13 @@ defmodule PoddyclipBackend.Processing do
   Handles job submission, persistence, and status tracking via webhooks.
   """
 
+  @initial_progress %{
+    "stage" => "waiting",
+    "stage_index" => 0,
+    "total_stages" => 14,
+    "percent_complete" => 0
+  }
+
   alias PoddyclipBackend.Processing.{Job, Client}
   alias PoddyclipBackend.Billing
   alias PoddyclipBackend.Accounts
@@ -34,6 +41,7 @@ defmodule PoddyclipBackend.Processing do
       |> Job.changeset(%{
         filename: filename,
         status: :queued,
+        progress: @initial_progress,
         input_s3_key: input_s3_key,
         user_id: user_id,
         estimated_seconds: opts[:estimated_seconds]

@@ -78,7 +78,7 @@ export function ProcessPage() {
           <Show when={!store.initializing} fallback={
             <div class="flex flex-col items-center justify-center py-12">
               <span class="loading loading-spinner loading-lg text-primary" />
-              <p class="text-base-content/60 mt-4">Processing...</p>
+              <p class="text-base-content/60 mt-4">Loading...</p>
             </div>
           }>
             <Show when={store.job} fallback={
@@ -93,7 +93,7 @@ export function ProcessPage() {
                 >
                   <Show when={store.submitting} fallback={"MUNCH IT!"}>
                     <span class="loading loading-spinner loading-sm"></span>
-                    Processing...
+                    Queueing...
                   </Show>
                 </button>
               </div>
