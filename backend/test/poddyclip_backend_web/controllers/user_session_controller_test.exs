@@ -121,6 +121,20 @@ defmodule PoddyclipBackendWeb.UserSessionControllerTest do
 
       assert html_response(conn, 200) =~ "The link is invalid or it has expired."
     end
+
+    test "returns to settings after reauthentication", %{conn: conn, user: user} do
+      {token, _hashed_token} = generate_user_magic_link_token(user)
+
+      conn =
+        conn
+        |> init_test_session(%{user_return_to: "/users/settings"})
+        |> post(~p"/users/log-in?return_to=/users/settings", %{
+          "user" => %{"token" => token}
+        })
+
+      assert get_session(conn, :user_token)
+      assert redirected_to(conn) == ~p"/users/settings"
+    end
   end
 
   describe "signed-in app shell" do
@@ -135,17 +149,15 @@ defmodule PoddyclipBackendWeb.UserSessionControllerTest do
       assert html =~ ~s(href="/users/settings")
     end
 
-    test "does not show account and settings links for guest users", %{conn: conn} do
+    test "redirects guest users away from the app shell", %{conn: conn} do
       {:ok, guest} = Accounts.create_guest_user()
 
-      html =
+      conn =
         conn
         |> log_in_user(guest)
         |> get(~p"/app")
-        |> html_response(200)
 
-      refute html =~ ~s(href="/account")
-      refute html =~ ~s(href="/users/settings")
+      assert redirected_to(conn) == ~p"/"
     end
   end
 

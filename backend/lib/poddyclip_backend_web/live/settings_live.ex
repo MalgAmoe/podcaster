@@ -31,7 +31,7 @@ defmodule PoddyclipBackendWeb.SettingsLive do
       socket =
         socket
         |> put_flash(:info, "You must re-authenticate to access this page.")
-        |> redirect(to: "/users/log-in")
+        |> redirect(to: "/users/log-in?return_to=/users/settings")
 
       {:ok, socket}
     end

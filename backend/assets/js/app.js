@@ -65,11 +65,18 @@ if (window.userToken && !window.isGuest) {
   })
 }
 
-// Mount Solid app if container exists
+// Mount Solid app / landing trial if containers exist
 const solidRoot = document.getElementById("solid-process-app");
-if (solidRoot) {
-  import("./solid/index.jsx").then(({ mountApp }) => {
-    mountApp(solidRoot, "/app");
+const landingTrialRoot = document.getElementById("solid-landing-trial");
+
+if (solidRoot || landingTrialRoot) {
+  import("./solid/index.jsx").then(({ mountApp, mountLandingTrial }) => {
+    if (solidRoot) {
+      mountApp(solidRoot, "/app");
+    }
+    if (landingTrialRoot) {
+      mountLandingTrial(landingTrialRoot);
+    }
   });
 }
 

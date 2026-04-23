@@ -52,7 +52,7 @@ defmodule PoddyclipBackendWeb.Router do
   scope "/", PoddyclipBackendWeb do
     pipe_through(:browser)
 
-    get("/", PageController, :redirect_to_app)
+    get("/", PageController, :landing)
     # PARKED — legal pages are intentionally kept in the codebase for later
     # reintroduction, but they are not part of the current public UI.
     # Keep the controller actions/templates in place, but do not expose the

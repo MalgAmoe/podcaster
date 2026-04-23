@@ -3,21 +3,21 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content={assigns[:meta_description] || "Free audio cleanup. Upload your recording, get back broadcast-ready audio."} />
+    <meta name="description" content={assigns[:meta_description] || "Clean up spoken audio online. Reduce noise, tame harshness, and level voice recordings with a free preview."} />
     <meta name="theme-color" content="#9333ea" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
-    <meta property="og:title" content={assigns[:page_title] || "Munchy Cow - Free Audio Cleanup"} />
-    <meta property="og:description" content={assigns[:meta_description] || "Free audio cleanup. Upload your recording, get back broadcast-ready audio."} />
+    <meta property="og:title" content={assigns[:page_title] || "Munchy Cow - Clean Up Voice Recordings"} />
+    <meta property="og:description" content={assigns[:meta_description] || "Clean up spoken audio online. Reduce noise, tame harshness, and level voice recordings with a free preview."} />
     <meta property="og:image" content={assigns[:meta_image] || "https://munchycow.com/images/munchycow-social.png"} />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content={assigns[:page_title] || "Munchy Cow - Free Audio Cleanup"} />
-    <meta property="twitter:description" content={assigns[:meta_description] || "Free audio cleanup. Upload your recording, get back broadcast-ready audio."} />
+    <meta name="twitter:title" content={assigns[:page_title] || "Munchy Cow - Clean Up Voice Recordings"} />
+    <meta property="twitter:description" content={assigns[:meta_description] || "Clean up spoken audio online. Reduce noise, tame harshness, and level voice recordings with a free preview."} />
     <meta name="twitter:image" content={assigns[:meta_image] || "https://munchycow.com/images/munchycow-social.png"} />
 
     <link rel="icon" type="image/svg+xml" href="/images/munchy_cow_head.svg" />
@@ -45,7 +45,10 @@
   <body class="bg-base-100 min-h-screen">
     <div class="navbar bg-base-200/80 backdrop-blur-lg border-b border-base-300/50 fixed top-0 left-0 right-0 z-40">
       <div class="navbar-start">
-        <.link href="/app" class="text-xl font-bold px-4 hover:text-primary transition-colors">Munchy Cow</.link>
+        <.link href="/" class="text-xl font-bold px-4 hover:text-primary transition-colors">Munchy Cow</.link>
+        <%= if @current_scope && @current_scope.user && !@current_scope.user.is_guest do %>
+          <.link href="/app" class="text-sm px-3 hover:text-primary transition-colors">App</.link>
+        <% end %>
         <%= if @current_scope && @current_scope.user && !@current_scope.user.is_guest do %>
           <.link href="/app/past-munchings" class="text-sm px-3 hover:text-primary transition-colors">Past Munchings</.link>
         <% end %>

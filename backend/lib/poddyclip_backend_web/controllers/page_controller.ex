@@ -1,19 +1,37 @@
 defmodule PoddyclipBackendWeb.PageController do
   @moduledoc """
-  Public pages: landing redirect, `/app` (SolidJS mount), `/feedback`,
+  Public pages: landing page, `/app` (SolidJS mount), `/feedback`,
   `/help`, plus parked legal pages (terms/privacy/legal) kept for later
   reintroduction.
   """
   use PoddyclipBackendWeb, :controller
 
-  # Main app - ensure guest user exists, serve SolidJS app
-  def app(conn, _params) do
+  def landing(conn, _params) do
     conn = PoddyclipBackendWeb.Plugs.EnsureGuestUser.call(conn, [])
 
     conn
     |> put_layout(false)
     |> assign(:conn, conn)
-    |> render(:process)
+    |> assign(:page_title, "Munchy Cow | Clean Up Voice Recordings Online")
+    |> assign(
+      :meta_description,
+      "Clean up spoken audio online with a free 20-second preview. Reduce noise, tame harshness, and level voice recordings for clearer listening."
+    )
+    |> render(:landing)
+  end
+
+  # Main app - ensure guest user exists, serve SolidJS app
+  def app(conn, _params) do
+    user = conn.assigns[:current_scope] && conn.assigns.current_scope.user
+
+    if user && !user.is_guest do
+      conn
+      |> put_layout(false)
+      |> assign(:conn, conn)
+      |> render(:process)
+    else
+      redirect(conn, to: "/")
+    end
   end
 
   def redirect_to_app(conn, _params) do

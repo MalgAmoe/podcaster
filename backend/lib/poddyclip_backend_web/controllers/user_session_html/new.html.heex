@@ -23,7 +23,13 @@
       </div>
     </div>
 
-    <.form :let={f} for={@form} as={:user} id="login_form_magic" action={"/users/log-in"}>
+    <.form
+      :let={f}
+      for={@form}
+      as={:user}
+      id="login_form_magic"
+      action={if @return_to, do: "/users/log-in?return_to=#{URI.encode_www_form(@return_to)}", else: "/users/log-in"}
+    >
       <.input
         readonly={@current_scope && @current_scope.user && !@current_scope.user.is_guest}
         field={f[:email]}

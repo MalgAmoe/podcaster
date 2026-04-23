@@ -5,8 +5,9 @@ import { NotificationProvider } from "./context/NotificationContext";
 import { NotificationContainer } from "./components/NotificationContainer";
 import { ProcessPage } from "./components/ProcessPage";
 import { PastMunchingsPage } from "./components/PastMunchingsPage";
+import { LandingTrialPage } from "./components/LandingTrialPage";
 
-function App(props) {
+function Providers(props) {
   return (
     <NotificationProvider>
       <ProcessProvider>
@@ -20,9 +21,18 @@ function App(props) {
 export function mountApp(container, basePath = "/app") {
   if (!container) return;
   render(() => (
-    <Router root={App} base={basePath}>
+    <Router root={Providers} base={basePath}>
       <Route path="/" component={ProcessPage} />
       <Route path="/past-munchings" component={PastMunchingsPage} />
     </Router>
+  ), container);
+}
+
+export function mountLandingTrial(container) {
+  if (!container) return;
+  render(() => (
+    <Providers>
+      <LandingTrialPage />
+    </Providers>
   ), container);
 }
