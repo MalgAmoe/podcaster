@@ -1,17 +1,23 @@
 //! Audio processing engine - adapts CLI processing chain for API use
 
+#[cfg(feature = "mossformer2")]
+use std::sync::Arc;
+use std::time::Instant;
+
 use anyhow::Result;
 use thiserror::Error;
 use tracing::{debug, info, warn};
 
 #[cfg(feature = "mossformer2")]
-use poddyclip::ai_clean::AiCleanProcessor;
+use poddyclip::ai_clean::{AiCleanProcessor, AiCleanRuntime};
 #[cfg(feature = "mossformer2")]
 use poddyclip::sample_rate::resample_mono;
 
 use poddyclip::analysis;
 use poddyclip::analysis::lufs::measure_integrated_lufs;
-use poddyclip::dynamics::autogain::{analyze_gain, apply_gain, DEFAULT_TARGET_PEAK_DB, DEFAULT_TARGET_RMS_DB};
+use poddyclip::dynamics::autogain::{
+    analyze_gain, apply_gain, DEFAULT_TARGET_PEAK_DB, DEFAULT_TARGET_RMS_DB,
+};
 use poddyclip::dynamics::limiter::Limiter;
 use poddyclip::dynamics::{StereoFetCompressor, StereoVcaPeakComp};
 use poddyclip::eq::deesser::StereoDeEsser;
@@ -50,19 +56,19 @@ pub type ProgressCallback = Box<dyn Fn(ProgressUpdate) -> Result<(), CancelledEr
 
 /// Processing stages for progress tracking
 const STAGES: &[&str] = &[
-    "decoding",           // 0
-    "filters",            // 1
-    "input_gain",         // 2
-    "denoise",            // 3
-    "peakcomp",           // 4
-    "analyzing_eq",       // 5
-    "fixeq",              // 6
-    "deesser",            // 7
-    "analyzing_enhance",  // 8
-    "enhanceeq",          // 9
-    "fetcomp",            // 10
-    "analyzing_levels",   // 11
-    "output",             // 12
+    "decoding",          // 0
+    "filters",           // 1
+    "input_gain",        // 2
+    "denoise",           // 3
+    "peakcomp",          // 4
+    "analyzing_eq",      // 5
+    "fixeq",             // 6
+    "deesser",           // 7
+    "analyzing_enhance", // 8
+    "enhanceeq",         // 9
+    "fetcomp",           // 10
+    "analyzing_levels",  // 11
+    "output",            // 12
 ];
 
 /// Run the full processing chain on audio samples
@@ -70,8 +76,10 @@ pub fn process_audio(
     samples: &mut Vec<Vec<f32>>,
     sample_rate: u32,
     config: &ProcessConfig,
+    #[cfg(feature = "mossformer2")] ai_clean_runtime: Option<Arc<AiCleanRuntime>>,
     on_progress: Option<ProgressCallback>,
 ) -> Result<()> {
+    let processing_start = Instant::now();
     let is_stereo = samples.len() >= 2;
 
     let report = |stage: &'static str, index: u8| -> Result<()> {
@@ -94,7 +102,8 @@ pub fn process_audio(
         config.fixeq_preset,
         config.deesser_enabled,
         config.enhanceeq_preset,
-        config.output_enabled, config.lufs_target,
+        config.output_enabled,
+        config.lufs_target,
     );
 
     // =========================================================================
@@ -141,48 +150,61 @@ pub fn process_audio(
 
     #[cfg(feature = "mossformer2")]
     {
-        match AiCleanProcessor::new(48_000) {
-            Ok(mut denoiser) => {
-                let left_input = resample_mono(&samples[0], sample_rate, denoiser.model_sample_rate())?;
+        match ai_clean_runtime {
+            Some(runtime) => {
+                let denoise_start = Instant::now();
+                let denoiser = AiCleanProcessor::from_runtime(runtime);
+                let model_sample_rate = denoiser.model_sample_rate();
+                let left_input =
+                    resample_mono(&samples[0], sample_rate, denoiser.model_sample_rate())?;
                 let plan = denoiser.analyze_run(left_input.len());
                 info!(
                     "AI clean: MossFormer2 mode={:?} segments={} input_sr={} model_sr={}",
-                    plan.mode,
-                    plan.segment_count,
-                    sample_rate,
-                    denoiser.model_sample_rate(),
+                    plan.mode, plan.segment_count, sample_rate, model_sample_rate,
                 );
 
                 let progress = on_progress.as_ref();
                 if is_stereo {
-                    let right_input =
-                        resample_mono(&samples[1], sample_rate, denoiser.model_sample_rate())?;
-                    let left_output = denoiser.process_with_progress(&left_input, |ai_progress| {
-                        if let Some(cb) = progress {
-                            Ok(cb(ProgressUpdate::new("denoise", 3, ai_progress.fraction_complete))?)
-                        } else {
-                            Ok(())
-                        }
-                    })?;
+                    let right_input = resample_mono(&samples[1], sample_rate, model_sample_rate)?;
+                    let left_output =
+                        denoiser.process_with_progress(&left_input, |ai_progress| {
+                            if let Some(cb) = progress {
+                                Ok(cb(ProgressUpdate::new(
+                                    "denoise",
+                                    3,
+                                    ai_progress.fraction_complete,
+                                ))?)
+                            } else {
+                                Ok(())
+                            }
+                        })?;
                     let right_output = denoiser.process(&right_input)?;
-                    samples[0] =
-                        resample_mono(&left_output, denoiser.model_sample_rate(), sample_rate)?;
-                    samples[1] =
-                        resample_mono(&right_output, denoiser.model_sample_rate(), sample_rate)?;
+                    samples[0] = resample_mono(&left_output, model_sample_rate, sample_rate)?;
+                    samples[1] = resample_mono(&right_output, model_sample_rate, sample_rate)?;
                 } else {
                     let output = denoiser.process_with_progress(&left_input, |ai_progress| {
                         if let Some(cb) = progress {
-                            Ok(cb(ProgressUpdate::new("denoise", 3, ai_progress.fraction_complete))?)
+                            Ok(cb(ProgressUpdate::new(
+                                "denoise",
+                                3,
+                                ai_progress.fraction_complete,
+                            ))?)
                         } else {
                             Ok(())
                         }
                     })?;
-                    samples[0] =
-                        resample_mono(&output, denoiser.model_sample_rate(), sample_rate)?;
+                    samples[0] = resample_mono(&output, model_sample_rate, sample_rate)?;
                 }
+
+                info!(
+                    mode = ?plan.mode,
+                    segments = plan.segment_count,
+                    duration_ms = denoise_start.elapsed().as_millis(),
+                    "AI clean completed"
+                );
             }
-            Err(e) => {
-                warn!("AI clean unavailable: {}", e);
+            None => {
+                warn!("AI clean unavailable: shared runtime not configured");
             }
         }
     }
@@ -198,8 +220,9 @@ pub fn process_audio(
     report("peakcomp", 4)?;
 
     if config.peakcomp_enabled {
-        let mut peakcomp = StereoVcaPeakComp::new_with_preset(sample_rate as f32, config.peakcomp_preset)
-            .ok_or_else(|| anyhow::anyhow!("Invalid peakcomp preset"))?;
+        let mut peakcomp =
+            StereoVcaPeakComp::new_with_preset(sample_rate as f32, config.peakcomp_preset)
+                .ok_or_else(|| anyhow::anyhow!("Invalid peakcomp preset"))?;
         peakcomp.configure(samples);
         if is_stereo {
             let (left, right) = samples.split_at_mut(1);
@@ -207,7 +230,11 @@ pub fn process_audio(
         } else {
             peakcomp.process_mono(&mut samples[0]);
         }
-        debug!("PeakComp: preset={} gr={:.1}dB", config.peakcomp_preset, peakcomp.get_gain_reduction_db());
+        debug!(
+            "PeakComp: preset={} gr={:.1}dB",
+            config.peakcomp_preset,
+            peakcomp.get_gain_reduction_db()
+        );
     } else {
         debug!("PeakComp: skipped");
     }
@@ -233,7 +260,8 @@ pub fn process_audio(
         } else {
             fixeq.process_mono(&mut samples[0]);
         }
-        debug!("FixEQ: preset={} demud={:.1}dB corrA={:.1}dB corrB={:.1}dB",
+        debug!(
+            "FixEQ: preset={} demud={:.1}dB corrA={:.1}dB corrB={:.1}dB",
             config.fixeq_preset,
             fixeq.get_demud_gain_db(),
             fixeq.get_correction_a_gain_db(),
@@ -287,9 +315,12 @@ pub fn process_audio(
         enhanceeq_proc.set_lowmid_gain(base_lowmid * scale);
         enhanceeq_proc.set_presence_gain(base_presence * scale);
         enhanceeq_proc.set_shelf_gain(base_air * scale);
-        debug!("EnhanceEQ: preset={} lowmid={:.1}dB presence={:.1}dB air={:.1}dB",
+        debug!(
+            "EnhanceEQ: preset={} lowmid={:.1}dB presence={:.1}dB air={:.1}dB",
             config.enhanceeq_preset,
-            base_lowmid * scale, base_presence * scale, base_air * scale,
+            base_lowmid * scale,
+            base_presence * scale,
+            base_air * scale,
         );
 
         if is_stereo {
@@ -308,15 +339,20 @@ pub fn process_audio(
     report("fetcomp", 10)?;
 
     if config.fetcomp_enabled {
-        let mut fetcomp = StereoFetCompressor::new_with_preset(sample_rate as f32, config.fetcomp_preset)
-            .ok_or_else(|| anyhow::anyhow!("Invalid fetcomp preset"))?;
+        let mut fetcomp =
+            StereoFetCompressor::new_with_preset(sample_rate as f32, config.fetcomp_preset)
+                .ok_or_else(|| anyhow::anyhow!("Invalid fetcomp preset"))?;
         if is_stereo {
             let (left, right) = samples.split_at_mut(1);
             fetcomp.process_stereo(&mut left[0], &mut right[0]);
         } else {
             fetcomp.process_mono(&mut samples[0]);
         }
-        debug!("FetComp: preset={} gr={:.1}dB", config.fetcomp_preset, fetcomp.get_gain_reduction_db());
+        debug!(
+            "FetComp: preset={} gr={:.1}dB",
+            config.fetcomp_preset,
+            fetcomp.get_gain_reduction_db()
+        );
     } else {
         debug!("FetComp: skipped");
     }
@@ -328,7 +364,10 @@ pub fn process_audio(
         report("analyzing_levels", 11)?;
         let lufs = measure_integrated_lufs(samples, sample_rate);
         let lufs_gain_db = config.lufs_target - lufs;
-        debug!("LUFS: measured={:.1} target={:.1} gain={:.1} dB", lufs, config.lufs_target, lufs_gain_db);
+        debug!(
+            "LUFS: measured={:.1} target={:.1} gain={:.1} dB",
+            lufs, config.lufs_target, lufs_gain_db
+        );
         apply_gain(samples, lufs_gain_db);
 
         report("output", 12)?;
@@ -343,6 +382,11 @@ pub fn process_audio(
     } else {
         debug!("Output: skipped");
     }
+
+    info!(
+        duration_ms = processing_start.elapsed().as_millis(),
+        "Processing pipeline completed"
+    );
 
     Ok(())
 }

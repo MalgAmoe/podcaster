@@ -59,10 +59,7 @@ impl Default for ReverbAnalysis {
 
 impl ReverbAnalysis {
     /// Compute reverb analysis from spectral and cepstral analysis
-    pub fn from_analyses(
-        spectrum: &SpectralAnalysis,
-        cepstral: &CepstralAnalysis,
-    ) -> Self {
+    pub fn from_analyses(spectrum: &SpectralAnalysis, cepstral: &CepstralAnalysis) -> Self {
         let sample_rate = spectrum.sample_rate;
 
         // Get echo info from cepstral analysis
@@ -89,12 +86,12 @@ impl ReverbAnalysis {
         // Natural tilt (-10 to +5dB) = could be reverb if flat
         // Extreme tilt = not reverb, something else (proximity effect, EQ, etc.)
         let tilt_reverb_factor = if tilt_db.abs() > 15.0 {
-            0.0  // Extreme tilt = not reverb
+            0.0 // Extreme tilt = not reverb
         } else {
             // Closer to 0 = flatter = more reverby
             // -5 to +5 is natural speech range
             let flatness = 1.0 - (tilt_db.abs() / 10.0);
-            flatness.clamp(0.0, 0.5)  // Max 50% confidence from tilt alone
+            flatness.clamp(0.0, 0.5) // Max 50% confidence from tilt alone
         };
 
         // Echo delay-based confidence:
@@ -103,19 +100,19 @@ impl ReverbAnalysis {
         // Long delays (>150ms) could be discrete echo
         let delay_confidence = if let Some(delay) = echo_delay_ms {
             if delay < 50.0 {
-                0.3  // Low confidence for short delays
+                0.3 // Low confidence for short delays
             } else if delay < 150.0 {
-                1.0  // High confidence for typical reverb delays
+                1.0 // High confidence for typical reverb delays
             } else {
-                0.7  // Medium confidence for long delays
+                0.7 // Medium confidence for long delays
             }
         } else {
-            0.0  // No echo detected
+            0.0 // No echo detected
         };
 
         // CPP-based adjustment: highly voiced content may have false positives
         let cpp_factor = if cepstral.cpp > 10.0 {
-            0.5  // Reduce echo strength for highly voiced content
+            0.5 // Reduce echo strength for highly voiced content
         } else {
             1.0
         };
@@ -123,10 +120,10 @@ impl ReverbAnalysis {
         // Combine factors to estimate effective reverb strength
         let echo_strength = if raw_echo_strength > 0.0 {
             (raw_echo_strength * delay_confidence * cpp_factor)
-                .max(tilt_reverb_factor)  // Use tilt if stronger indicator
+                .max(tilt_reverb_factor) // Use tilt if stronger indicator
                 .clamp(0.0, 1.0)
         } else {
-            tilt_reverb_factor  // Fall back to tilt-based estimate
+            tilt_reverb_factor // Fall back to tilt-based estimate
         };
 
         // Estimate RT60 from adjusted echo strength
@@ -137,12 +134,12 @@ impl ReverbAnalysis {
         // Per-band RT60: high frequencies decay faster
         // Typical ratio: bass decays 1.5-2x slower than highs
         let rt60_per_band = [
-            rt60_avg_ms * 1.5,  // Sub-bass: slowest
-            rt60_avg_ms * 1.3,  // Low-mid
-            rt60_avg_ms * 1.1,  // Mid
-            rt60_avg_ms * 1.0,  // Upper-mid (reference)
-            rt60_avg_ms * 0.8,  // Presence
-            rt60_avg_ms * 0.5,  // High: fastest decay
+            rt60_avg_ms * 1.5, // Sub-bass: slowest
+            rt60_avg_ms * 1.3, // Low-mid
+            rt60_avg_ms * 1.1, // Mid
+            rt60_avg_ms * 1.0, // Upper-mid (reference)
+            rt60_avg_ms * 0.8, // Presence
+            rt60_avg_ms * 0.5, // High: fastest decay
         ];
 
         // Estimate DRR from echo strength
@@ -169,12 +166,7 @@ impl ReverbAnalysis {
     ///
     /// decay = 10^(-3 * hop_time / RT60)
     /// This gives the factor by which reverb decays per hop
-    pub fn compute_decay_per_bin(
-        &self,
-        n_bins: usize,
-        hop_size: usize,
-        bin_freq: f32,
-    ) -> Vec<f32> {
+    pub fn compute_decay_per_bin(&self, n_bins: usize, hop_size: usize, bin_freq: f32) -> Vec<f32> {
         let hop_time_ms = (hop_size as f32 / self.sample_rate as f32) * 1000.0;
 
         (0..n_bins)

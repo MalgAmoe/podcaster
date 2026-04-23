@@ -1,7 +1,11 @@
 use dashmap::DashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use tokio::sync::Semaphore;
+use tokio::sync::{Notify, Semaphore};
 use uuid::Uuid;
+
+#[cfg(feature = "mossformer2")]
+use poddyclip::ai_clean::AiCleanRuntime;
 
 use crate::models::{Job, JobStatus};
 use crate::storage::Storage;
@@ -19,6 +23,10 @@ pub struct AppState {
     pub config: Arc<AppConfig>,
     pub storage: Option<Arc<Storage>>,
     pub webhook: WebhookClient,
+    #[cfg(feature = "mossformer2")]
+    pub ai_clean_runtime: Arc<AiCleanRuntime>,
+    pub active_background_tasks: Arc<AtomicUsize>,
+    pub shutdown_notify: Arc<Notify>,
     /// Semaphore to limit concurrent CPU-bound processing tasks
     pub processing_semaphore: Arc<Semaphore>,
     /// Semaphore to reserve preview traffic to a smaller dedicated capacity
@@ -92,15 +100,56 @@ impl AppConfig {
 }
 
 impl AppState {
-    pub fn new(config: AppConfig, storage: Option<Storage>) -> Self {
+    pub fn new(
+        config: AppConfig,
+        storage: Option<Storage>,
+        #[cfg(feature = "mossformer2")] ai_clean_runtime: AiCleanRuntime,
+    ) -> Self {
         let preview_max_concurrency = config.preview_max_concurrency;
         Self {
             jobs: Arc::new(DashMap::new()),
             config: Arc::new(config),
             storage: storage.map(Arc::new),
             webhook: WebhookClient::new(),
+            #[cfg(feature = "mossformer2")]
+            ai_clean_runtime: Arc::new(ai_clean_runtime),
+            active_background_tasks: Arc::new(AtomicUsize::new(0)),
+            shutdown_notify: Arc::new(Notify::new()),
             processing_semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_PROCESSING)),
             preview_semaphore: Arc::new(Semaphore::new(preview_max_concurrency)),
+        }
+    }
+
+    pub fn begin_background_task(&self) -> BackgroundTaskGuard {
+        self.active_background_tasks.fetch_add(1, Ordering::SeqCst);
+        BackgroundTaskGuard {
+            active_background_tasks: self.active_background_tasks.clone(),
+            shutdown_notify: self.shutdown_notify.clone(),
+        }
+    }
+
+    pub fn active_background_task_count(&self) -> usize {
+        self.active_background_tasks.load(Ordering::SeqCst)
+    }
+
+    pub async fn wait_for_background_tasks(&self, timeout: std::time::Duration) -> bool {
+        let deadline = std::time::Instant::now() + timeout;
+
+        loop {
+            let notified = self.shutdown_notify.notified();
+
+            if self.active_background_task_count() == 0 {
+                return true;
+            }
+
+            let now = std::time::Instant::now();
+            if now >= deadline {
+                return false;
+            }
+
+            if tokio::time::timeout(deadline - now, notified).await.is_err() {
+                return self.active_background_task_count() == 0;
+            }
         }
     }
 
@@ -133,5 +182,19 @@ impl AppState {
             .filter(|j| matches!(j.status, JobStatus::Completed))
             .count();
         (active, completed)
+    }
+}
+
+pub struct BackgroundTaskGuard {
+    active_background_tasks: Arc<AtomicUsize>,
+    shutdown_notify: Arc<Notify>,
+}
+
+impl Drop for BackgroundTaskGuard {
+    fn drop(&mut self) {
+        let previous = self.active_background_tasks.fetch_sub(1, Ordering::SeqCst);
+        if previous == 1 {
+            self.shutdown_notify.notify_waiters();
+        }
     }
 }

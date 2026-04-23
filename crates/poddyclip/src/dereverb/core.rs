@@ -238,8 +238,12 @@ impl Clone for DeReverbProcessor {
     fn clone(&self) -> Self {
         // Create new processor and copy state
         let mut new_proc = Self::new_with_params(self.stft.sample_rate(), self.params.clone());
-        new_proc.prev_frame_power.copy_from_slice(&self.prev_frame_power);
-        new_proc.reverb_estimate.copy_from_slice(&self.reverb_estimate);
+        new_proc
+            .prev_frame_power
+            .copy_from_slice(&self.prev_frame_power);
+        new_proc
+            .reverb_estimate
+            .copy_from_slice(&self.reverb_estimate);
         new_proc.decay_per_bin.copy_from_slice(&self.decay_per_bin);
         new_proc.prev_gain.copy_from_slice(&self.prev_gain);
         new_proc.max_gain_reduction_db = self.max_gain_reduction_db;

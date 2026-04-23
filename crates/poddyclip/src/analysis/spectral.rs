@@ -239,10 +239,7 @@ impl SpectralAnalysis {
         let min_spacing_bins = (min_spacing_hz / self.bin_freq).ceil() as usize;
 
         if min_bin >= max_bin {
-            return (
-                (default_freq_a, -60.0, 0.0),
-                (default_freq_b, -60.0, 0.0),
-            );
+            return ((default_freq_a, -60.0, 0.0), (default_freq_b, -60.0, 0.0));
         }
 
         // Compute deviation for range

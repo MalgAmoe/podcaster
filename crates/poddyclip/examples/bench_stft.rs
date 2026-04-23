@@ -29,7 +29,10 @@ fn main() {
             })
             .collect();
 
-        println!("Audio length: {} seconds ({} samples)", duration, num_samples);
+        println!(
+            "Audio length: {} seconds ({} samples)",
+            duration, num_samples
+        );
         println!("-----------------------------------------");
 
         // Benchmark Denoiser

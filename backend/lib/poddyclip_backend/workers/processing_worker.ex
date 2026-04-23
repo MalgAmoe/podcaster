@@ -54,6 +54,16 @@ defmodule PoddyclipBackend.Workers.ProcessingWorker do
         Processing.mark_processing(job.id, rust_job_id)
         :ok
 
+      {:error, %Req.TransportError{reason: :timeout} = reason} ->
+        Logger.warning("ProcessingWorker: start request timed out, keeping job queued",
+          error: inspect(reason)
+        )
+
+        # Koyeb scale-to-zero can accept the request after Phoenix times out locally.
+        # In that case late webhooks will move the job forward. Do not mark failed here,
+        # or the UI will briefly show a false failure before the webhook corrects it.
+        :ok
+
       {:error, reason} ->
         Logger.error("ProcessingWorker: failed to start",
           error: inspect(reason)

@@ -5,10 +5,11 @@
 
 use std::f32::consts::PI;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use anyhow::{bail, Context, Result};
-use ort::{ep, session::Session};
 use ort::value::TensorRef;
+use ort::{ep, session::Session};
 use realfft::{num_complex, ComplexToReal, RealFftPlanner, RealToComplex};
 
 const MODEL_SAMPLE_RATE: u32 = 48_000;
@@ -21,8 +22,8 @@ const FEAT_DIM: usize = NUM_MELS * 3;
 const PREEMPH: f32 = 0.97;
 const DELTA_WIN: usize = 2;
 
-const ONE_TIME_DECODE_SECS: f32 = 20.0;
-const DECODE_WINDOW_SECS: f32 = 4.0;
+const ONE_TIME_DECODE_SECS: f32 = 12.0;
+const DECODE_WINDOW_SECS: f32 = 8.0;
 const DECODE_STRIDE_RATIO: f32 = 0.75;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,19 +49,27 @@ pub struct AiCleanProgress {
     pub fraction_complete: f32,
 }
 
-pub struct AiCleanProcessor {
+struct AiCleanRuntimeState {
     session: Session,
+}
+
+pub struct AiCleanRuntime {
+    state: Mutex<AiCleanRuntimeState>,
     mel_fb: Vec<f32>,
-    fft_forward: std::sync::Arc<dyn RealToComplex<f32>>,
-    fft_inverse: std::sync::Arc<dyn ComplexToReal<f32>>,
+    fft_forward: Arc<dyn RealToComplex<f32>>,
+    fft_inverse: Arc<dyn ComplexToReal<f32>>,
     window: Vec<f32>,
 }
 
-impl AiCleanProcessor {
+pub struct AiCleanProcessor {
+    runtime: Arc<AiCleanRuntime>,
+}
+
+impl AiCleanRuntime {
     pub fn new(input_sample_rate: u32) -> Result<Self> {
         if input_sample_rate != MODEL_SAMPLE_RATE {
             bail!(
-                "AiCleanProcessor requires {} Hz audio, got {} Hz",
+                "AiCleanRuntime requires {} Hz audio, got {} Hz",
                 MODEL_SAMPLE_RATE,
                 input_sample_rate
             );
@@ -71,12 +80,10 @@ impl AiCleanProcessor {
         let mel_path = model_dir.join("mel_fb.bin");
 
         let session = Session::builder()?
-            .with_execution_providers([
-                ep::CUDA::default()
-                    .with_device_id(0)
-                    .build()
-                    .error_on_failure(),
-            ])?
+            .with_execution_providers([ep::CUDA::default()
+                .with_device_id(0)
+                .build()
+                .error_on_failure()])?
             .with_intra_threads(4)?
             .commit_from_file(&onnx_path)
             .with_context(|| {
@@ -97,7 +104,7 @@ impl AiCleanProcessor {
             .collect();
 
         Ok(Self {
-            session,
+            state: Mutex::new(AiCleanRuntimeState { session }),
             mel_fb,
             fft_forward,
             fft_inverse,
@@ -135,30 +142,35 @@ impl AiCleanProcessor {
         }
     }
 
-    pub fn process(&mut self, audio: &[f32]) -> Result<Vec<f32>> {
+    pub fn process(&self, audio: &[f32]) -> Result<Vec<f32>> {
         self.process_with_progress(audio, |_| Ok(()))
     }
 
-    pub fn process_with_progress<F>(&mut self, audio: &[f32], mut on_progress: F) -> Result<Vec<f32>>
+    pub fn process_with_progress<F>(&self, audio: &[f32], mut on_progress: F) -> Result<Vec<f32>>
     where
         F: FnMut(AiCleanProgress) -> Result<()>,
     {
         let plan = self.analyze_run(audio.len());
-        self.process_native(audio, plan, &mut on_progress)
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| anyhow::anyhow!("AiCleanRuntime lock poisoned"))?;
+        self.process_native(audio, plan, &mut on_progress, &mut state.session)
     }
 
     fn process_native<F>(
-        &mut self,
+        &self,
         audio: &[f32],
         plan: AiCleanPlan,
         on_progress: &mut F,
+        session: &mut Session,
     ) -> Result<Vec<f32>>
     where
         F: FnMut(AiCleanProgress) -> Result<()>,
     {
         match plan.mode {
             AiCleanMode::OneShot => {
-                let output = self.process_segment(audio)?;
+                let output = self.process_segment(audio, session)?;
                 on_progress(AiCleanProgress {
                     mode: plan.mode,
                     completed_segments: 1,
@@ -167,15 +179,16 @@ impl AiCleanProcessor {
                 })?;
                 Ok(output)
             }
-            AiCleanMode::Segmented => self.process_segmented(audio, plan, on_progress),
+            AiCleanMode::Segmented => self.process_segmented(audio, plan, on_progress, session),
         }
     }
 
     fn process_segmented<F>(
-        &mut self,
+        &self,
         audio: &[f32],
         plan: AiCleanPlan,
         on_progress: &mut F,
+        session: &mut Session,
     ) -> Result<Vec<f32>>
     where
         F: FnMut(AiCleanProgress) -> Result<()>,
@@ -195,7 +208,7 @@ impl AiCleanProcessor {
         for segment_index in 0..total_segments {
             let current_idx = segment_index * stride;
             let segment = &padded[current_idx..current_idx + window];
-            let enhanced = self.process_segment(segment)?;
+            let enhanced = self.process_segment(segment, session)?;
 
             if current_idx == 0 {
                 let end = window - give_up_length;
@@ -220,14 +233,14 @@ impl AiCleanProcessor {
         Ok(output)
     }
 
-    fn process_segment(&mut self, audio: &[f32]) -> Result<Vec<f32>> {
+    fn process_segment(&self, audio: &[f32], session: &mut Session) -> Result<Vec<f32>> {
         let scaled: Vec<f32> = audio.iter().map(|&x| x * 32768.0).collect();
         let features = self.compute_features(&scaled);
         if features.is_empty() {
             return Ok(vec![0.0; audio.len()]);
         }
 
-        let mask = self.run_model(&features)?;
+        let mask = self.run_model(session, &features)?;
         let (stft_real, stft_imag) = self.stft(&scaled);
 
         let num_frames = stft_real.len().min(mask.len());
@@ -248,15 +261,18 @@ impl AiCleanProcessor {
         Ok(output.iter().map(|&x| x / 32768.0).collect())
     }
 
-    fn run_model(&mut self, features: &[Vec<f32>]) -> Result<Vec<Vec<f32>>> {
+    fn run_model(&self, session: &mut Session, features: &[Vec<f32>]) -> Result<Vec<Vec<f32>>> {
         let num_frames = features.len();
         let mut flat = vec![0f32; num_frames * FEAT_DIM];
         for (i, frame) in features.iter().enumerate() {
             flat[i * FEAT_DIM..(i + 1) * FEAT_DIM].copy_from_slice(frame);
         }
 
-        let input = TensorRef::from_array_view(([1i64, num_frames as i64, FEAT_DIM as i64], flat.as_slice()))?;
-        let outputs = self.session.run(ort::inputs![input])?;
+        let input = TensorRef::from_array_view((
+            [1i64, num_frames as i64, FEAT_DIM as i64],
+            flat.as_slice(),
+        ))?;
+        let outputs = session.run(ort::inputs![input])?;
         let output_array = outputs[0].try_extract_tensor::<f32>()?;
         let data = output_array.1;
 
@@ -418,6 +434,37 @@ impl AiCleanProcessor {
                 mel
             })
             .collect()
+    }
+}
+
+impl AiCleanProcessor {
+    pub fn new(input_sample_rate: u32) -> Result<Self> {
+        Ok(Self {
+            runtime: Arc::new(AiCleanRuntime::new(input_sample_rate)?),
+        })
+    }
+
+    pub fn from_runtime(runtime: Arc<AiCleanRuntime>) -> Self {
+        Self { runtime }
+    }
+
+    pub fn model_sample_rate(&self) -> u32 {
+        self.runtime.model_sample_rate()
+    }
+
+    pub fn analyze_run(&self, input_samples: usize) -> AiCleanPlan {
+        self.runtime.analyze_run(input_samples)
+    }
+
+    pub fn process(&self, audio: &[f32]) -> Result<Vec<f32>> {
+        self.runtime.process(audio)
+    }
+
+    pub fn process_with_progress<F>(&self, audio: &[f32], on_progress: F) -> Result<Vec<f32>>
+    where
+        F: FnMut(AiCleanProgress) -> Result<()>,
+    {
+        self.runtime.process_with_progress(audio, on_progress)
     }
 }
 

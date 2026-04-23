@@ -35,6 +35,8 @@ pub async fn preview(
     let job_timeout = state.config.job_timeout_seconds;
     let preview_limit = state.config.preview_max_seconds;
     let preview_tolerance = state.config.preview_tolerance_seconds;
+    #[cfg(feature = "mossformer2")]
+    let ai_clean_runtime = state.ai_clean_runtime.clone();
 
     let wav_bytes = tokio::time::timeout(
         std::time::Duration::from_secs(job_timeout),
@@ -42,15 +44,13 @@ pub async fn preview(
             let (mut samples, metadata) = decode_audio(&audio_bytes, None)
                 .map_err(|e| ApiError::DecodeFailed(e.to_string()))?;
 
-            let decoded_duration =
-                metadata.duration_samples as f64 / metadata.sample_rate as f64;
+            let decoded_duration = metadata.duration_samples as f64 / metadata.sample_rate as f64;
             let allowed_duration = preview_limit as f64 + preview_tolerance;
 
             if decoded_duration > allowed_duration {
                 warn!(
                     decoded_duration,
-                    allowed_duration,
-                    "Preview rejected for exceeding duration limit"
+                    allowed_duration, "Preview rejected for exceeding duration limit"
                 );
                 return Err(ApiError::PreviewTooLong {
                     max_seconds: preview_limit,
@@ -58,8 +58,15 @@ pub async fn preview(
                 });
             }
 
-            process_audio(&mut samples, metadata.sample_rate, &ProcessConfig::new(), None)
-                .map_err(|e| ApiError::ProcessingError(e.to_string()))?;
+            process_audio(
+                &mut samples,
+                metadata.sample_rate,
+                &ProcessConfig::new(),
+                #[cfg(feature = "mossformer2")]
+                Some(ai_clean_runtime),
+                None,
+            )
+            .map_err(|e| ApiError::ProcessingError(e.to_string()))?;
 
             encode_wav(&samples, metadata.sample_rate)
                 .map_err(|e| ApiError::ProcessingError(e.to_string()))

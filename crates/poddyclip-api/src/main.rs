@@ -1,6 +1,9 @@
 use std::net::SocketAddr;
 use std::time::Duration;
+#[cfg(feature = "mossformer2")]
+use std::time::Instant;
 
+use axum::http::HeaderValue;
 use axum::{
     extract::DefaultBodyLimit,
     middleware,
@@ -9,7 +12,6 @@ use axum::{
 };
 use tokio::net::TcpListener;
 use tokio::signal;
-use axum::http::HeaderValue;
 use tower_http::{
     cors::{AllowOrigin, Any, CorsLayer},
     limit::RequestBodyLimitLayer,
@@ -18,6 +20,8 @@ use tower_http::{
 use tracing::{error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+#[cfg(feature = "mossformer2")]
+use poddyclip::ai_clean::AiCleanRuntime;
 use poddyclip_api::handlers::{create_s3_job, delete_job, health, ping, preview};
 use poddyclip_api::require_api_key;
 use poddyclip_api::state::{AppConfig, AppState};
@@ -50,8 +54,7 @@ async fn main() {
     info!("  Result retention: {}s", config.result_retention_seconds);
     info!(
         "  Preview limit: {}s (+{}s tolerance)",
-        config.preview_max_seconds,
-        config.preview_tolerance_seconds
+        config.preview_max_seconds, config.preview_tolerance_seconds
     );
     info!("  Preview concurrency: {}", config.preview_max_concurrency);
 
@@ -67,7 +70,10 @@ async fn main() {
                     Some(s)
                 }
                 Err(e) => {
-                    warn!("Failed to initialize S3 storage: {}. Falling back to in-memory.", e);
+                    warn!(
+                        "Failed to initialize S3 storage: {}. Falling back to in-memory.",
+                        e
+                    );
                     None
                 }
             }
@@ -78,7 +84,30 @@ async fn main() {
         }
     };
 
-    let state = AppState::new(config, storage);
+    #[cfg(feature = "mossformer2")]
+    let ai_clean_runtime = {
+        let start = Instant::now();
+        let runtime = match AiCleanRuntime::new(48_000) {
+            Ok(runtime) => runtime,
+            Err(e) => {
+                error!("Failed to initialize shared AI clean runtime: {}", e);
+                std::process::exit(1);
+            }
+        };
+        info!(
+            init_ms = start.elapsed().as_millis(),
+            model_sample_rate = runtime.model_sample_rate(),
+            "Shared AI clean runtime ready"
+        );
+        runtime
+    };
+
+    let state = AppState::new(
+        config,
+        storage,
+        #[cfg(feature = "mossformer2")]
+        ai_clean_runtime,
+    );
 
     // Log API key status
     if state.config.api_key.is_some() {
@@ -97,8 +126,14 @@ async fn main() {
     let protected_routes = Router::new()
         .route("/jobs", post(create_s3_job))
         .route("/jobs/{id}", delete(delete_job))
-        .route("/preview", post(preview).layer(DefaultBodyLimit::max(max_body_size)))
-        .route_layer(middleware::from_fn_with_state(state.clone(), require_api_key));
+        .route(
+            "/preview",
+            post(preview).layer(DefaultBodyLimit::max(max_body_size)),
+        )
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            require_api_key,
+        ));
 
     // Public routes
     let public_routes = Router::new()
@@ -141,7 +176,7 @@ async fn main() {
         .layer(RequestBodyLimitLayer::new(max_body_size))
         .layer(cors_layer)
         .layer(TraceLayer::new_for_http())
-        .with_state(state);
+        .with_state(state.clone());
 
     // Start server with graceful shutdown
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -158,7 +193,7 @@ async fn main() {
     info!("Listening on http://{}", addr);
 
     if let Err(e) = axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
+        .with_graceful_shutdown(shutdown_signal(state.clone()))
         .await
     {
         error!(
@@ -171,7 +206,7 @@ async fn main() {
     info!("Server shut down gracefully");
 }
 
-async fn shutdown_signal() {
+async fn shutdown_signal(state: AppState) {
     let ctrl_c = async {
         if let Err(e) = signal::ctrl_c().await {
             error!("Failed to install Ctrl+C handler: {}", e);
@@ -197,6 +232,27 @@ async fn shutdown_signal() {
         _ = ctrl_c => info!("Received Ctrl+C, shutting down..."),
         _ = terminate => info!("Received SIGTERM, shutting down..."),
     }
+
+    let active_tasks = state.active_background_task_count();
+    if active_tasks > 0 {
+        info!(
+            active_tasks,
+            "Waiting for active background jobs to finish before shutdown"
+        );
+
+        let drained = state
+            .wait_for_background_tasks(Duration::from_secs(30))
+            .await;
+
+        if drained {
+            info!("All background jobs drained before shutdown");
+        } else {
+            warn!(
+                remaining_tasks = state.active_background_task_count(),
+                "Shutdown grace period expired with active background jobs still running"
+            );
+        }
+    }
 }
 
 /// Background task to clean up old completed/failed jobs
@@ -217,7 +273,8 @@ async fn cleanup_task(state: AppState) {
             let job = entry.value();
             let is_terminal = matches!(
                 job.status,
-                poddyclip_api::models::JobStatus::Completed | poddyclip_api::models::JobStatus::Failed
+                poddyclip_api::models::JobStatus::Completed
+                    | poddyclip_api::models::JobStatus::Failed
             );
 
             if is_terminal && (now - job.updated_at) > retention_seconds {

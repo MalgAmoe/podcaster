@@ -63,7 +63,9 @@ mod tests {
         let sample_rate = 48000u32;
         let num_samples = sample_rate as usize;
         let mono: Vec<f32> = (0..num_samples)
-            .map(|i| (2.0 * std::f32::consts::PI * 440.0 * i as f32 / sample_rate as f32).sin() * 0.5)
+            .map(|i| {
+                (2.0 * std::f32::consts::PI * 440.0 * i as f32 / sample_rate as f32).sin() * 0.5
+            })
             .collect();
         let samples = vec![mono];
 
@@ -84,7 +86,11 @@ mod tests {
         assert_eq!(metadata.channels, 1, "Decoded should be 1 channel");
         assert_eq!(metadata.sample_rate, sample_rate);
         assert_eq!(decoded.len(), 1, "Should have 1 channel vec");
-        assert_eq!(decoded[0].len(), num_samples, "Should have same number of samples");
+        assert_eq!(
+            decoded[0].len(),
+            num_samples,
+            "Should have same number of samples"
+        );
     }
 
     #[test]
@@ -110,17 +116,30 @@ mod tests {
         assert_eq!(in_rate, sample_rate);
 
         // Decode (as the API would)
-        let (mut samples, metadata) = crate::audio::decode_audio(&input_wav, Some("test.wav")).unwrap();
+        let (mut samples, metadata) =
+            crate::audio::decode_audio(&input_wav, Some("test.wav")).unwrap();
         assert_eq!(samples.len(), 1, "Should decode as mono");
         assert_eq!(metadata.channels, 1);
         let decoded_len = samples[0].len();
 
         // Process through engine
         let config = crate::models::ProcessConfig::new();
-        crate::processing::process_audio(&mut samples, metadata.sample_rate, &config, None).unwrap();
+        crate::processing::process_audio(
+            &mut samples,
+            metadata.sample_rate,
+            &config,
+            #[cfg(feature = "mossformer2")]
+            None,
+            None,
+        )
+        .unwrap();
 
         assert_eq!(samples.len(), 1, "Processing should not add channels");
-        assert_eq!(samples[0].len(), decoded_len, "Processing should not change sample count");
+        assert_eq!(
+            samples[0].len(),
+            decoded_len,
+            "Processing should not change sample count"
+        );
 
         // Encode output
         let output_wav = encode_wav(&samples, metadata.sample_rate).unwrap();
@@ -129,13 +148,21 @@ mod tests {
         assert_eq!(out_ch, 1, "Output WAV must be mono");
         assert_eq!(out_rate, sample_rate, "Output sample rate must match input");
         let expected_data = (decoded_len * 1 * 2) as u32;
-        assert_eq!(out_data, expected_data, "Output data size mismatch — would cause speed issue");
+        assert_eq!(
+            out_data, expected_data,
+            "Output data size mismatch — would cause speed issue"
+        );
 
         // Decode the output and verify
-        let (final_decoded, final_meta) = crate::audio::decode_audio(&output_wav, Some("out.wav")).unwrap();
+        let (final_decoded, final_meta) =
+            crate::audio::decode_audio(&output_wav, Some("out.wav")).unwrap();
         assert_eq!(final_meta.channels, 1);
         assert_eq!(final_decoded.len(), 1);
-        assert_eq!(final_decoded[0].len(), decoded_len, "Round-trip sample count must match");
+        assert_eq!(
+            final_decoded[0].len(),
+            decoded_len,
+            "Round-trip sample count must match"
+        );
     }
 
     #[test]
@@ -143,10 +170,14 @@ mod tests {
         let sample_rate = 48000u32;
         let num_samples = sample_rate as usize;
         let left: Vec<f32> = (0..num_samples)
-            .map(|i| (2.0 * std::f32::consts::PI * 440.0 * i as f32 / sample_rate as f32).sin() * 0.5)
+            .map(|i| {
+                (2.0 * std::f32::consts::PI * 440.0 * i as f32 / sample_rate as f32).sin() * 0.5
+            })
             .collect();
         let right: Vec<f32> = (0..num_samples)
-            .map(|i| (2.0 * std::f32::consts::PI * 880.0 * i as f32 / sample_rate as f32).sin() * 0.3)
+            .map(|i| {
+                (2.0 * std::f32::consts::PI * 880.0 * i as f32 / sample_rate as f32).sin() * 0.3
+            })
             .collect();
         let samples = vec![left, right];
 

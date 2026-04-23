@@ -32,9 +32,12 @@ pub fn decode_audio(data: &[u8], filename: Option<&str>) -> Result<(Vec<Vec<f32>
         }
     }
 
-    let probed = match symphonia::default::get_probe()
-        .format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default())
-    {
+    let probed = match symphonia::default::get_probe().format(
+        &hint,
+        mss,
+        &FormatOptions::default(),
+        &MetadataOptions::default(),
+    ) {
         Ok(probed) => probed,
         Err(_) if filename.is_some() => {
             // Extension hint may be wrong (e.g. .mp3 file that's actually MP4/AAC).
@@ -42,7 +45,12 @@ pub fn decode_audio(data: &[u8], filename: Option<&str>) -> Result<(Vec<Vec<f32>
             let cursor = Cursor::new(data.to_vec());
             let mss = MediaSourceStream::new(Box::new(cursor), Default::default());
             symphonia::default::get_probe()
-                .format(&Hint::new(), mss, &FormatOptions::default(), &MetadataOptions::default())
+                .format(
+                    &Hint::new(),
+                    mss,
+                    &FormatOptions::default(),
+                    &MetadataOptions::default(),
+                )
                 .map_err(|e| anyhow::anyhow!("Failed to probe audio format: {}", e))?
         }
         Err(e) => return Err(anyhow::anyhow!("Failed to probe audio format: {}", e)),
@@ -67,33 +75,31 @@ pub fn decode_audio(data: &[u8], filename: Option<&str>) -> Result<(Vec<Vec<f32>
 
     loop {
         match format.next_packet() {
-            Ok(packet) => {
-                match decoder.decode(&packet) {
-                    Ok(decoded) => {
-                        consecutive_errors = 0;
+            Ok(packet) => match decoder.decode(&packet) {
+                Ok(decoded) => {
+                    consecutive_errors = 0;
 
-                        let spec = *decoded.spec();
-                        let duration = decoded.capacity() as u64;
+                    let spec = *decoded.spec();
+                    let duration = decoded.capacity() as u64;
 
-                        let mut sample_buf = SampleBuffer::<f32>::new(duration, spec);
-                        sample_buf.copy_interleaved_ref(decoded);
+                    let mut sample_buf = SampleBuffer::<f32>::new(duration, spec);
+                    sample_buf.copy_interleaved_ref(decoded);
 
-                        let samples = sample_buf.samples();
+                    let samples = sample_buf.samples();
 
-                        for (i, sample) in samples.iter().enumerate() {
-                            all_samples[i % channels].push(*sample);
-                        }
+                    for (i, sample) in samples.iter().enumerate() {
+                        all_samples[i % channels].push(*sample);
                     }
-                    Err(symphonia::core::errors::Error::DecodeError(_)) => {
-                        consecutive_errors += 1;
-                        total_errors += 1;
-                        if consecutive_errors >= max_consecutive_errors {
-                            bail!("File appears to be corrupt (too many consecutive decode errors)");
-                        }
-                    }
-                    Err(e) => return Err(anyhow::anyhow!("Decoding error: {}", e)),
                 }
-            }
+                Err(symphonia::core::errors::Error::DecodeError(_)) => {
+                    consecutive_errors += 1;
+                    total_errors += 1;
+                    if consecutive_errors >= max_consecutive_errors {
+                        bail!("File appears to be corrupt (too many consecutive decode errors)");
+                    }
+                }
+                Err(e) => return Err(anyhow::anyhow!("Decoding error: {}", e)),
+            },
             Err(symphonia::core::errors::Error::IoError(e))
                 if e.kind() == std::io::ErrorKind::UnexpectedEof =>
             {
@@ -159,8 +165,7 @@ mod tests {
     use super::*;
 
     fn test_mp3_path() -> std::path::PathBuf {
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../sounds/short.mp3")
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../sounds/short.mp3")
     }
 
     #[test]
@@ -172,7 +177,11 @@ mod tests {
         assert_eq!(metadata.channels, 2);
         assert!(metadata.duration_samples > 0);
         assert_eq!(samples.len(), 2);
-        assert!(samples[0].len() > 1000, "expected many samples, got {}", samples[0].len());
+        assert!(
+            samples[0].len() > 1000,
+            "expected many samples, got {}",
+            samples[0].len()
+        );
     }
 
     #[test]
@@ -189,10 +198,17 @@ mod tests {
 
         // Should still decode successfully, skipping the bad frames
         let result = decode_audio(&data, Some("short.mp3"));
-        assert!(result.is_ok(), "decode should succeed with a few corrupt frames: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "decode should succeed with a few corrupt frames: {:?}",
+            result.err()
+        );
 
         let (samples, metadata) = result.unwrap();
-        assert!(samples[0].len() > 1000, "should have decoded most of the file");
+        assert!(
+            samples[0].len() > 1000,
+            "should have decoded most of the file"
+        );
         assert_eq!(metadata.channels, 2);
     }
 
@@ -211,7 +227,11 @@ mod tests {
 
         // Should still decode, skipping bad frames at the start
         let result = decode_audio(&data, Some("short.mp3"));
-        assert!(result.is_ok(), "decode should handle corrupt frames at start: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "decode should handle corrupt frames at start: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -232,8 +252,8 @@ mod tests {
     #[test]
     fn test_decode_wav() {
         // Check if we have a wav file to test
-        let wav_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../sounds/kebab1.wav");
+        let wav_path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../sounds/kebab1.wav");
 
         if wav_path.exists() {
             let data = std::fs::read(&wav_path).unwrap();
@@ -251,6 +271,10 @@ mod tests {
         // Should still work because of the probe retry without hint
         let data = std::fs::read(test_mp3_path()).expect("short.mp3 not found in sounds/");
         let result = decode_audio(&data, Some("wrong.wav"));
-        assert!(result.is_ok(), "should handle wrong extension via probe retry: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "should handle wrong extension via probe retry: {:?}",
+            result.err()
+        );
     }
 }

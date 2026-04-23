@@ -3,8 +3,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::processing::get_total_stages;
 use super::ProcessConfig;
+use crate::processing::get_total_stages;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Job {
@@ -83,7 +83,12 @@ impl JobProgress {
 }
 
 impl Job {
-    pub fn new(id: Uuid, config: ProcessConfig, input_filename: String, input_size_bytes: usize) -> Self {
+    pub fn new(
+        id: Uuid,
+        config: ProcessConfig,
+        input_filename: String,
+        input_size_bytes: usize,
+    ) -> Self {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
@@ -111,7 +116,13 @@ impl Job {
         }
     }
 
-    pub fn with_webhook(mut self, user_id: Option<i64>, phoenix_job_id: Option<i64>, webhook_url: Option<String>, webhook_secret: Option<String>) -> Self {
+    pub fn with_webhook(
+        mut self,
+        user_id: Option<i64>,
+        phoenix_job_id: Option<i64>,
+        webhook_url: Option<String>,
+        webhook_secret: Option<String>,
+    ) -> Self {
         self.user_id = user_id;
         self.phoenix_job_id = phoenix_job_id;
         self.webhook_url = webhook_url;

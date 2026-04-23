@@ -194,4 +194,3 @@ impl<P: MonoProcessor> StereoProcessor for Stereo<P> {
         self.left.latency_samples()
     }
 }
-

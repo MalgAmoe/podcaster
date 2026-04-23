@@ -240,7 +240,9 @@ pub fn measure_integrated_lufs(samples: &[Vec<f32>], sample_rate: u32) -> f32 {
 
             // Trim rolling buffers to keep only what we need for overlap
             // Keep the last (block_samples - hop_samples) samples
-            let keep_from = rolling_buffers[0].len().saturating_sub(block_samples - hop_samples);
+            let keep_from = rolling_buffers[0]
+                .len()
+                .saturating_sub(block_samples - hop_samples);
             for buf in &mut rolling_buffers {
                 if keep_from > 0 {
                     buf.drain(0..keep_from);

@@ -9,6 +9,13 @@ import { useNotifications } from "./NotificationContext";
 
 const ProcessContext = createContext();
 
+const INITIAL_SERVER_JOB_PROGRESS = {
+  stage: "waiting",
+  stage_index: 0,
+  total_stages: 14,
+  percent_complete: 0,
+};
+
 export function ProcessProvider(props) {
   const { notify } = useNotifications();
 
@@ -366,7 +373,12 @@ export function ProcessProvider(props) {
           duration_seconds: store.estimatedSeconds || 60,
         };
         const job = await api.createJob(store.s3Key, store.filename, config);
-        setStore({ job });
+        setStore({
+          job: {
+            ...job,
+            progress: job.progress || INITIAL_SERVER_JOB_PROGRESS,
+          },
+        });
       }
     } catch (err) {
       if (err.name === "AbortError") {

@@ -64,7 +64,10 @@ impl WebhookClient {
         // Build URL: webhook_url is like "http://phoenix:4000/api/internal/jobs"
         // We need "http://phoenix:4000/api/internal/users/{user_id}/check_seconds?seconds={seconds}"
         let base_url = webhook_url.trim_end_matches("/jobs");
-        let url = format!("{}/users/{}/check_seconds?seconds={}", base_url, user_id, seconds);
+        let url = format!(
+            "{}/users/{}/check_seconds?seconds={}",
+            base_url, user_id, seconds
+        );
 
         let mut request = self.client.get(&url);
         if let Some(secret) = webhook_secret {
@@ -123,14 +126,11 @@ impl WebhookClient {
     /// Send a webhook notification for a job status change.
     /// Uses exponential backoff retry for reliability.
     pub async fn notify(&self, job: &Job, download_url: Option<String>) {
-        let (webhook_url, phoenix_job_id, webhook_secret) = match (
-            &job.webhook_url,
-            job.phoenix_job_id,
-            &job.webhook_secret,
-        ) {
-            (Some(url), Some(id), secret) => (url.clone(), id, secret.clone()),
-            _ => return, // No webhook configured
-        };
+        let (webhook_url, phoenix_job_id, webhook_secret) =
+            match (&job.webhook_url, job.phoenix_job_id, &job.webhook_secret) {
+                (Some(url), Some(id), secret) => (url.clone(), id, secret.clone()),
+                _ => return, // No webhook configured
+            };
 
         let url = format!("{}/{}/status", webhook_url, phoenix_job_id);
         let payload = WebhookPayload {

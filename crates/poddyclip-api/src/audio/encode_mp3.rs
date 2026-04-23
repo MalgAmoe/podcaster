@@ -15,7 +15,8 @@ pub fn encode_mp3(samples: &[Vec<f32>], sample_rate: u32, bitrate_kbps: u32) -> 
         anyhow::bail!("No samples to encode");
     }
 
-    let mut builder = Builder::new().ok_or_else(|| anyhow::anyhow!("Failed to create LAME encoder"))?;
+    let mut builder =
+        Builder::new().ok_or_else(|| anyhow::anyhow!("Failed to create LAME encoder"))?;
 
     builder
         .set_sample_rate(sample_rate)
@@ -70,7 +71,13 @@ pub fn encode_mp3(samples: &[Vec<f32>], sample_rate: u32, bitrate_kbps: u32) -> 
         let left = convert(&samples[0]);
         let right = convert(&samples[1]);
         encoder
-            .encode(DualPcm { left: &left, right: &right }, &mut output)
+            .encode(
+                DualPcm {
+                    left: &left,
+                    right: &right,
+                },
+                &mut output,
+            )
             .map_err(|e| anyhow::anyhow!("Encoding error: {:?}", e))?
     };
 
@@ -101,7 +108,9 @@ mod tests {
         let duration_secs = 5.0;
         let num_samples = (sample_rate as f32 * duration_secs) as usize;
         let mono: Vec<f32> = (0..num_samples)
-            .map(|i| (2.0 * std::f32::consts::PI * 440.0 * i as f32 / sample_rate as f32).sin() * 0.5)
+            .map(|i| {
+                (2.0 * std::f32::consts::PI * 440.0 * i as f32 / sample_rate as f32).sin() * 0.5
+            })
             .collect();
 
         let mp3 = encode_mp3(&[mono], sample_rate, 192).unwrap();
@@ -132,10 +141,14 @@ mod tests {
         let duration_secs = 5.0;
         let num_samples = (sample_rate as f32 * duration_secs) as usize;
         let left: Vec<f32> = (0..num_samples)
-            .map(|i| (2.0 * std::f32::consts::PI * 440.0 * i as f32 / sample_rate as f32).sin() * 0.5)
+            .map(|i| {
+                (2.0 * std::f32::consts::PI * 440.0 * i as f32 / sample_rate as f32).sin() * 0.5
+            })
             .collect();
         let right: Vec<f32> = (0..num_samples)
-            .map(|i| (2.0 * std::f32::consts::PI * 880.0 * i as f32 / sample_rate as f32).sin() * 0.3)
+            .map(|i| {
+                (2.0 * std::f32::consts::PI * 880.0 * i as f32 / sample_rate as f32).sin() * 0.3
+            })
             .collect();
 
         let mp3 = encode_mp3(&[left, right], sample_rate, 192).unwrap();

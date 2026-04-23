@@ -71,7 +71,7 @@ defmodule PoddyclipBackend.Processing.Client do
     case Req.post("#{base_url()}/jobs",
            json: config,
            headers: auth_headers(),
-           receive_timeout: 30_000
+           receive_timeout: 120_000
          ) do
       {:ok, %{status: 200, body: body}} ->
         {:ok, body}

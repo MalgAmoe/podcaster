@@ -54,7 +54,9 @@ impl IntoResponse for ApiError {
             }
             ApiError::JobFailed(m) => (StatusCode::OK, "job_failed", m.clone()),
             ApiError::InvalidRequest(m) => (StatusCode::BAD_REQUEST, "invalid_request", m.clone()),
-            ApiError::DecodeFailed(m) => (StatusCode::UNPROCESSABLE_ENTITY, "decode_failed", m.clone()),
+            ApiError::DecodeFailed(m) => {
+                (StatusCode::UNPROCESSABLE_ENTITY, "decode_failed", m.clone())
+            }
             ApiError::UnsupportedFormat(f) => {
                 (StatusCode::BAD_REQUEST, "unsupported_format", f.clone())
             }
@@ -63,12 +65,16 @@ impl IntoResponse for ApiError {
                 "file_too_large",
                 format!("{} MB exceeds {} MB limit", size, max),
             ),
-            ApiError::ProcessingError(m) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, "processing_error", m.clone())
-            }
-            ApiError::Internal(m) => {
-                (StatusCode::INTERNAL_SERVER_ERROR, "internal_error", m.clone())
-            }
+            ApiError::ProcessingError(m) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "processing_error",
+                m.clone(),
+            ),
+            ApiError::Internal(m) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "internal_error",
+                m.clone(),
+            ),
             ApiError::PreviewTooLong {
                 max_seconds,
                 tolerance_seconds,

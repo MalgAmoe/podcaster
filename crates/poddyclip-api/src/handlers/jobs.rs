@@ -37,7 +37,9 @@ pub async fn delete_job(
     Path(job_id): Path<Uuid>,
 ) -> Result<Json<DeleteResponse>, ApiError> {
     // Check if job exists
-    let job = state.get_job(&job_id).ok_or(ApiError::JobNotFound(job_id))?;
+    let job = state
+        .get_job(&job_id)
+        .ok_or(ApiError::JobNotFound(job_id))?;
 
     // Signal cancellation to the processing task (if still running)
     job.cancel();
@@ -199,8 +201,12 @@ pub async fn create_s3_job(
 
     // Create job with webhook info
     let job_id = Uuid::new_v4();
-    let job = Job::new(job_id, config.clone(), filename.clone(), audio_bytes.len())
-        .with_webhook(req.user_id, req.phoenix_job_id, req.webhook_url.clone(), req.webhook_secret.clone());
+    let job = Job::new(job_id, config.clone(), filename.clone(), audio_bytes.len()).with_webhook(
+        req.user_id,
+        req.phoenix_job_id,
+        req.webhook_url.clone(),
+        req.webhook_secret.clone(),
+    );
 
     // Get cancellation flag before inserting job (Arc is cloned)
     let cancelled = job.cancelled.clone();
@@ -222,8 +228,13 @@ pub async fn create_s3_job(
     let filename_for_upload = filename.clone();
     let webhook_client = state.webhook.clone();
     let semaphore = state.processing_semaphore.clone();
+    #[cfg(feature = "mossformer2")]
+    let ai_clean_runtime = state.ai_clean_runtime.clone();
+    let background_task = state.begin_background_task();
 
     task::spawn(async move {
+        let _background_task = background_task;
+
         // Update status to waiting for processing slot
         state_clone.update_job(&job_id, |j| {
             j.progress.update("waiting", 0);
@@ -349,6 +360,8 @@ pub async fn create_s3_job(
                     &mut samples,
                     metadata.sample_rate,
                     &config,
+                    #[cfg(feature = "mossformer2")]
+                    Some(ai_clean_runtime.clone()),
                     Some(progress_callback),
                 )?;
 
@@ -369,8 +382,16 @@ pub async fn create_s3_job(
         match result {
             Ok(Ok(Ok((output_bytes, content_type)))) => {
                 // Upload to S3 with retry if storage is configured and user_id/phoenix_job_id are present
-                let s3_key = if let (Some(ref storage), Some(user_id), Some(phoenix_job_id)) = (&state_clone.storage, user_id_for_upload, phoenix_job_id_for_upload) {
-                    let extension = if content_type == "audio/mpeg" { ".mp3" } else { ".wav" };
+                let s3_key = if let (Some(ref storage), Some(user_id), Some(phoenix_job_id)) = (
+                    &state_clone.storage,
+                    user_id_for_upload,
+                    phoenix_job_id_for_upload,
+                ) {
+                    let extension = if content_type == "audio/mpeg" {
+                        ".mp3"
+                    } else {
+                        ".wav"
+                    };
 
                     upload_with_retry(
                         storage,
@@ -383,19 +404,25 @@ pub async fn create_s3_job(
                         job_id,
                     )
                     .await
-                } else if state_clone.storage.is_some() && (user_id_for_upload.is_none() || phoenix_job_id_for_upload.is_none()) {
-                    error!("Job {} missing user_id or phoenix_job_id, cannot upload to S3", job_id);
+                } else if state_clone.storage.is_some()
+                    && (user_id_for_upload.is_none() || phoenix_job_id_for_upload.is_none())
+                {
+                    error!(
+                        "Job {} missing user_id or phoenix_job_id, cannot upload to S3",
+                        job_id
+                    );
                     None
                 } else {
                     None
                 };
 
                 // Generate presigned download URL if we have S3
-                let download_url = if let (Some(ref key), Some(ref storage)) = (&s3_key, &state_clone.storage) {
-                    storage.presign_get(key).await.ok()
-                } else {
-                    None
-                };
+                let download_url =
+                    if let (Some(ref key), Some(ref storage)) = (&s3_key, &state_clone.storage) {
+                        storage.presign_get(key).await.ok()
+                    } else {
+                        None
+                    };
 
                 state_clone.update_job(&job_id, |j| {
                     j.status = JobStatus::Completed;
@@ -530,7 +557,9 @@ fn validate_webhook_url(url_str: &str) -> Result<(), &'static str> {
     }
 
     // Check for blocked ports
-    let port = parsed.port().unwrap_or(if parsed.scheme() == "https" { 443 } else { 80 });
+    let port = parsed
+        .port()
+        .unwrap_or(if parsed.scheme() == "https" { 443 } else { 80 });
     if BLOCKED_PORTS.contains(&port) {
         return Err("Webhook URL uses a blocked port");
     }
@@ -578,7 +607,7 @@ fn is_safe_private_ip(ip: &IpAddr) -> bool {
             // Allow loopback and standard private ranges
             ipv4.is_loopback() // 127.0.0.0/8
                 || ipv4.is_private() // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
-            // Explicitly NOT allowing link-local (169.254.x.x) due to metadata risk
+                                     // Explicitly NOT allowing link-local (169.254.x.x) due to metadata risk
         }
         IpAddr::V6(ipv6) => {
             // Allow only loopback for IPv6
@@ -623,7 +652,14 @@ async fn upload_with_retry(
 
     for attempt in 1..=S3_UPLOAD_MAX_RETRIES {
         match storage
-            .upload_result(user_id, phoenix_job_id, data, content_type, filename, extension)
+            .upload_result(
+                user_id,
+                phoenix_job_id,
+                data,
+                content_type,
+                filename,
+                extension,
+            )
             .await
         {
             Ok(key) => {

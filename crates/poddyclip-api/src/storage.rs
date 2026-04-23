@@ -103,14 +103,22 @@ impl Storage {
             .unwrap_or("audio");
         let stem = Self::sanitize_filename(raw_stem);
 
-        let key = format!("results/{}/{}/{}_processed{}", user_id, job_id, stem, extension);
+        let key = format!(
+            "results/{}/{}/{}_processed{}",
+            user_id, job_id, stem, extension
+        );
 
         self.bucket
             .put_object_with_content_type(&key, data, content_type)
             .await
             .context("Failed to upload to S3")?;
 
-        debug!("Uploaded {} bytes to s3://{}/{}", data.len(), self.bucket.name(), key);
+        debug!(
+            "Uploaded {} bytes to s3://{}/{}",
+            data.len(),
+            self.bucket.name(),
+            key
+        );
 
         Ok(key)
     }
@@ -129,7 +137,11 @@ impl Storage {
 
         let url = self
             .bucket
-            .presign_get(key, self.presign_expiry.as_secs() as u32, Some(custom_queries))
+            .presign_get(
+                key,
+                self.presign_expiry.as_secs() as u32,
+                Some(custom_queries),
+            )
             .await
             .context("Failed to generate presigned URL")?;
 

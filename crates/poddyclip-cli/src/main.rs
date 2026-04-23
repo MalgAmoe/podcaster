@@ -16,12 +16,10 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
-use poddyclip::analysis;
-use poddyclip::analysis::lufs::measure_integrated_lufs;
 #[cfg(feature = "mossformer2")]
 use poddyclip::ai_clean::{AiCleanMode, AiCleanProcessor};
-#[cfg(feature = "mossformer2")]
-use poddyclip::sample_rate::resample_mono;
+use poddyclip::analysis;
+use poddyclip::analysis::lufs::measure_integrated_lufs;
 use poddyclip::denoiser::{
     analyze_audio, detect_tonal_peaks, get_gate_preset_name, get_preset, PeakAttenuator,
     PeakAttenuatorParams, RealtimeDenoiser, SpectralGate, DEFAULT_PRESET, PRESETS,
@@ -41,6 +39,8 @@ use poddyclip::eq::{
     StereoEnhanceEq,
 };
 use poddyclip::repair::Declicker;
+#[cfg(feature = "mossformer2")]
+use poddyclip::sample_rate::resample_mono;
 use poddyclip::saturation::{
     get_saturation_preset, get_saturation_preset_name, Channel9, TapeGlue,
 };
@@ -525,7 +525,7 @@ fn main() -> Result<()> {
         let start = Instant::now();
 
         match AiCleanProcessor::new(48_000) {
-            Ok(mut denoiser) => {
+            Ok(denoiser) => {
                 if sample_rate != denoiser.model_sample_rate() {
                     println!(
                         "  Resampling: {} Hz -> {} Hz -> {} Hz",
@@ -535,7 +535,8 @@ fn main() -> Result<()> {
                     );
                 }
 
-                let left_input = resample_mono(&samples[0], sample_rate, denoiser.model_sample_rate())?;
+                let left_input =
+                    resample_mono(&samples[0], sample_rate, denoiser.model_sample_rate())?;
                 let plan = denoiser.analyze_run(left_input.len());
                 println!("  Model sample rate: {} Hz", denoiser.model_sample_rate());
                 match plan.mode {
@@ -558,15 +559,16 @@ fn main() -> Result<()> {
                         }
                         Ok(())
                     })?;
-                    let right_output = denoiser.process_with_progress(&right_input, |progress| {
-                        if progress.mode == AiCleanMode::Segmented {
-                            println!(
-                                "  Right channel: segment {}/{}",
-                                progress.completed_segments, progress.total_segments
-                            );
-                        }
-                        Ok(())
-                    })?;
+                    let right_output =
+                        denoiser.process_with_progress(&right_input, |progress| {
+                            if progress.mode == AiCleanMode::Segmented {
+                                println!(
+                                    "  Right channel: segment {}/{}",
+                                    progress.completed_segments, progress.total_segments
+                                );
+                            }
+                            Ok(())
+                        })?;
                     samples[0] =
                         resample_mono(&left_output, denoiser.model_sample_rate(), sample_rate)?;
                     samples[1] =
@@ -581,8 +583,7 @@ fn main() -> Result<()> {
                         }
                         Ok(())
                     })?;
-                    samples[0] =
-                        resample_mono(&output, denoiser.model_sample_rate(), sample_rate)?;
+                    samples[0] = resample_mono(&output, denoiser.model_sample_rate(), sample_rate)?;
                 }
                 println!("  AI cleaning complete");
             }
@@ -808,9 +809,8 @@ fn main() -> Result<()> {
     // Saturation (Channel9)
     if saturation_enabled {
         let start = Instant::now();
-        let sat_preset =
-            get_saturation_preset(saturation_preset)
-                .ok_or_else(|| anyhow!("Invalid saturation preset {}", saturation_preset))?;
+        let sat_preset = get_saturation_preset(saturation_preset)
+            .ok_or_else(|| anyhow!("Invalid saturation preset {}", saturation_preset))?;
         let mut channel9: Stereo<Channel9> = Stereo::new(sample_rate as f32);
         channel9.set_both(|c| c.set_drive(sat_preset.channel9_drive));
         println!(
@@ -831,9 +831,8 @@ fn main() -> Result<()> {
     // ButterComp
     if buttercomp_enabled {
         let start = Instant::now();
-        let buttercomp_amount =
-            get_buttercomp_preset(buttercomp_preset)
-                .ok_or_else(|| anyhow!("Invalid ButterComp preset {}", buttercomp_preset))?;
+        let buttercomp_amount = get_buttercomp_preset(buttercomp_preset)
+            .ok_or_else(|| anyhow!("Invalid ButterComp preset {}", buttercomp_preset))?;
         let mut compressor: Stereo<ButterComp2> = Stereo::new(sample_rate as f32);
         compressor.set_both(|c| c.set_compress(buttercomp_amount));
         println!(
@@ -1030,7 +1029,9 @@ fn main() -> Result<()> {
         let name = PRESETS[denoiser_preset_index - 1].name.to_lowercase();
         let output_dir = PathBuf::from("sounds_out");
         std::fs::create_dir_all(&output_dir).ok();
-        output_dir.join(format!("{stem}_denoised_{denoiser_preset_index}_{name}.wav"))
+        output_dir.join(format!(
+            "{stem}_denoised_{denoiser_preset_index}_{name}.wav"
+        ))
     });
 
     println!("\nSaving: {}", output_path.display());
@@ -1098,33 +1099,31 @@ fn load_audio(input_path: &Path) -> Result<(Vec<Vec<f32>>, u32)> {
 
     loop {
         match format.next_packet() {
-            Ok(packet) => {
-                match decoder.decode(&packet) {
-                    Ok(decoded) => {
-                        consecutive_errors = 0;
+            Ok(packet) => match decoder.decode(&packet) {
+                Ok(decoded) => {
+                    consecutive_errors = 0;
 
-                        let spec = *decoded.spec();
-                        let duration = decoded.capacity() as u64;
+                    let spec = *decoded.spec();
+                    let duration = decoded.capacity() as u64;
 
-                        let mut sample_buf = SampleBuffer::<f32>::new(duration, spec);
-                        sample_buf.copy_interleaved_ref(decoded);
+                    let mut sample_buf = SampleBuffer::<f32>::new(duration, spec);
+                    sample_buf.copy_interleaved_ref(decoded);
 
-                        let samples = sample_buf.samples();
+                    let samples = sample_buf.samples();
 
-                        for (i, sample) in samples.iter().enumerate() {
-                            all_samples[i % channels].push(*sample);
-                        }
+                    for (i, sample) in samples.iter().enumerate() {
+                        all_samples[i % channels].push(*sample);
                     }
-                    Err(symphonia::core::errors::Error::DecodeError(_)) => {
-                        consecutive_errors += 1;
-                        total_errors += 1;
-                        if consecutive_errors >= max_consecutive_errors {
-                            bail!("File appears to be corrupt (too many consecutive decode errors)");
-                        }
-                    }
-                    Err(e) => return Err(e.into()),
                 }
-            }
+                Err(symphonia::core::errors::Error::DecodeError(_)) => {
+                    consecutive_errors += 1;
+                    total_errors += 1;
+                    if consecutive_errors >= max_consecutive_errors {
+                        bail!("File appears to be corrupt (too many consecutive decode errors)");
+                    }
+                }
+                Err(e) => return Err(e.into()),
+            },
             Err(symphonia::core::errors::Error::IoError(e))
                 if e.kind() == std::io::ErrorKind::UnexpectedEof =>
             {
@@ -1135,7 +1134,10 @@ fn load_audio(input_path: &Path) -> Result<(Vec<Vec<f32>>, u32)> {
     }
 
     if total_errors > 0 {
-        eprintln!("Warning: skipped {} malformed audio frames during decode", total_errors);
+        eprintln!(
+            "Warning: skipped {} malformed audio frames during decode",
+            total_errors
+        );
     }
 
     if all_samples.is_empty() || all_samples[0].is_empty() {

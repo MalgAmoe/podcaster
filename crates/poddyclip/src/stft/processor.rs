@@ -41,7 +41,9 @@ impl StftProcessor {
         let mut planner = FftPlanner::new();
         let fft = planner.plan_fft_forward(config.window_size);
         let ifft = planner.plan_fft_inverse(config.window_size);
-        let scratch_len = fft.get_inplace_scratch_len().max(ifft.get_inplace_scratch_len());
+        let scratch_len = fft
+            .get_inplace_scratch_len()
+            .max(ifft.get_inplace_scratch_len());
         let fft_scratch = vec![Complex::new(0.0, 0.0); scratch_len];
         let window = create_window(config.window_size, config.window_type);
 
@@ -258,7 +260,8 @@ impl StftProcessor {
         }
 
         // Copy output (first hop_size samples)
-        output[..self.config.hop_size].copy_from_slice(&self.overlap_buffer[..self.config.hop_size]);
+        output[..self.config.hop_size]
+            .copy_from_slice(&self.overlap_buffer[..self.config.hop_size]);
 
         // Shift buffer
         self.overlap_buffer.rotate_left(self.config.hop_size);
@@ -458,8 +461,10 @@ mod tests {
         });
 
         // Output should be roughly half amplitude
-        let input_rms: f32 = (samples.iter().map(|x| x * x).sum::<f32>() / samples.len() as f32).sqrt();
-        let output_rms: f32 = (output.iter().map(|x| x * x).sum::<f32>() / output.len() as f32).sqrt();
+        let input_rms: f32 =
+            (samples.iter().map(|x| x * x).sum::<f32>() / samples.len() as f32).sqrt();
+        let output_rms: f32 =
+            (output.iter().map(|x| x * x).sum::<f32>() / output.len() as f32).sqrt();
 
         let ratio = output_rms / input_rms;
         assert!(
