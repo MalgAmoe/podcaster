@@ -5,7 +5,7 @@ defmodule PoddyclipBackend.Billing do
   ## Plans
 
   - **free**: 1800 seconds (30 minutes), no card required
-  - **pro**: $15/mo, 54000 seconds (15 hours)
+  - **munch**: $15/mo, 18000 seconds (300 minutes)
 
   ## Seconds Management
 

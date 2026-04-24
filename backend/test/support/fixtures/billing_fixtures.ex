@@ -34,7 +34,7 @@ defmodule PoddyclipBackend.BillingFixtures do
         Enum.into(attrs, %{
           name: "munch",
           display_name: "Munch Plan",
-          seconds: 54000,
+          seconds: 18000,
           price_cents: 1500,
           polar_product_id: "prod_test_123",
           active: true

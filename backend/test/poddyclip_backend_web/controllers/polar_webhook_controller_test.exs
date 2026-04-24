@@ -122,7 +122,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
       # Verify user was updated
       updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
       assert updated_user.plan_id == munch_plan.id
-      assert updated_user.seconds_available == 54000
+      assert updated_user.seconds_available == 18000
       assert updated_user.subscription_status == "active"
       assert updated_user.polar_subscription_id == "sub_test_123"
       assert updated_user.polar_customer_id == customer_id
@@ -216,7 +216,7 @@ defmodule PoddyclipBackendWeb.PolarWebhookControllerTest do
 
       # Verify minutes were reset
       updated_user = Repo.get!(PoddyclipBackend.Accounts.User, user.id)
-      assert updated_user.seconds_available == 54000
+      assert updated_user.seconds_available == 18000
     end
 
     test "doesn't reset minutes for non-renewal update", %{conn: conn, munch_plan: munch_plan} do

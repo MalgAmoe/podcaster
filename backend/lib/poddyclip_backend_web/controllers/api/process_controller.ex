@@ -456,7 +456,7 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
     "plan": {"name": "free", "display_name": "Free", "seconds": 1800},
     "seconds_available": 720,
     "subscription_status": "none",
-    "purchased_seconds": 9000,
+    "purchased_seconds": 3600,
     "total_seconds_available": 9720,
     "pack_count": 1
   }

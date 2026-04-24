@@ -101,7 +101,7 @@ defmodule PoddyclipBackend.BillingTest do
                })
 
       assert updated.plan_id == munch_plan.id
-      assert updated.seconds_available == 54000
+      assert updated.seconds_available == 18000
       assert updated.subscription_status == "active"
       assert updated.polar_customer_id == "cus_123"
       assert updated.polar_subscription_id == "sub_456"

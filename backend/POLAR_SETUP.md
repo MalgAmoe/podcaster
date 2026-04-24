@@ -43,7 +43,7 @@ BASE_URL=https://munchycow.com      # For success redirect URLs
    - **Name**: "Pro" (or your plan name)
    - **Type**: Subscription
    - **Price**: $15/month
-   - **Description**: "15 hours of audio processing per month"
+   - **Description**: "300 minutes of audio processing per month"
 4. Save the product
 
 ### 3. Get Product ID

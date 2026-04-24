@@ -228,12 +228,12 @@ defmodule PoddyclipBackend.Accounts.UserNotifier do
 
     You've used #{percent_used}% of your monthly processing time. You have #{minutes_remaining} minutes left.
 
-    Upgrade to Munch Plan for 15 hours/month, or grab a Snack for extra minutes:
+    Upgrade to Munch Plan for 300 minutes/month, or grab a Snack for extra minutes:
     #{app_link}
     """
 
     html = html_template(
-      "<p>Hi there,</p><p>You've used <strong>#{percent_used}%</strong> of your processing time. You have <strong>#{minutes_remaining} minutes</strong> left.</p><p>Upgrade to Munch Plan for 15 hours/month, or grab a Snack for extra minutes.</p>",
+      "<p>Hi there,</p><p>You've used <strong>#{percent_used}%</strong> of your processing time. You have <strong>#{minutes_remaining} minutes</strong> left.</p><p>Upgrade to Munch Plan for 300 minutes/month, or grab a Snack for extra minutes.</p>",
       button_text: "View Options",
       button_url: app_link
     )

@@ -3,15 +3,15 @@ defmodule PoddyclipBackend.Billing.MinutePack do
   Schema for purchasable minute packs.
 
   Minute packs allow users to buy additional processing time:
-  - $5 for 150 minutes (9000 seconds)
+  - $5 for 60 minutes (3600 seconds)
   - Expire 1 year from purchase
   - Usage order: subscription seconds first, then packs (FIFO by expiry)
-  - Both Free and Pro users can purchase packs
+  - Both Free and Munch users can purchase packs
   """
   use Ecto.Schema
   import Ecto.Changeset
 
-  @pack_seconds 9000
+  @pack_seconds 3600
   @pack_price_cents 500
   @expiry_days 365
 

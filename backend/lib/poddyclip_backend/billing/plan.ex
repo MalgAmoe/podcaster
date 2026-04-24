@@ -4,7 +4,7 @@ defmodule PoddyclipBackend.Billing.Plan do
 
   Plans define the available subscription tiers:
   - free: 1800 seconds (30 minutes), no payment required
-  - pro: 54000 seconds (15 hours), $15/month
+  - munch: 18000 seconds (300 minutes), $15/month
   """
   use Ecto.Schema
   import Ecto.Changeset

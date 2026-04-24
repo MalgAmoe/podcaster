@@ -26,7 +26,7 @@ plans = [
   %{
     name: "munch",
     display_name: "Munch Plan",
-    seconds: 54000,
+    seconds: 18000,
     price_cents: 1500,
     polar_product_id: System.get_env("POLAR_MUNCH_PRODUCT_ID"),
     active: true
