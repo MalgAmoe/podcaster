@@ -4,6 +4,9 @@ export function getErrorMessage(error) {
   if (error.includes("insufficient_seconds")) {
     return "Not enough time available. Upgrade to Munch Plan or buy a Snack for more processing time.";
   }
+  if (error.includes("job_too_long")) {
+    return "Files must stay within the 1-hour limit.";
+  }
   if (error.includes("too_long")) {
     return "Preview clips must stay within the 20-second limit.";
   }

@@ -500,6 +500,12 @@ export function ProcessProvider(props) {
           persistent: true,
           action: { label: "See options", onClick: () => window.location.href = "/account" }
         });
+      } else if (err instanceof ApiError && err.code === "job_too_long") {
+        let message = getErrorMessage(err.code);
+        if (err.details?.max_seconds !== undefined) {
+          message += ` Maximum allowed length is ${Math.floor(err.details.max_seconds / 3600)}h ${(err.details.max_seconds % 3600) / 60}m.`;
+        }
+        notify({ type: "error", message, persistent: true });
       } else {
         notify({ type: "error", message: err.message, persistent: true });
       }

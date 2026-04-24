@@ -204,6 +204,13 @@ impl FixEq {
             .map_or(0.0, |d| d.get_gain_reduction_db())
     }
 
+    /// Get maximum de-mud gain reduction in dB (from left channel)
+    pub fn get_max_demud_gain_db(&self) -> f32 {
+        self.demud_left
+            .as_ref()
+            .map_or(0.0, |d| d.get_max_gain_reduction_db())
+    }
+
     /// Get computed correction A strength (0-1)
     pub fn get_correction_a_strength(&self) -> f32 {
         self.correction_a_strength
@@ -221,11 +228,25 @@ impl FixEq {
             .map_or(0.0, |d| d.get_gain_reduction_db())
     }
 
+    /// Get maximum correction A gain reduction in dB (from left channel)
+    pub fn get_max_correction_a_gain_db(&self) -> f32 {
+        self.correction_a_left
+            .as_ref()
+            .map_or(0.0, |d| d.get_max_gain_reduction_db())
+    }
+
     /// Get correction B gain reduction in dB (from left channel)
     pub fn get_correction_b_gain_db(&self) -> f32 {
         self.correction_b_left
             .as_ref()
             .map_or(0.0, |d| d.get_gain_reduction_db())
+    }
+
+    /// Get maximum correction B gain reduction in dB (from left channel)
+    pub fn get_max_correction_b_gain_db(&self) -> f32 {
+        self.correction_b_left
+            .as_ref()
+            .map_or(0.0, |d| d.get_max_gain_reduction_db())
     }
 
     // =========================================================================

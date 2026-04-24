@@ -139,6 +139,7 @@ pub struct VcaPeakComp {
     sliding_max: SlidingMax,
     envelope: f32,
     gain_reduction_db: f32,
+    max_gain_reduction_db: f32,
     sample_rate: f32,
     // Cached values for ratio calculation
     ratio_factor: f32, // 1.0 - 1.0 / ratio
@@ -172,6 +173,7 @@ impl VcaPeakComp {
             sliding_max: SlidingMax::new(lookahead_samples + 1),
             envelope: 0.0,
             gain_reduction_db: 0.0,
+            max_gain_reduction_db: 0.0,
             sample_rate,
             ratio_factor: 1.0 - 1.0 / ratio,
         }
@@ -265,6 +267,7 @@ impl VcaPeakComp {
             self.gain_reduction_db = self.release_coeff * self.gain_reduction_db
                 + (1.0 - self.release_coeff) * target_gr_db;
         }
+        self.max_gain_reduction_db = self.max_gain_reduction_db.max(self.gain_reduction_db);
 
         // Apply gain reduction using fast approximation
         let gain = db_to_linear(-self.gain_reduction_db);
@@ -276,12 +279,18 @@ impl VcaPeakComp {
         -self.gain_reduction_db
     }
 
+    /// Get maximum gain reduction in dB (negative value)
+    pub fn get_max_gain_reduction_db(&self) -> f32 {
+        -self.max_gain_reduction_db
+    }
+
     /// Reset internal state
     pub fn reset(&mut self) {
         self.lookahead_buffer.clear();
         self.sliding_max.reset();
         self.envelope = 0.0;
         self.gain_reduction_db = 0.0;
+        self.max_gain_reduction_db = 0.0;
     }
 
     /// Get latency in samples
@@ -459,6 +468,10 @@ impl StereoVcaPeakComp {
                 self.left.gain_reduction_db = self.left.release_coeff * self.left.gain_reduction_db
                     + (1.0 - self.left.release_coeff) * target_gr_db;
             }
+            self.left.max_gain_reduction_db = self
+                .left
+                .max_gain_reduction_db
+                .max(self.left.gain_reduction_db);
 
             // Apply same gain to both channels using fast approximation
             let gain = db_to_linear(-self.left.gain_reduction_db);
@@ -504,6 +517,10 @@ impl StereoVcaPeakComp {
             self.left.gain_reduction_db = self.left.release_coeff * self.left.gain_reduction_db
                 + (1.0 - self.left.release_coeff) * target_gr_db;
         }
+        self.left.max_gain_reduction_db = self
+            .left
+            .max_gain_reduction_db
+            .max(self.left.gain_reduction_db);
 
         // Apply same gain to both channels (linked) using fast approximation
         let gain = db_to_linear(-self.left.gain_reduction_db);
@@ -525,6 +542,11 @@ impl StereoVcaPeakComp {
     /// Get gain reduction from left channel (for metering)
     pub fn get_gain_reduction_db(&self) -> f32 {
         self.left.get_gain_reduction_db()
+    }
+
+    /// Get maximum gain reduction from left channel (for metering)
+    pub fn get_max_gain_reduction_db(&self) -> f32 {
+        self.left.get_max_gain_reduction_db()
     }
 
     /// Get latency in samples

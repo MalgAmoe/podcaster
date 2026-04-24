@@ -22,6 +22,7 @@ pub struct DynamicBand {
     // Processing chain
     filter: SvfBiquad,
     current_gain_db: f32,
+    max_gain_reduction_db: f32,
     gain_smooth_coeff: f32,
 
     // Parameters
@@ -54,6 +55,7 @@ impl DynamicBand {
             release_coeff,
             filter,
             current_gain_db: 0.0,
+            max_gain_reduction_db: 0.0,
             gain_smooth_coeff,
             threshold_db: -20.0,
             ratio: 2.0,
@@ -126,6 +128,7 @@ impl DynamicBand {
 
         // Smooth gain changes
         self.current_gain_db += self.gain_smooth_coeff * (target_gain_db - self.current_gain_db);
+        self.max_gain_reduction_db = self.max_gain_reduction_db.min(self.current_gain_db);
 
         // Apply bell filter
         let (_, bp, _) = self.filter.process(input);
@@ -144,12 +147,17 @@ impl DynamicBand {
     pub fn reset(&mut self) {
         self.envelope = 0.0;
         self.current_gain_db = 0.0;
+        self.max_gain_reduction_db = 0.0;
         self.sidechain.reset();
         self.filter.reset();
     }
 
     pub fn get_gain_reduction_db(&self) -> f32 {
         self.current_gain_db
+    }
+
+    pub fn get_max_gain_reduction_db(&self) -> f32 {
+        self.max_gain_reduction_db
     }
 }
 
@@ -173,6 +181,7 @@ pub struct DynamicBandCut {
     // Processing chain
     filter: BandExtractFilter,
     current_gain_db: f32,
+    max_gain_reduction_db: f32,
     gain_smooth_coeff: f32,
 
     // Parameters
@@ -204,6 +213,7 @@ impl DynamicBandCut {
             release_coeff,
             filter,
             current_gain_db: 0.0,
+            max_gain_reduction_db: 0.0,
             gain_smooth_coeff,
             threshold_db: -20.0,
             ratio: 2.0,
@@ -265,6 +275,7 @@ impl DynamicBandCut {
 
         // Smooth gain changes
         self.current_gain_db += self.gain_smooth_coeff * (target_gain_db - self.current_gain_db);
+        self.max_gain_reduction_db = self.max_gain_reduction_db.min(self.current_gain_db);
 
         // Apply band-cut: subtract scaled band from input
         // When gain_db = 0, gain_lin = 1.0, no subtraction
@@ -285,11 +296,16 @@ impl DynamicBandCut {
     pub fn reset(&mut self) {
         self.envelope = 0.0;
         self.current_gain_db = 0.0;
+        self.max_gain_reduction_db = 0.0;
         self.sidechain.reset();
         self.filter.reset();
     }
 
     pub fn get_gain_reduction_db(&self) -> f32 {
         self.current_gain_db
+    }
+
+    pub fn get_max_gain_reduction_db(&self) -> f32 {
+        self.max_gain_reduction_db
     }
 }

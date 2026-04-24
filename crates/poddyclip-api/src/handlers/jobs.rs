@@ -225,6 +225,7 @@ pub async fn create_s3_job(
     // Spawn processing task
     let state_clone = state.clone();
     let job_timeout = state.config.job_timeout_seconds;
+    let max_job_duration_seconds = state.config.max_job_duration_seconds;
     let filename_for_upload = filename.clone();
     let webhook_client = state.webhook.clone();
     let semaphore = state.processing_semaphore.clone();
@@ -295,6 +296,14 @@ pub async fn create_s3_job(
                 progress_state.update_job(&job_id, |j| {
                     j.audio_duration_seconds = Some(audio_duration_seconds);
                 });
+
+                if audio_duration_seconds > max_job_duration_seconds {
+                    return Err(anyhow::anyhow!(
+                        "File is too long: {}s exceeds {}s limit",
+                        audio_duration_seconds,
+                        max_job_duration_seconds
+                    ));
+                }
 
                 // Check if user has enough seconds before processing
                 if let Some(job) = progress_state.get_job(&job_id) {

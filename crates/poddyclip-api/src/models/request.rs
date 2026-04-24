@@ -66,8 +66,8 @@ impl ProcessConfig {
             fetcomp_enabled: false,
             fetcomp_preset: 1,
 
-            fixeq_enabled: false,
-            fixeq_preset: 1,
+            fixeq_enabled: true,
+            fixeq_preset: 2,
             deesser_enabled: true,
             enhanceeq_enabled: true,
             enhanceeq_preset: 1,

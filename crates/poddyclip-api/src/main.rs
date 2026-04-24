@@ -52,6 +52,7 @@ async fn main() {
     info!("Configuration:");
     info!("  Port: {}", port);
     info!("  Max file size: {} MB", config.max_file_size_mb);
+    info!("  Max job duration: {}s", config.max_job_duration_seconds);
     info!("  Job timeout: {}s", config.job_timeout_seconds);
     info!("  Result retention: {}s", config.result_retention_seconds);
     #[cfg(feature = "mossformer2")]

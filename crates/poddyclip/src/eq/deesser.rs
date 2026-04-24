@@ -108,6 +108,11 @@ impl DeEsser {
         self.band.get_gain_reduction_db()
     }
 
+    /// Get maximum gain reduction reached in dB
+    pub fn get_max_gain_reduction_db(&self) -> f32 {
+        self.band.get_max_gain_reduction_db()
+    }
+
     /// Reset internal state
     pub fn reset(&mut self) {
         self.band.reset();
@@ -225,6 +230,11 @@ impl StereoDeEsser {
     /// Get gain reduction from left channel (for metering)
     pub fn get_gain_reduction_db(&self) -> f32 {
         self.left.get_gain_reduction_db()
+    }
+
+    /// Get maximum gain reduction from left channel (for metering)
+    pub fn get_max_gain_reduction_db(&self) -> f32 {
+        self.left.get_max_gain_reduction_db()
     }
 
     /// Reset internal state

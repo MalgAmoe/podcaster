@@ -13,6 +13,8 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   alias PoddyclipBackend.Processing.Client, as: ProcessingClient
   alias PoddyclipBackend.Storage
 
+  @max_job_duration_seconds 3_600
+
   @doc """
   POST /api/presign-upload - Generate S3 presigned PUT URL.
 
@@ -201,7 +203,7 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   end
 
   defp create_job_after_checks(conn, user, s3_key, filename, params) do
-    estimated_seconds = params["duration_seconds"] || 60
+    estimated_seconds = normalize_duration_seconds(params["duration_seconds"])
 
     # Skip billing checks for guest users
     billing_ok =
@@ -212,7 +214,16 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
         Billing.has_seconds?(user, estimated_seconds)
       end
 
-    if not billing_ok do
+    cond do
+      estimated_seconds > @max_job_duration_seconds ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{
+          error: "job_too_long",
+          max_seconds: @max_job_duration_seconds
+        })
+
+      not billing_ok ->
       conn
       |> put_status(:payment_required)
       |> json(%{
@@ -220,30 +231,42 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
         seconds_available: user.seconds_available,
         seconds_needed: estimated_seconds
       })
-    else
-      opts = [
-        estimated_seconds: estimated_seconds
-      ]
 
-      try do
-        case Processing.submit_job_from_s3(s3_key, filename, user.id, opts) do
-          {:ok, job} ->
-            json(conn, %{
-              id: job.id,
-              status: Atom.to_string(job.status),
-              filename: job.filename
-            })
+      true ->
+        opts = [
+          estimated_seconds: estimated_seconds
+        ]
+
+        try do
+          case Processing.submit_job_from_s3(s3_key, filename, user.id, opts) do
+            {:ok, job} ->
+              json(conn, %{
+                id: job.id,
+                status: Atom.to_string(job.status),
+                filename: job.filename
+              })
+          end
+        rescue
+          e ->
+            Logger.error("Failed to create job: #{Exception.message(e)}")
+
+            conn
+            |> put_status(500)
+            |> json(%{error: "Failed to start processing"})
         end
-      rescue
-        e ->
-          Logger.error("Failed to create job: #{Exception.message(e)}")
-
-          conn
-          |> put_status(500)
-          |> json(%{error: "Failed to start processing"})
-      end
     end
   end
+
+  defp normalize_duration_seconds(duration_seconds) when is_integer(duration_seconds), do: duration_seconds
+
+  defp normalize_duration_seconds(duration_seconds) when is_binary(duration_seconds) do
+    case Integer.parse(duration_seconds) do
+      {seconds, _rest} -> seconds
+      :error -> 60
+    end
+  end
+
+  defp normalize_duration_seconds(_duration_seconds), do: 60
 
   @doc """
   DELETE /api/jobs/:id - Cancel a job.

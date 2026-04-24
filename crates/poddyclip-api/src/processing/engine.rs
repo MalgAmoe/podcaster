@@ -258,9 +258,9 @@ pub fn process_audio(
             peakcomp.process_mono(&mut samples[0]);
         }
         debug!(
-            "PeakComp: preset={} gr={:.1}dB",
+            "PeakComp: preset={} max_gr={:.1}dB",
             config.peakcomp_preset,
-            peakcomp.get_gain_reduction_db()
+            peakcomp.get_max_gain_reduction_db()
         );
     } else {
         debug!("PeakComp: skipped");
@@ -288,11 +288,11 @@ pub fn process_audio(
             fixeq.process_mono(&mut samples[0]);
         }
         debug!(
-            "FixEQ: preset={} demud={:.1}dB corrA={:.1}dB corrB={:.1}dB",
+            "FixEQ: preset={} max_demud={:.1}dB max_corrA={:.1}dB max_corrB={:.1}dB",
             config.fixeq_preset,
-            fixeq.get_demud_gain_db(),
-            fixeq.get_correction_a_gain_db(),
-            fixeq.get_correction_b_gain_db(),
+            fixeq.get_max_demud_gain_db(),
+            fixeq.get_max_correction_a_gain_db(),
+            fixeq.get_max_correction_b_gain_db(),
         );
     } else {
         debug!("FixEQ: skipped");
@@ -312,7 +312,7 @@ pub fn process_audio(
         } else {
             deesser.process_mono(&mut samples[0]);
         }
-        debug!("DeEsser: gr={:.1}dB", deesser.get_gain_reduction_db());
+        debug!("DeEsser: max_gr={:.1}dB", deesser.get_max_gain_reduction_db());
     } else {
         debug!("DeEsser: skipped");
     }

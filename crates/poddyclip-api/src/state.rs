@@ -15,7 +15,8 @@ use crate::models::{Job, JobStatus};
 use crate::storage::Storage;
 use crate::webhook::WebhookClient;
 
-const DEFAULT_MAX_FILE_SIZE_MB: usize = 2048;
+const DEFAULT_MAX_FILE_SIZE_MB: usize = 1024;
+const DEFAULT_MAX_JOB_DURATION_SECONDS: u32 = 3600;
 
 /// Maximum concurrent processing tasks (matches CCX13 2 vCPU)
 const MAX_CONCURRENT_PROCESSING: usize = 2;
@@ -41,6 +42,7 @@ pub struct AppState {
 
 pub struct AppConfig {
     pub max_file_size_mb: usize,
+    pub max_job_duration_seconds: u32,
     pub job_timeout_seconds: u64,
     pub result_retention_seconds: u64,
     pub preview_max_seconds: u32,
@@ -59,6 +61,7 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             max_file_size_mb: DEFAULT_MAX_FILE_SIZE_MB,
+            max_job_duration_seconds: DEFAULT_MAX_JOB_DURATION_SECONDS,
             job_timeout_seconds: 600,
             result_retention_seconds: 3600,
             preview_max_seconds: 20,
@@ -81,6 +84,10 @@ impl AppConfig {
                 .ok()
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(DEFAULT_MAX_FILE_SIZE_MB),
+            max_job_duration_seconds: std::env::var("MAX_JOB_DURATION_SECONDS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(DEFAULT_MAX_JOB_DURATION_SECONDS),
             job_timeout_seconds: std::env::var("JOB_TIMEOUT_SECONDS")
                 .ok()
                 .and_then(|s| s.parse().ok())
