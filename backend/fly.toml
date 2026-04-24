@@ -9,9 +9,6 @@ kill_timeout = "30s"
   [build.args]
     ADMIN_ENABLED = "false"
 
-[deploy]
-  release_command = "/app/bin/poddyclip_backend eval \"PoddyclipBackend.Release.migrate\""
-
 [env]
   PHX_HOST = "poddyclip-backend.fly.dev"
   PHX_SERVER = "true"
