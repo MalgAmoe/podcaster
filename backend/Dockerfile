@@ -14,8 +14,9 @@ WORKDIR /app
 RUN mix local.hex --force && \
     mix local.rebar --force
 
+ARG ADMIN_ENABLED=false
 ENV MIX_ENV=prod
-ENV ADMIN_ENABLED=true
+ENV ADMIN_ENABLED=${ADMIN_ENABLED}
 
 # Install mix dependencies
 COPY mix.exs mix.lock ./
