@@ -168,7 +168,7 @@ pub fn process_audio(
                 let model_sample_rate = denoiser.model_sample_rate();
                 let left_input =
                     resample_mono_if_needed(&samples[0], sample_rate, denoiser.model_sample_rate())?;
-                let plan = denoiser.analyze_run(left_input.len());
+                let plan = denoiser.analyze_audio_run(&left_input);
                 info!(
                     "AI clean: MossFormer2 mode={:?} segments={} input_sr={} model_sr={} pool_size={} wait_ms={}",
                     plan.mode,

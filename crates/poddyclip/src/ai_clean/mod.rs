@@ -25,6 +25,8 @@ const DELTA_WIN: usize = 2;
 const ONE_TIME_DECODE_SECS: f32 = 12.0;
 const DECODE_WINDOW_SECS: f32 = 8.0;
 const DECODE_STRIDE_RATIO: f32 = 0.75;
+const LEADING_SILENCE_TRIGGER_SECS: f32 = 0.5;
+const LEADING_SILENCE_THRESHOLD: f32 = 5e-4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AiCleanMode {
@@ -47,6 +49,11 @@ pub struct AiCleanProgress {
     pub completed_segments: usize,
     pub total_segments: usize,
     pub fraction_complete: f32,
+}
+
+struct PreparedAiInput<'a> {
+    audio: &'a [f32],
+    trimmed_leading_samples: usize,
 }
 
 struct AiCleanRuntimeState {
@@ -153,6 +160,13 @@ impl AiCleanRuntime {
         }
     }
 
+    pub fn analyze_audio_run(&self, audio: &[f32]) -> AiCleanPlan {
+        let prepared = prepare_ai_clean_input(audio);
+        let mut plan = self.analyze_run(prepared.audio.len());
+        plan.input_samples = audio.len();
+        plan
+    }
+
     pub fn process(&self, audio: &[f32]) -> Result<Vec<f32>> {
         self.process_with_progress(audio, |_| Ok(()))
     }
@@ -161,17 +175,19 @@ impl AiCleanRuntime {
     where
         F: FnMut(AiCleanProgress) -> Result<()>,
     {
-        let plan = self.analyze_run(audio.len());
+        let prepared = prepare_ai_clean_input(audio);
+        let plan = self.analyze_run(prepared.audio.len());
         let mut state = self
             .state
             .lock()
             .map_err(|_| anyhow::anyhow!("AiCleanRuntime lock poisoned"))?;
-        self.process_native(audio, plan, &mut on_progress, &mut state.session)
+        self.process_native(audio, &prepared, plan, &mut on_progress, &mut state.session)
     }
 
     fn process_native<F>(
         &self,
-        audio: &[f32],
+        original_audio: &[f32],
+        prepared: &PreparedAiInput<'_>,
         plan: AiCleanPlan,
         on_progress: &mut F,
         session: &mut Session,
@@ -179,9 +195,14 @@ impl AiCleanRuntime {
     where
         F: FnMut(AiCleanProgress) -> Result<()>,
     {
+        let audio = prepared.audio;
         match plan.mode {
             AiCleanMode::OneShot => {
-                let output = self.process_segment(audio, session)?;
+                let output = self.restore_trimmed_leading_silence(
+                    original_audio,
+                    self.process_segment(audio, session)?,
+                    prepared.trimmed_leading_samples,
+                );
                 on_progress(AiCleanProgress {
                     mode: plan.mode,
                     completed_segments: 1,
@@ -190,8 +211,32 @@ impl AiCleanRuntime {
                 })?;
                 Ok(output)
             }
-            AiCleanMode::Segmented => self.process_segmented(audio, plan, on_progress, session),
+            AiCleanMode::Segmented => {
+                let output = self.process_segmented(audio, plan, on_progress, session)?;
+                Ok(self.restore_trimmed_leading_silence(
+                    original_audio,
+                    output,
+                    prepared.trimmed_leading_samples,
+                ))
+            }
         }
+    }
+
+    fn restore_trimmed_leading_silence(
+        &self,
+        original_audio: &[f32],
+        processed_audio: Vec<f32>,
+        trimmed_leading_samples: usize,
+    ) -> Vec<f32> {
+        if trimmed_leading_samples == 0 {
+            return processed_audio;
+        }
+
+        let mut restored = Vec::with_capacity(original_audio.len());
+        restored.extend_from_slice(&original_audio[..trimmed_leading_samples]);
+        restored.extend_from_slice(&processed_audio);
+        restored.truncate(original_audio.len());
+        restored
     }
 
     fn process_segmented<F>(
@@ -460,6 +505,10 @@ impl AiCleanProcessor {
         self.runtime.analyze_run(input_samples)
     }
 
+    pub fn analyze_audio_run(&self, audio: &[f32]) -> AiCleanPlan {
+        self.runtime.analyze_audio_run(audio)
+    }
+
     pub fn process(&self, audio: &[f32]) -> Result<Vec<f32>> {
         self.runtime.process(audio)
     }
@@ -561,4 +610,27 @@ fn padded_length(input_len: usize, window: usize, stride: usize) -> usize {
         let padding = stride - ((input_len - window) % stride);
         input_len + padding
     }
+}
+
+fn prepare_ai_clean_input(audio: &[f32]) -> PreparedAiInput<'_> {
+    let silence_end = detect_leading_silence_end(audio);
+    let trigger_samples = (LEADING_SILENCE_TRIGGER_SECS * MODEL_SAMPLE_RATE as f32) as usize;
+
+    if silence_end >= trigger_samples && silence_end < audio.len() {
+        PreparedAiInput {
+            audio: &audio[silence_end..],
+            trimmed_leading_samples: silence_end,
+        }
+    } else {
+        PreparedAiInput {
+            audio,
+            trimmed_leading_samples: 0,
+        }
+    }
+}
+
+fn detect_leading_silence_end(audio: &[f32]) -> usize {
+    audio.iter()
+        .position(|sample| sample.abs() >= LEADING_SILENCE_THRESHOLD)
+        .unwrap_or(audio.len())
 }
