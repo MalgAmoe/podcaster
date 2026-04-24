@@ -15,7 +15,7 @@ kill_timeout = '30s'
     ADMIN_ENABLED = 'false'
 
 [env]
-  PHX_HOST = 'munchycow.fly.dev'
+  PHX_HOST = 'munchycow.com'
   PHX_SERVER = 'true'
   PORT = '4000'
 
