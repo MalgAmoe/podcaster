@@ -491,8 +491,10 @@ defmodule PoddyclipBackendWeb.CoreComponents do
   def mini_footer(assigns) do
     ~H"""
     <footer class="py-6 mt-12 border-t border-base-300">
-      <div class="max-w-3xl mx-auto px-6 flex flex-col sm:flex-row justify-center items-center gap-2 text-sm text-base-content/50">
+      <div class="max-w-3xl mx-auto px-6 flex flex-col sm:flex-row justify-center items-center gap-2 sm:gap-4 text-sm text-base-content/50">
         <span>&copy; 2026 Munchy Cow</span>
+        <span class="hidden sm:inline">&middot;</span>
+        <.link href="/help" class="hover:text-primary transition-colors">Help & FAQ</.link>
       </div>
     </footer>
     """
