@@ -14,9 +14,12 @@
     <meta property="og:site_name" content="Munchy Cow" />
     <meta property="og:title" content={assigns[:page_title] || "Munchy Cow - Clean Up Voice Recordings"} />
     <meta property="og:description" content={assigns[:meta_description] || "Clean up spoken audio online. Reduce noise, tame harshness, and level voice recordings with a free preview."} />
-    <meta property="og:image" content={assigns[:meta_image] || "https://munchycow.com/images/munchycow-social.png"} />
+    <meta property="og:image" content={assigns[:meta_image] || "https://munchycow.com/images/munchycow-social.png?v=2"} />
+    <meta property="og:image:secure_url" content={assigns[:meta_image] || "https://munchycow.com/images/munchycow-social.png?v=2"} />
+    <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={assigns[:meta_image_alt] || "Munchy Cow audio cleaner"} />
     <%= if assigns[:conn] do %>
       <meta property="og:url" content={Phoenix.Controller.current_url(@conn)} />
     <% end %>
@@ -25,7 +28,8 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={assigns[:page_title] || "Munchy Cow - Clean Up Voice Recordings"} />
     <meta name="twitter:description" content={assigns[:meta_description] || "Clean up spoken audio online. Reduce noise, tame harshness, and level voice recordings with a free preview."} />
-    <meta name="twitter:image" content={assigns[:meta_image] || "https://munchycow.com/images/munchycow-social.png"} />
+    <meta name="twitter:image" content={assigns[:meta_image] || "https://munchycow.com/images/munchycow-social.png?v=2"} />
+    <meta name="twitter:image:alt" content={assigns[:meta_image_alt] || "Munchy Cow audio cleaner"} />
 
     <link rel="icon" type="image/svg+xml" href="/images/munchy_cow_head.svg" />
     <link rel="apple-touch-icon" href="/images/munchy_cow_head.svg" />
