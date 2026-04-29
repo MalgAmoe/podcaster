@@ -32,8 +32,8 @@ defmodule PoddyclipBackend.Processing.Client do
 
   Returns `{:ok, body}` with health info on success, or `{:error, reason}` on failure.
   """
-  def health do
-    case Req.get("#{base_url()}/health", receive_timeout: 5_000) do
+  def health(receive_timeout \\ 5_000) do
+    case Req.get("#{base_url()}/health", receive_timeout: receive_timeout) do
       {:ok, %{status: 200, body: body}} ->
         {:ok, body}
 

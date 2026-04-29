@@ -4,10 +4,17 @@ import { getStageLabel } from "../utils/stages";
 
 export function JobProgress() {
   const { store, cancelJob } = useProcess();
-  const previewStageLabel = () =>
-    store.job?.preview_status === "queued" || store.job?.progress?.stage === "waiting"
-      ? "Waiting for a demo slot..."
-      : "Processing preview...";
+  const previewStageLabel = () => {
+    if (
+      store.job?.preview_status === "queued" ||
+      store.job?.preview_status === "starting" ||
+      store.job?.progress?.stage === "waiting" ||
+      store.job?.progress?.stage === "starting"
+    ) {
+      return "Waiting for a demo slot...";
+    }
+    return "Processing preview...";
+  };
 
   return (
     <Show when={store.job}>

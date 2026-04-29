@@ -31,8 +31,11 @@ defmodule PoddyclipBackendWeb.PreviewChannelTest do
 
     assert join_payload == %{request_id: request_id, status: "queued"}
 
-    :ok = PreviewGate.mark_preview_processing(guest.id, request_id)
+    :ok = PreviewGate.mark_preview_starting(guest.id, request_id)
 
+    assert_push "preview_updated", %{request_id: ^request_id, status: "starting"}
+
+    :ok = PreviewGate.mark_preview_processing(guest.id, request_id)
     assert_push "preview_updated", %{request_id: ^request_id, status: "processing"}
   end
 end

@@ -14,6 +14,7 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
   alias PoddyclipBackend.Storage
 
   @max_job_duration_seconds 3_600
+  @preview_ready_timeout_ms 90_000
 
   @doc """
   POST /api/presign-upload - Generate S3 presigned PUT URL.
@@ -91,12 +92,19 @@ defmodule PoddyclipBackendWeb.Api.ProcessController do
       {:ok, token} ->
         try do
           if preview_request_id do
-            PreviewGate.mark_preview_processing(user.id, preview_request_id)
+            PreviewGate.mark_preview_starting(user.id, preview_request_id)
           end
 
           case File.read(upload.path) do
             {:ok, audio_bytes} ->
-              case ProcessingClient.preview(audio_bytes, upload.content_type || "audio/wav") do
+              with {:ok, _health} <- ProcessingClient.health(@preview_ready_timeout_ms) do
+                if preview_request_id do
+                  PreviewGate.mark_preview_processing(user.id, preview_request_id)
+                end
+
+                ProcessingClient.preview(audio_bytes, upload.content_type || "audio/wav")
+              end
+              |> case do
                 {:ok, wav_bytes} ->
                   if preview_request_id do
                     PreviewGate.mark_preview_completed(user.id, preview_request_id)

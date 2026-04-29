@@ -1,6 +1,7 @@
 const STAGE_LABELS = {
   "waiting": "Waiting for available slot...",
   "queued": "Waiting for available slot...",
+  "starting": "Waiting for available slot...",
   "decoding": "Reading audio...",
   "processing": "Reading audio...",
   "filters": "Cutting rumble & hiss...",

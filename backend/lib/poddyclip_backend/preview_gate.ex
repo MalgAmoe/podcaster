@@ -57,6 +57,11 @@ defmodule PoddyclipBackend.PreviewGate do
     GenServer.call(__MODULE__, {:set_preview_status, user_id, request_id, "processing"})
   end
 
+  def mark_preview_starting(user_id, request_id)
+      when is_integer(user_id) and is_binary(request_id) do
+    GenServer.call(__MODULE__, {:set_preview_status, user_id, request_id, "starting"})
+  end
+
   def mark_preview_completed(user_id, request_id)
       when is_integer(user_id) and is_binary(request_id) do
     GenServer.call(__MODULE__, {:set_preview_status, user_id, request_id, "completed"})

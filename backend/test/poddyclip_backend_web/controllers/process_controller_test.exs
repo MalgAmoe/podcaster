@@ -210,6 +210,10 @@ defmodule PoddyclipBackendWeb.ProcessControllerTest do
   defmodule PreviewStubPlug do
     def init(opts), do: opts
 
+    def call(%Plug.Conn{method: "GET", request_path: "/health"} = conn, _opts) do
+      Plug.Conn.send_resp(conn, 200, ~s({"status":"ok"}))
+    end
+
     def call(conn, opts) do
       opts[:handler].(conn)
     end

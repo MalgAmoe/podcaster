@@ -69,6 +69,18 @@ export function ProcessProvider(props) {
       return;
     }
 
+    if (payload.status === "starting") {
+      setStore("job", {
+        ...store.job,
+        preview_status: "starting",
+        progress: {
+          stage: "starting",
+          percent_complete: 10,
+        },
+      });
+      return;
+    }
+
     if (payload.status === "processing") {
       setStore("job", {
         ...store.job,
