@@ -145,7 +145,12 @@ pub fn process_audio(
     // =========================================================================
     report_progress(&mut on_progress, "input_gain", 2)?;
 
-    let gain_db = analyze_gain(samples, DEFAULT_TARGET_RMS_DB, DEFAULT_TARGET_PEAK_DB);
+    let gain_db = analyze_gain(
+        samples,
+        sample_rate,
+        DEFAULT_TARGET_RMS_DB,
+        DEFAULT_TARGET_PEAK_DB,
+    );
     debug!("Input gain: {:.1} dB", gain_db);
     apply_gain(samples, gain_db);
 

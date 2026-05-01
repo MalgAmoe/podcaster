@@ -392,7 +392,12 @@ fn main() -> Result<()> {
     } else {
         poddyclip::dynamics::autogain::calculate_rms_and_peak(&samples[0])
     };
-    let gain_db = analyze_gain(&samples, DEFAULT_TARGET_RMS_DB, DEFAULT_TARGET_PEAK_DB);
+    let gain_db = analyze_gain(
+        &samples,
+        sample_rate,
+        DEFAULT_TARGET_RMS_DB,
+        DEFAULT_TARGET_PEAK_DB,
+    );
     println!(
         "  Input: RMS {:.1}dB, Peak {:.1}dB",
         linear_to_db(rms),
